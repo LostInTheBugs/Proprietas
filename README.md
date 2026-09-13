@@ -33,6 +33,10 @@ se créer normalement depuis la page de connexion.
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
   encaissements / dépenses, solde par lot, état daté, quittances
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
+- **Recouvrement des impayés** : décompte détaillé par provision (imputation FIFO, échu / à
+  échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,
+  **article 19-2** (exigibilité immédiate des provisions), intérêts au taux légal, frais,
+  étapes amiables et judiciaires
 - **Assemblées générales** : convocations, résolutions, moteur de majorités légal
   (art. 24 / 25 / 26, unanimité, régime 2 copropriétaires), procès-verbaux
 - **Consultation écrite** (régime petite copropriété, unanimité)
@@ -112,13 +116,47 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   connexion depuis une nouvelle IP, 2FA désactivée ou réinitialisée, code de
   secours utilisé.
 
+## Recouvrement des impayés
+
+Page « 💶 Recouvrement » (réservée au syndic) : par lot, un dossier suit la
+procédure légale — relances email → **mise en demeure** → article 19-2 → amiable →
+contentieux.
+
+- **Décompte détaillé** : imputation FIFO des encaissements sur les appels les plus
+  anciens ; distinction échu / à échoir. La mise en demeure liste la nature et le
+  montant de chaque provision échue impayée (exigence de précision — cf. Cass. 3e
+  civ., 18 juin 2026, n° 24-19.950).
+- **Mise en demeure (PDF)** : générée depuis le dossier (mentions de la fiche
+  Service-Public F2603 : identité et adresse du copropriétaire, décompte, délai de
+  30 jours, conséquences). L'app trace le mode d'envoi et la référence (lettre
+  recommandée électronique — la voie électronique est la règle, le papier
+  l'exception — ou remise). L'envoi recommandé électronique se fait chez un
+  prestataire externe (type AR24) : l'app prépare le courrier, le syndic l'envoie.
+- **Article 19-2** : 30 jours après la mise en demeure restée infructueuse, l'app
+  calcule les provisions non encore échues de l'exercice + les restes des exercices
+  précédents devenus **immédiatement exigibles** (activation assistée, tracée,
+  jamais automatique).
+- **Intérêts et frais** : taux de l'intérêt légal paramétrable (arrêté semestriel,
+  saisi par le syndic — pas de taux inventé par l'app), intérêts courus estimés
+  depuis la mise en demeure, frais de recouvrement imputés au dossier (à la charge
+  du débiteur).
+- **Étapes suivantes** : conciliation / commissaire de justice / saisine du
+  tribunal (≤ 5 000 € : règlement amiable obligatoire avant le juge, conciliateur
+  gratuit ; le syndic n'a pas besoin d'autorisation d'AG pour le recouvrement ;
+  prescription 5 ans).
+
+⚠️ L'application **génère les courriers mais ne fournit pas de conseil
+juridique** : faites valider les modèles par un conseil avant usage réel. Le syndic
+ne peut pas avancer de fonds au syndicat (art. 18 de la loi du 10 juillet 1965) —
+le module n'expose volontairement aucune fonction d'avance.
+
 ## Tests
 
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 95 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 104 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
@@ -128,8 +166,9 @@ par lot, authentification (register fermé, login, switch-copro, expiration),
 double authentification (enrôlement, connexion en deux étapes, codes de secours à
 usage unique, politiques par copropriété, réinitialisation par le syndic), journal
 d'audit (droits, isolation inter-copro, pagination), fonds de travaux 5 %,
-génération PDF (non vide + régression du compte de gestion) et un flux complet de
-bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
+recouvrement (décompte FIFO et imputation, statuts du dossier, mise en demeure
+générée, article 19-2, permissions syndic), génération PDF (non vide + régression
+du compte de gestion) et un flux complet de bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
 
 L'ancien `test_e2e.py` (script urllib contre une instance réelle) vit désormais
 dans `backend/scripts/smoke_e2e.py` : conservé comme smoke test manuel d'un
