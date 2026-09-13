@@ -68,7 +68,13 @@ def client(db_engine):
             test_db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    # Le middleware de détection externe écrit via SessionLocal (hors dépendances
+    # FastAPI) : le brancher sur la MÊME base en mémoire pour les tests.
+    import app.main as main_module
+    main_module_original_session = main_module.SessionLocal
+    main_module.SessionLocal = TestingSession
     yield TestClient(app)
+    main_module.SessionLocal = main_module_original_session
     app.dependency_overrides.clear()
 
 
