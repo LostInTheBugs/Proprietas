@@ -568,3 +568,47 @@ class AuditOut(BaseModel):
     action: str = ""
     detail: str = ""
     ip: str = ""
+
+
+# ---------- Instance (profil d'exposition) ----------
+class DiagnosticItem(BaseModel):
+    id: str
+    label: str
+    statut: str = "ignore"  # ok | attention | echec | ignore
+    detail: str = ""
+
+
+class DiagnosticOut(BaseModel):
+    checked_at: datetime
+    results: List[DiagnosticItem] = []
+
+
+class InstanceOut(BaseModel):
+    mode: str = "local"  # local | vps | maison
+    public_url: str = ""
+    first_external_at: Optional[datetime] = None
+    last_check_at: Optional[datetime] = None
+    last_check: List[DiagnosticItem] = []
+    exposed_unprotected: bool = False
+    https_active: bool = False
+    version: str = ""
+
+
+class InstanceUpdate(BaseModel):
+    mode: str = "local"
+    public_url: str = ""
+
+    @field_validator("mode")
+    @classmethod
+    def _valider_mode(cls, v):
+        if v not in ("local", "vps", "maison"):
+            raise ValueError("mode invalide (local | vps | maison)")
+        return v
+
+    @field_validator("public_url")
+    @classmethod
+    def _valider_url(cls, v):
+        v = (v or "").strip()
+        if v and not (v.startswith("http://") or v.startswith("https://")):
+            raise ValueError("l'URL publique doit commencer par http:// ou https://")
+        return v

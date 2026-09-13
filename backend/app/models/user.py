@@ -25,6 +25,9 @@ class User(Base):
     totp_secret = Column(Text, default="")
     totp_enabled = Column(Boolean, default=False)
     recovery_hashes = Column(Text, default="[]")
+    # Version des jetons : incrémentée par « déconnecter tous mes appareils » —
+    # les JWT portent la version et sont refusés dès qu'elle ne correspond plus.
+    token_version = Column(Integer, default=0)
     # Dernière connexion (alertes « nouvelle connexion »)
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String, default="")

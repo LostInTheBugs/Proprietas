@@ -38,9 +38,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if two_factor.politique_requise(db, user):
         return LoginResponse(
             must_enroll_2fa=True,
-            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30),
+            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30,
+                                                ver=user.token_version or 0),
         )
-    return LoginResponse(access_token=create_access_token(user.id))
+    return LoginResponse(access_token=create_access_token(user.id, ver=user.token_version or 0))
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -64,16 +65,19 @@ def login(req: LoginRequest, db: Session = Depends(get_db), request: Request = N
     if user.totp_enabled and not user.is_demo:
         return LoginResponse(
             two_factor_required=True,
-            challenge_token=create_scoped_token(user.id, "2fa_challenge"),
+            challenge_token=create_scoped_token(user.id, "2fa_challenge",
+                                                ver=user.token_version or 0),
         )
     if not user.totp_enabled and two_factor.politique_requise(db, user):
         return LoginResponse(
             must_enroll_2fa=True,
-            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30),
+            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30,
+                                                ver=user.token_version or 0),
         )
     two_factor.finaliser_connexion(db, user, request)  # journal + alerte nouvelle IP
     return LoginResponse(
-        access_token=create_access_token(user.id, two_factor.copro_principale_id(db, user)))
+        access_token=create_access_token(user.id, two_factor.copro_principale_id(db, user),
+                                         ver=user.token_version or 0))
 
 
 @router.get("/coproprietes")
@@ -108,7 +112,8 @@ def switch_copro(copro_id: int, db: Session = Depends(get_db), user: User = Depe
             .first())
     if not lien:
         raise HTTPException(403, "Accès refusé à cette copropriété")
-    return TokenResponse(access_token=create_access_token(user.id, copro_id))
+    return TokenResponse(access_token=create_access_token(user.id, copro_id,
+                                                          ver=user.token_version or 0))
 
 
 @router.post("/coproprietes", response_model=TokenResponse)
@@ -125,7 +130,8 @@ def creer_copropriete(data: CoproCreate, db: Session = Depends(get_db), user: Us
     db.add(UserCopro(user_id=user.id, copropriete_id=copro.id, principale=True))
     audit.enregistrer(db, "copro_created", user=user, copro_id=copro.id, detail=copro.nom)
     db.commit()
-    return TokenResponse(access_token=create_access_token(user.id, copro.id))
+    return TokenResponse(access_token=create_access_token(user.id, copro.id,
+                                                          ver=user.token_version or 0))
 
 
 @router.get("/me", response_model=UserOut)

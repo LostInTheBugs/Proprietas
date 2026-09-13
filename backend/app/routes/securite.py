@@ -57,6 +57,18 @@ def statut_2fa(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 # ---------- Enrôlement ----------
 
+@router.post("/logout-all")
+def deconnecter_partout(request: Request, db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    """« Déconnecter tous mes appareils » : invalide TOUTES les sessions du compte
+    (y compris la session courante) en incrémentant la version des jetons."""
+    user.token_version = int(user.token_version or 0) + 1
+    audit.enregistrer(db, "sessions_revoked", user=user,
+                      copro_id=two_factor.copro_principale_id(db, user), request=request)
+    db.commit()
+    return {"ok": True, "message": "Toutes vos sessions ont été déconnectées."}
+
+
 @router.post("/2fa/setup", response_model=TwoFactorSetupOut)
 def configurer_2fa(db: Session = Depends(get_db), user: User = Depends(get_current_user_2fa)):
     """Génère un secret TOTP en attente + le QR code à scanner (rien n'est actif
@@ -96,7 +108,8 @@ def verifier_enrolement(req: TwoFactorVerifyIn, request: Request,
     db.commit()
     out = TwoFactorVerifyOut(recovery_codes=codes)
     if getattr(user, "_token_scope", "") == "2fa_setup":
-        out.access_token = create_access_token(user.id, two_factor.copro_principale_id(db, user))
+        out.access_token = create_access_token(user.id, two_factor.copro_principale_id(db, user),
+                                               ver=user.token_version or 0)
     return out
 
 
@@ -135,7 +148,7 @@ def verifier_connexion(req: TwoFactorVerifyLoginIn, request: Request,
             db, user, "Un code de secours vient d'être utilisé pour vous connecter.")
     two_factor.finaliser_connexion(db, user, request)  # journal + dernière connexion + alerte
     return LoginResponse(access_token=create_access_token(
-        user.id, two_factor.copro_principale_id(db, user)))
+        user.id, two_factor.copro_principale_id(db, user), ver=user.token_version or 0))
 
 
 # ---------- Gestion ----------

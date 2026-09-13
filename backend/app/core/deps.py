@@ -20,6 +20,10 @@ def _charger_user(db: Session, raw: str) -> User:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(401, "Utilisateur introuvable")
+    # Révocation globale (« déconnecter tous mes appareils ») : un jeton dont la
+    # version ne correspond plus au compte est refusé, même encore valide en date.
+    if int(payload.get("ver", 0) or 0) != int(user.token_version or 0):
+        raise HTTPException(401, "Session révoquée — reconnectez-vous")
     user._token_data = payload
     user._token_scope = str(payload.get("scope") or "")
     return user

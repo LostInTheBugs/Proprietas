@@ -1,10 +1,15 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from app.core.config import get_settings
-from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite
+from app.core.database import SessionLocal
+from app.core.httpinfo import est_externe, requete_https
+from app.models.instance import InstanceState
+from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance
 
 settings = get_settings()
 
@@ -39,9 +44,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite):
+for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance):
     app.include_router(r.router)
 app.include_router(securite.router_audit)
+
+
+# ---------- En-têtes de sécurité (tous les modes de déploiement) ----------
+# Tout est servi par l'application elle-même : CSP stricte sauf /docs (Swagger
+# charge ses assets depuis un CDN). style-src 'unsafe-inline' : barres de
+# progression en styles inline dans le frontend.
+_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+
+
+@app.middleware("http")
+async def entetes_securite(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    if not request.url.path.startswith("/docs"):
+        h.setdefault("Content-Security-Policy", _CSP)
+    if requete_https(request):
+        h.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
+# ---------- Exposition internet : jamais silencieuse ----------
+@app.middleware("http")
+async def detecter_acces_externe(request: Request, call_next):
+    """Note la PREMIÈRE requête vue depuis internet : l'application ne peut pas
+    être exposée sans que son propriétaire puisse le savoir (bandeau + assistant)."""
+    if est_externe(request):
+        try:
+            with SessionLocal() as s:
+                inst = s.get(InstanceState, 1)
+                if inst is None:
+                    inst = InstanceState(id=1)
+                    s.add(inst)
+                if not inst.first_external_at:
+                    inst.first_external_at = datetime.now()
+                    s.commit()
+        except Exception:
+            pass  # la détection ne bloque JAMAIS la requête
+    return await call_next(request)
 
 
 @app.get("/api/health")
