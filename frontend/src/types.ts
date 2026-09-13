@@ -5,6 +5,7 @@ export interface User {
   email: string;
   nom: string;
   role: string;
+  two_factor_enabled?: boolean;
 }
 
 export interface Copro {
@@ -31,7 +32,33 @@ export interface Copro {
   relance_jour: number;
   relance_heure: string;
   relance_minimum: number;
+  totp_policy: string;
   notes: string;
+}
+
+export interface LoginResponse {
+  access_token?: string | null;
+  token_type?: string;
+  two_factor_required?: boolean;
+  must_enroll_2fa?: boolean;
+  challenge_token?: string | null;
+}
+
+export interface TwoFactorStatus {
+  enabled: boolean;
+  recovery_codes_left: number;
+  policy: string;
+  required: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  created_at: string;
+  user_email: string;
+  user_nom: string;
+  action: string;
+  detail: string;
+  ip: string;
 }
 
 export interface Personne {

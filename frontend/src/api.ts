@@ -52,6 +52,26 @@ export const api = {
   del: <T>(path: string) => request<T>("DELETE", path),
 };
 
+/** POST avec jeton explicite, SANS redirection 401 — étapes 2FA de la connexion
+ *  (jeton de challenge/enrôlement) et assistants. */
+export async function postAuthStep<T>(path: string, body: unknown, token?: string): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch("/api" + path, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const data = await res.json();
+      detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
 export async function uploadDocument(categorie: string, libelle: string, file: File) {
   const form = new FormData();
   form.append("categorie", categorie);

@@ -16,6 +16,7 @@ const NAV = [
   { to: "/relances", label: "Relances", icon: "📧" },
   { to: "/travaux", label: "Travaux", icon: "🔨" },
   { to: "/consolide", label: "Consolidé", icon: "🗂" },
+  { to: "/securite", label: "Sécurité", icon: "🔐" },
   { to: "/settings", label: "Réglages", icon: "⚙" },
 ];
 
