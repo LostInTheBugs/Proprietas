@@ -36,11 +36,20 @@ export default function Layout() {
   const [nvNom, setNvNom] = useState("");
   const [nvVille, setNvVille] = useState("");
   const [busy, setBusy] = useState(false);
+  const [alerteExposition, setAlerteExposition] = useState(false);
   const nav = useNavigate();
 
   useEffect(() => {
     api.get<CoproLien[]>("/auth/coproprietes").then(setCopros).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    // Bandeau « exposition internet non déclarée » — réservé au syndic (seul à pouvoir agir).
+    if (user?.role !== "syndic") return;
+    api.get<{ exposed_unprotected: boolean }>("/instance")
+      .then((i) => setAlerteExposition(!!i.exposed_unprotected))
+      .catch(() => {});
+  }, [user?.role]);
 
   const active = copros.find((c) => c.active);
 
@@ -182,9 +191,20 @@ export default function Layout() {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden px-8 py-6">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {alerteExposition && (
+          <div className="border-b border-amber-200 bg-amber-50 px-8 py-2 text-sm text-amber-800">
+            ⚠️ Cette application est joignable depuis internet sans que les protections aient été
+            vérifiées.{" "}
+            <NavLink to="/securite" className="font-medium underline hover:text-amber-900">
+              Ouvrir Sécurité → Accès depuis internet
+            </NavLink>
+          </div>
+        )}
+        <main className="flex-1 overflow-x-hidden px-8 py-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

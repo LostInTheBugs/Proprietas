@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { api, getToken } from "../api";
+import { api, clearToken, getToken } from "../api";
 import { useUser } from "../auth";
 import { Badge, Button, Card, Empty, Input, Select } from "../components/ui";
 import TwoFactorWizard from "../components/TwoFactorWizard";
-import type { AuditEntry, Copro, TwoFactorStatus, User } from "../types";
+import type { AuditEntry, Copro, DiagnosticItem, InstanceOut, TwoFactorStatus, User } from "../types";
 
 const LIBELLES_ACTIONS: Record<string, string> = {
   login: "Connexion",
@@ -16,6 +16,9 @@ const LIBELLES_ACTIONS: Record<string, string> = {
   user_created: "Compte créé",
   user_deleted: "Compte supprimé",
   copro_created: "Copropriété créée",
+  instance_updated: "Profil d'accès mis à jour",
+  diagnostic_run: "Diagnostic d'exposition lancé",
+  sessions_revoked: "Sessions révoquées (déconnexion globale)",
   relance_envoyee: "Relance envoyée",
   situation_fonds: "Situation du fonds envoyée",
   export_rapport_annuel: "Export rapport annuel",
@@ -23,6 +26,19 @@ const LIBELLES_ACTIONS: Record<string, string> = {
   export_quittances: "Export quittances",
   export_csv: "Export CSV (grand livre)",
   export_registre: "Export registre",
+};
+
+const MODES = [
+  { value: "local", label: "Réseau local uniquement (ou ordinateur personnel)" },
+  { value: "vps", label: "Sur un serveur (VPS), accessible depuis internet" },
+  { value: "maison", label: "Chez moi, exposée depuis ma connexion" },
+];
+
+const ICONES_STATUT: Record<string, string> = {
+  ok: "✅",
+  attention: "⚠️",
+  echec: "❌",
+  ignore: "➖",
 };
 
 export default function Securite() {
@@ -46,6 +62,14 @@ export default function Securite() {
   const [nouveauxCodes, setNouveauxCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Accès depuis internet (syndic)
+  const [inst, setInst] = useState<InstanceOut | null>(null);
+  const [mode, setMode] = useState("local");
+  const [urlPublique, setUrlPublique] = useState("");
+  const [instBusy, setInstBusy] = useState(false);
+  const [diagBusy, setDiagBusy] = useState(false);
+  const [revokeBusy, setRevokeBusy] = useState(false);
+
   function flash(msg: string) {
     setMessage(msg);
     setError("");
@@ -66,6 +90,14 @@ export default function Securite() {
     }).catch(() => {});
   }
 
+  function chargerInstance() {
+    api.get<InstanceOut>("/instance").then((i) => {
+      setInst(i);
+      setMode(i.mode);
+      setUrlPublique(i.public_url);
+    }).catch(() => {});
+  }
+
   useEffect(() => {
     chargerStatut();
     api.get<Copro>("/copro").then(setCopro).catch(() => {});
@@ -76,6 +108,7 @@ export default function Securite() {
     if (!isSyndic) return;
     chargerUsers();
     chargerAudit(0);
+    chargerInstance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSyndic]);
 
@@ -154,6 +187,61 @@ export default function Securite() {
       chargerAudit(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
+    }
+  }
+
+  async function revoquerSessions() {
+    const suffixe = statut?.enabled
+      ? " Vous vous reconnecterez avec votre mot de passe et votre code de double authentification."
+      : " Vous vous reconnecterez avec votre mot de passe.";
+    if (
+      !confirm(
+        "Déconnecter TOUS vos appareils ?\n\n" +
+          "Toutes vos sessions actives seront fermées, y compris celle-ci." + suffixe
+      )
+    )
+      return;
+    setRevokeBusy(true);
+    setError("");
+    try {
+      await api.post("/auth/logout-all");
+      clearToken();
+      window.location.href = "/login";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+      setRevokeBusy(false);
+    }
+  }
+
+  async function sauverInstance() {
+    setInstBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const maj = await api.put<InstanceOut>("/instance", { mode, public_url: urlPublique });
+      setInst(maj);
+      flash("Profil d'accès enregistré.");
+      if (isSyndic) chargerAudit(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setInstBusy(false);
+    }
+  }
+
+  async function lancerDiagnostic() {
+    setDiagBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      await api.post<{ checked_at: string; results: DiagnosticItem[] }>("/instance/diagnostic");
+      chargerInstance();
+      flash("Diagnostic terminé.");
+      if (isSyndic) chargerAudit(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setDiagBusy(false);
     }
   }
 
@@ -277,8 +365,113 @@ export default function Securite() {
         )}
       </Card>
 
+      <Card title="Sessions et appareils">
+        <div className="space-y-3">
+          <p className="text-sm leading-relaxed text-slate-600">
+            Si vous perdez un appareil ou doutez de sa sécurité, cette action ferme immédiatement
+            toutes vos sessions, sur tous vos appareils (y compris celle-ci).
+          </p>
+          <Button variant="secondary" onClick={revoquerSessions} disabled={revokeBusy}>
+            {revokeBusy ? "…" : "Déconnecter tous mes appareils"}
+          </Button>
+        </div>
+      </Card>
+
       {isSyndic && (
         <>
+          <Card title="Accès depuis internet">
+            <div className="space-y-4">
+              {inst?.exposed_unprotected && (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  ⚠️ Cette application est joignable depuis internet (première requête externe
+                  le{" "}
+                  {inst.first_external_at
+                    ? new Date(inst.first_external_at).toLocaleString("fr-FR")
+                    : "—"}
+                  ) mais elle n'est pas déclarée comme exposée. Vérifiez la configuration ci-dessous.
+                </p>
+              )}
+              <div className="space-y-1.5 text-sm">
+                <p className="font-medium text-slate-600">Où est installée cette application ?</p>
+                {MODES.map((m) => (
+                  <label key={m.value} className="flex items-center gap-2 text-slate-600">
+                    <input
+                      type="radio"
+                      name="mode-instance"
+                      value={m.value}
+                      checked={mode === m.value}
+                      onChange={() => setMode(m.value)}
+                    />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+
+              {mode !== "local" && (
+                <>
+                  <Input
+                    label="Adresse publique (URL)"
+                    value={urlPublique}
+                    onChange={(e) => setUrlPublique(e.target.value)}
+                    placeholder="https://copro.exemple.fr"
+                  />
+                  <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <p className="font-medium text-slate-700">
+                      {mode === "vps" ? "Sur un serveur (VPS) :" : "Depuis chez vous :"}
+                    </p>
+                    <p>
+                      1. Pointez votre domaine vers{" "}
+                      {mode === "vps"
+                        ? "ce serveur"
+                        : "votre connexion — ou utilisez un tunnel, recommandé"},
+                      {" "}(record DNS de type A).
+                    </p>
+                    <p>2. Activez le profil internet (proxy TLS automatique) :</p>
+                    <CommandeCopiable texte="docker compose --profile internet up -d --build" />
+                    <p className="text-xs leading-relaxed text-slate-500">
+                      3. Renseignez l'URL ci-dessus, enregistrez, puis lancez le diagnostic.
+                    </p>
+                    {mode === "maison" && (
+                      <p className="text-xs leading-relaxed text-slate-500">
+                        Hébergement maison : préférez un tunnel (Cloudflare Tunnel, Tailscale) à
+                        l'ouverture de ports sur votre box — voir « Hébergement maison » dans le README.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={sauverInstance} disabled={instBusy || !inst}>
+                  {instBusy ? "…" : "Enregistrer"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={lancerDiagnostic}
+                  disabled={diagBusy || !inst || mode === "local"}
+                >
+                  {diagBusy ? "Diagnostic en cours… (≈ 30 s)" : "Lancer le diagnostic"}
+                </Button>
+              </div>
+
+              {inst?.last_check && inst.last_check.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-slate-500">
+                    Dernier diagnostic :{" "}
+                    {inst.last_check_at ? new Date(inst.last_check_at).toLocaleString("fr-FR") : ""}
+                  </p>
+                  {inst.last_check.map((it) => (
+                    <div key={it.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                      <span aria-hidden="true">{ICONES_STATUT[it.statut] ?? "➖"}</span>
+                      <span className="font-medium text-slate-700">{it.label}</span>
+                      {it.detail && <span className="text-slate-500">— {it.detail}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+
           <Card title="Politique de double authentification">
             <div className="space-y-3">
               <Select
@@ -380,6 +573,26 @@ export default function Securite() {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+function CommandeCopiable({ texte }: { texte: string }) {
+  const [copie, setCopie] = useState(false);
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
+      <code className="flex-1 overflow-x-auto whitespace-nowrap text-xs text-slate-100">{texte}</code>
+      <button
+        type="button"
+        className="shrink-0 text-xs font-medium text-slate-300 hover:text-white"
+        onClick={() => {
+          navigator.clipboard?.writeText(texte);
+          setCopie(true);
+          setTimeout(() => setCopie(false), 1500);
+        }}
+      >
+        {copie ? "✓ copié" : "copier"}
+      </button>
     </div>
   );
 }

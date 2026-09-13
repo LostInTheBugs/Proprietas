@@ -61,6 +61,24 @@ export interface AuditEntry {
   ip: string;
 }
 
+export interface DiagnosticItem {
+  id: string;
+  label: string;
+  statut: string; // ok | attention | echec | ignore
+  detail: string;
+}
+
+export interface InstanceOut {
+  mode: string; // local | vps | maison
+  public_url: string;
+  first_external_at: string | null;
+  last_check_at: string | null;
+  last_check: DiagnosticItem[];
+  exposed_unprotected: boolean;
+  https_active: boolean;
+  version: string;
+}
+
 export interface Personne {
   id: number;
   nom: string;
