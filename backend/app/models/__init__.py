@@ -15,10 +15,11 @@ from app.models.contact import Contact
 from app.models.contrat import Contrat
 from app.models.audit import AuditLog
 from app.models.instance import InstanceState
+from app.models.recouvrement import ActeRecouvrement
 
 __all__ = [
     "User", "UserCopro", "Copropriete", "Personne", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
-    "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState",
+    "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
 ]

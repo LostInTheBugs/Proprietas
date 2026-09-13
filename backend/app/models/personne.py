@@ -11,6 +11,7 @@ class Personne(Base):
     prenom = Column(String, default="")
     email = Column(String, default="")
     telephone = Column(String, default="")
+    adresse = Column(String, default="")  # adresse postale (mise en demeure)
     est_proprietaire = Column(Boolean, default=True)
     est_occupant = Column(Boolean, default=True)
     notes = Column(String, default="")

@@ -36,6 +36,9 @@ class Copropriete(Base):
     # Défini à la création de la copropriété (COPRO_TOTP_DEFAULT_POLICY) ;
     # les bases existantes restent en « off » après migration.
     totp_policy = Column(String, default="off")
+    # Taux de l'intérêt légal (%) pour les intérêts de retard de recouvrement —
+    # arrêté semestriel, saisi par le syndic (jamais deviné par l'app).
+    taux_legal_retard = Column(Float, default=0.0)
     notes = Column(String, default="")
 
     users = relationship("User", back_populates="copropriete")

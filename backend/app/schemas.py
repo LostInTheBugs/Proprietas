@@ -63,6 +63,7 @@ class CoproOut(BaseModel):
     relance_jour: int = 1
     relance_heure: str = "09:00"
     relance_minimum: float = 0.0
+    taux_legal_retard: float = 0.0  # intérêts de retard de recouvrement (%)
     totp_policy: str = "off"  # double authentification : off | syndic | all
 
     @field_validator("totp_policy", mode="before")
@@ -105,6 +106,7 @@ class CoproUpdate(BaseModel):
     relance_jour: Optional[int] = None
     relance_heure: Optional[str] = None
     relance_minimum: Optional[float] = None
+    taux_legal_retard: Optional[float] = None
     totp_policy: Optional[str] = None
     notes: Optional[str] = None
 
@@ -122,6 +124,7 @@ class PersonneIn(BaseModel):
     prenom: str = ""
     email: str = ""
     telephone: str = ""
+    adresse: str = ""  # adresse postale (mise en demeure)
     est_proprietaire: bool = True
     est_occupant: bool = True
     notes: str = ""
@@ -620,3 +623,84 @@ class InstanceUpdate(BaseModel):
         if v and not (v.startswith("http://") or v.startswith("https://")):
             raise ValueError("l'URL publique doit commencer par http:// ou https://")
         return v
+
+
+# ---------- Recouvrement ----------
+class RecouvrementLotOut(BaseModel):
+    lot_id: int
+    lot_numero: str
+    personne_id: Optional[int] = None
+    personne_nom: str = ""
+    personne_email: str = ""
+    solde: float = 0.0
+    retard_depuis: Optional[date] = None
+    statut: str = "a_jour"
+    statut_label: str = ""
+    md_date: Optional[date] = None
+    md_jours: Optional[int] = None
+    jours_restants: Optional[int] = None
+    frais_total: float = 0.0
+    interets: float = 0.0
+    total_reclame: float = 0.0
+
+
+class DecompteLigne(BaseModel):
+    exercice: Optional[int] = None
+    libelle: str = ""
+    echeance: Optional[date] = None
+    charges: float = 0.0
+    fonds: float = 0.0
+    montant: float = 0.0
+    restant_du: float = 0.0
+    echu: bool = False
+
+
+class RecouvrementActeOut(BaseModel):
+    id: int
+    type: str
+    date_acte: datetime
+    date_envoi: Optional[date] = None
+    mode_envoi: str = ""
+    reference: str = ""
+    montant: float = 0.0
+    libelle: str = ""
+    auteur: str = ""
+
+
+class RecouvrementActeIn(BaseModel):
+    type: str
+    date_envoi: Optional[date] = None
+    mode_envoi: str = ""
+    reference: str = ""
+    montant: float = 0.0
+    libelle: str = ""
+
+
+class RecouvrementDossierOut(BaseModel):
+    lot_id: int
+    lot_numero: str
+    personne_nom: str = ""
+    personne_email: str = ""
+    personne_adresse: str = ""
+    solde: float = 0.0
+    arriere_echu: float = 0.0
+    retard_depuis: Optional[date] = None
+    statut: str = "a_jour"
+    statut_label: str = ""
+    md_date: Optional[date] = None
+    md_jours: Optional[int] = None
+    jours_restants: Optional[int] = None
+    frais_total: float = 0.0
+    interets: float = 0.0
+    taux_legal: float = 0.0
+    total_reclame: float = 0.0
+    decompte: List[DecompteLigne] = []
+    actes: List[RecouvrementActeOut] = []
+    relances: List[RelanceOut] = []
+
+
+class Mise19_2Out(BaseModel):
+    lignes: List[DecompteLigne] = []
+    total: float = 0.0
+    arriere_echu: float = 0.0
+    exercice: Optional[int] = None
