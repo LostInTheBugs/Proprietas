@@ -189,7 +189,7 @@ export default function Settings() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="Expéditeur" value={copro.email_expediteur} onChange={(e) => setCopro({ ...copro, email_expediteur: e.target.value })} placeholder="syndic@votre-domaine.fr" />
-            <Input label="Adresse publique de l'app" value={copro.frontend_url} onChange={(e) => setCopro({ ...copro, frontend_url: e.target.value })} placeholder="https://copro.cloudfr.net" />
+            <Input label="Adresse publique de l'app" value={copro.frontend_url} onChange={(e) => setCopro({ ...copro, frontend_url: e.target.value })} placeholder="https://proprietas.cloudfr.net" />
           </div>
           {isSyndic && (
             <div className="flex gap-2">

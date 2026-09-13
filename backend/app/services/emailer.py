@@ -160,7 +160,7 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
     lignes += [
         "",
         "Vous pouvez consulter les détails et répondre en ligne :",
-        copro.frontend_url or "https://copro.cloudfr.net",
+        copro.frontend_url or "https://proprietas.cloudfr.net",
         "",
         "Cordialement,",
         syndic_nom or "Le syndic",

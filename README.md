@@ -21,7 +21,7 @@ plan pluriannuel de travaux ; Lyon : 3 lots) :
 
 | Champ | Valeur |
 |-------|--------|
-| Email | `demo@copro.cloudfr.net` |
+| Email | `demo@proprietas.cloudfr.net` |
 | Mot de passe | `demo123456` |
 
 Le compte démo ne bloque pas l'inscription : le premier compte réel peut toujours
@@ -118,7 +118,7 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 83 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 95 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,

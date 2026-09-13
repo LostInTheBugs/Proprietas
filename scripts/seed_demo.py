@@ -28,9 +28,9 @@ from app.models.travaux import Travaux
 from app.models.relance import Relance
 
 db = SessionLocal()
-EMAIL_DEMO = "demo@copro.cloudfr.net"
+EMAIL_DEMO = "demo@proprietas.cloudfr.net"
 MDP_DEMO = "demo123456"
-FRONT_URL = "https://copro.cloudfr.net"
+FRONT_URL = "https://proprietas.cloudfr.net"
 
 
 def r2(x):
@@ -437,7 +437,7 @@ def main():
                      description="Contrôle annuel de la chaudière collective."))
 
     db.commit()
-    print("Démo créée : demo@copro.cloudfr.net / demo123456")
+    print("Démo créée : demo@proprietas.cloudfr.net / demo123456")
     print("  - Résidence Les Tilleuls (Paris, 5 lots, comptes 2024-2026, AG, documents, PPT)")
     print("  - Résidence Les Acacias (Lyon, 3 lots)")
 
