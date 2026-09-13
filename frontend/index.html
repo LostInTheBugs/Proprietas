@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Proprietas — Gestion de copropriété</title>
     <meta name="version" content="2026.09.004" />
+    <script>
+      // Applique le thème avant le premier rendu (évite un flash clair en mode sombre).
+      // La préférence du compte est ensuite resynchronisée après /auth/me.
+      (function () {
+        try {
+          var t = localStorage.getItem("copro_theme") || "system";
+          var dark = t === "dark" || (t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

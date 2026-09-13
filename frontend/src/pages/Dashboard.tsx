@@ -115,9 +115,9 @@ export default function Dashboard() {
             <div>
               <svg viewBox="0 0 560 190" className="w-full" role="img" aria-label="Trésorerie mensuelle">
                 {/* ligne de base */}
-                <line x1="0" y1="160" x2="560" y2="160" stroke="#cbd5e1" strokeWidth="1" />
+                <line x1="0" y1="160" x2="560" y2="160" className="chart-axis" strokeWidth="1" />
                 {[0, 1, 2, 3].map((i) => (
-                  <line key={i} x1="0" y1={160 - i * 38} x2="560" y2={160 - i * 38} stroke="#f1f5f9" strokeWidth="1" />
+                  <line key={i} x1="0" y1={160 - i * 38} x2="560" y2={160 - i * 38} className="chart-grid" strokeWidth="1" />
                 ))}
                 {mois.map((m, i) => {
                   const x = 12 + i * 44;

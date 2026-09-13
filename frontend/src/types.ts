@@ -6,6 +6,7 @@ export interface User {
   nom: string;
   role: string;
   two_factor_enabled?: boolean;
+  theme?: string;
 }
 
 export interface Copro {

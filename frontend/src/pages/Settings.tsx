@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useUser } from "../auth";
 import type { Copro, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
+import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 
 export default function Settings() {
   const { user: me } = useUser();
@@ -17,6 +18,18 @@ export default function Settings() {
   // Nouveau mot de passe SMTP (le mot de passe actuel n'est jamais renvoyé par le backend)
   const [smtpPassword, setSmtpPassword] = useState("");
   const [prochaineDate, setProchaineDate] = useState<string | null>(null);
+  // Thème d'affichage (préférence personnelle, conservée sur le compte)
+  const [choixTheme, setChoixTheme] = useState<Theme>(getStoredTheme());
+  useEffect(() => {
+    if (me?.theme) setChoixTheme(normalizeTheme(me.theme));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.theme]);
+
+  function changerTheme(t: Theme) {
+    setChoixTheme(t);
+    applyTheme(t);
+    api.post("/auth/theme", { theme: t }).catch(() => {});
+  }
 
   useEffect(() => {
     api.get<Copro>("/copro").then((c) => {
@@ -122,6 +135,27 @@ export default function Settings() {
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {saved && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Modifications enregistrées ✓</p>}
+
+      <Card title="Apparence">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["system", "Système"],
+            ["light", "Clair"],
+            ["dark", "Sombre"],
+          ].map(([value, label]) => (
+            <Button
+              key={value}
+              variant={choixTheme === value ? "primary" : "secondary"}
+              onClick={() => changerTheme(value as Theme)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          « Système » suit le réglage clair / sombre de l'appareil. La préférence est conservée sur votre compte.
+        </p>
+      </Card>
 
       <Card title="Copropriété">
         <div className="space-y-3">
