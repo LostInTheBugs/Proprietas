@@ -12,7 +12,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
 from app.routes.copro import get_or_create_copro
-from app.schemas import RegisterRequest, LoginRequest, LoginResponse, TokenResponse, UserOut, UserCreate, CoproCreate
+from app.schemas import RegisterRequest, LoginRequest, LoginResponse, TokenResponse, UserOut, UserCreate, CoproCreate, ThemeIn
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.services import two_factor
 
@@ -137,6 +137,14 @@ def creer_copropriete(data: CoproCreate, db: Session = Depends(get_db), user: Us
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.post("/theme")
+def maj_theme(data: ThemeIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Préférence d'affichage du compte (clair / sombre / système)."""
+    user.theme = data.theme
+    db.commit()
+    return {"theme": user.theme}
 
 
 @router.post("/users", response_model=UserOut)

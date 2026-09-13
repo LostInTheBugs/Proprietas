@@ -27,6 +27,24 @@ class UserOut(BaseModel):
     nom: str
     role: str
     two_factor_enabled: bool = False  # propriété du modèle User (totp_enabled)
+    theme: str = "system"  # light | dark | system
+
+    @field_validator("theme", mode="before")
+    @classmethod
+    def _theme_none(cls, v):
+        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+        return "system" if v is None else v
+
+
+class ThemeIn(BaseModel):
+    theme: str
+
+    @field_validator("theme")
+    @classmethod
+    def _theme_valide(cls, v):
+        if v not in ("light", "dark", "system"):
+            raise ValueError("thème invalide (light | dark | system)")
+        return v
 
 
 class UserCreate(BaseModel):

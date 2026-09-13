@@ -28,6 +28,8 @@ class User(Base):
     # Version des jetons : incrémentée par « déconnecter tous mes appareils » —
     # les JWT portent la version et sont refusés dès qu'elle ne correspond plus.
     token_version = Column(Integer, default=0)
+    # Préférence d'affichage : "light" | "dark" | "system" (voir Réglages → Apparence).
+    theme = Column(String, default="system")
     # Dernière connexion (alertes « nouvelle connexion »)
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String, default="")
