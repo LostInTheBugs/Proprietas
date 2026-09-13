@@ -140,6 +140,33 @@ déploiement réel, le parcours équivalent tournant en CI dans `test_flux_compl
 Production : **https://proprietas.cloudfr.net** + legacy **https://copro.cloudfr.net**
 (Cloudflare proxy → serveur de production, Caddy TLS Let's Encrypt).
 
+### Profils de déploiement
+
+- **Réseau local** (défaut) : `docker compose up -d` → l'application écoute sur le
+  port 8000, accessible depuis votre réseau (aucun domaine requis).
+- **Accès depuis internet** : `COPRO_DOMAIN="copro.exemple.fr" docker compose
+  --profile internet up -d --build` → ajoute le proxy TLS (Caddy, certificats
+  Let's Encrypt automatiques). Plusieurs domaines possibles, séparés par des
+  virgules (`COPRO_DOMAIN="copro.fr, ancien.fr"`).
+
+Dans l'application, le profil est affiché et VÉRIFIÉ : 🔐 Sécurité →
+« Accès depuis internet » (réservé au syndic) — déclarez où vit l'application,
+renseignez l'URL publique puis lancez le **diagnostic** (HTTPS, certificat, DNS,
+en-têtes, rate-limit, couverture 2FA). La première requête vue depuis internet est
+détectée automatiquement : un bandeau propose l'assistant — une exposition ne peut
+pas passer inaperçue.
+
+### Hébergement « maison » (sans ouvrir de ports)
+
+Depuis une connexion personnelle, préférez un tunnel à l'ouverture de ports :
+- **Cloudflare Tunnel** : `cloudflared tunnel --url http://localhost:8000` (essai) ;
+  en production, un tunnel nommé vers votre domaine (Cloudflare Zero Trust, gratuit
+  jusqu'à 50 utilisateurs) ;
+- ou **Tailscale Funnel**.
+
+Activez ensuite le durcissement dans 🔐 Sécurité → « Accès depuis internet » et
+vérifiez avec le diagnostic.
+
 ### Migrations Alembic
 
 Le schéma est géré par **Alembic** (`backend/alembic/`, URL lue depuis `COPRO_DATABASE_URL` —
@@ -171,7 +198,8 @@ lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
 # Sur le serveur de production (utilisateur avec droits docker)
 cd /opt/copro-app
 git pull
-sudo docker compose up -d --build
+sudo docker compose up -d --build                      # réseau local
+sudo docker compose --profile internet up -d --build   # instance exposée (proxy TLS)
 ```
 
 Le build multi-stage (Dockerfile racine `backend/Dockerfile`) compile le frontend (Node 20)
