@@ -2,6 +2,8 @@
 # Proprietas Desktop — spec PyInstaller (onedir, sans console).
 # Build : pyinstaller --clean --noconfirm desktop/proprietas.spec  (depuis la racine du dépôt,
 #         après `npm --prefix frontend run build`).
+# macOS : même commande sur un Mac → dist/Proprietas.app (BUNDLE ; icône .icns
+#         committée — régénérable avec desktop/make_icns.py).
 #
 # onedir et non onefile : le mode onefile s'auto-extrait dans %TEMP% puis se
 # relance, un comportement qui déclenche les heuristiques de Windows Defender
@@ -9,6 +11,7 @@
 
 import json
 import os
+import sys
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, '..'))  # racine du dépôt, absolue
 BACKEND = os.path.join(ROOT, 'backend')
@@ -97,3 +100,20 @@ coll = COLLECT(
     upx=False,
     name='Proprietas',
 )
+
+# --- macOS : bundle .app (icône .icns, version dans l'Info.plist) ----------
+# N'est exécuté que sur macOS ; sur Windows/Linux la spec produit dist/Proprietas/.
+if sys.platform == 'darwin':
+    appl = BUNDLE(
+        coll,
+        name='Proprietas.app',
+        icon='proprietas.icns',
+        bundle_identifier='com.lostinthebugs.proprietas',
+        version=_ver,
+        info_plist={
+            'NSHighResolutionCapable': True,
+            'LSApplicationCategoryType': 'public.app-category.finance',
+            'LSMinimumSystemVersion': '12.0',
+            'NSHumanReadableCopyright': 'MIT License - github.com/LostInTheBugs/Proprietas',
+        },
+    )

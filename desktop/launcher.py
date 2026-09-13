@@ -1,9 +1,9 @@
 """Proprietas Desktop — lance le serveur local puis ouvre la fenêtre native.
 
-Double-clic sur Proprietas.exe : le backend (uvicorn) démarre sur un port
-local libre (127.0.0.1), la fenêtre s'ouvre sur l'application. Les données
-vivent dans « data/ », à côté de l'exécutable — sauvegarder = copier ce
-dossier, rien ne sort de la machine.
+Double-clic sur Proprietas.exe (Windows) ou Proprietas.app (macOS) : le
+backend (uvicorn) démarre sur un port local libre (127.0.0.1), la fenêtre
+s'ouvre sur l'application. Les données vivent dans « data/ », à côté de
+l'application — sauvegarder = copier ce dossier, rien ne sort de la machine.
 
 Variables d'environnement :
   PROPRIETAS_NO_WINDOW=1  → mode sans fenêtre (serveur seul ; tests, CI)
@@ -20,10 +20,40 @@ from pathlib import Path
 
 
 def base_dir() -> Path:
-    """Dossier de travail : à côté de l'exécutable (bundle) ou racine du dépôt (dev)."""
+    """Dossier de travail : à côté de l'application (bundle) ou racine du dépôt (dev).
+
+    macOS : le binaire vit dans « Proprietas.app/Contents/MacOS/ » — les données
+    vont À CÔTÉ du .app (jamais dedans), comme sur Windows à côté de l'exe.
+    """
     if getattr(sys, "frozen", False):  # exécutable PyInstaller
-        return Path(sys.executable).resolve().parent
+        exe = Path(sys.executable).resolve()
+        if sys.platform == "darwin":
+            for parent in exe.parents:
+                if parent.suffix == ".app":
+                    return parent.parent
+        return exe.parent
     return Path(__file__).resolve().parent.parent
+
+
+def data_dir(base: Path) -> Path:
+    """Dossier « data » : à côté de l'application si l'emplacement est inscriptible.
+
+    Repli macOS (emplacement protégé — lecture seule, translocation Gatekeeper) :
+    ~/Library/Application Support/Proprietas/data.
+    """
+    cand = base / "data"
+    try:
+        cand.mkdir(parents=True, exist_ok=True)
+        probe = cand / ".write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return cand
+    except OSError:
+        if sys.platform == "darwin":
+            alt = Path.home() / "Library" / "Application Support" / "Proprietas" / "data"
+            alt.mkdir(parents=True, exist_ok=True)
+            return alt
+        raise
 
 
 def resource_dir() -> Path:
@@ -52,7 +82,21 @@ def wait_server(port: int, tries: int = 300) -> bool:
 
 
 def screen_size() -> tuple:
-    """Taille de l'écran (Windows) pour ne pas ouvrir plus grand que lui."""
+    """Taille de l'écran (Windows / macOS) pour ne pas ouvrir plus grand que lui."""
+    if sys.platform == "darwin":
+        try:  # API pywebview ; repli AppKit ; repli taille raisonnable
+            import webview
+
+            s = webview.screens[0]
+            return int(s.width), int(s.height)
+        except Exception:
+            try:
+                from AppKit import NSScreen
+
+                f = NSScreen.mainScreen().frame()
+                return int(f.size.width), int(f.size.height)
+            except Exception:
+                return 1280, 800
     try:
         import ctypes
 
@@ -126,16 +170,29 @@ def _write_desktop_log(blocks: list) -> None:
 
 def _warn_user(base: Path) -> None:
     """Avertit l'utilisateur que la fenêtre native a échoué (best effort)."""
+    msg = (
+        "La fenêtre native de Proprietas n'a pas pu s'ouvrir.\n"
+        "Un journal de diagnostic a été écrit :\n"
+        f"{base / 'desktop.log'}\n\n"
+        "L'application s'ouvre dans votre navigateur.\n"
+        "Merci d'envoyer ce journal au développeur."
+    )
     try:
+        if sys.platform == "darwin":
+            import subprocess
+
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    'display dialog "{}" buttons {{"OK"}} with title "Proprietas"'
+                    ' with icon caution'.format(msg.replace('"', "'").replace("\n", " ")),
+                ],
+                check=False,
+            )
+            return
         import ctypes
 
-        msg = (
-            "La fenêtre native de Proprietas n'a pas pu s'ouvrir.\n"
-            "Un journal de diagnostic a été écrit :\n"
-            f"{base / 'desktop.log'}\n\n"
-            "L'application s'ouvre dans votre navigateur.\n"
-            "Merci d'envoyer ce journal au développeur."
-        )
         ctypes.windll.user32.MessageBoxW(0, msg, "Proprietas", 0x30)
     except Exception:
         pass
@@ -143,8 +200,7 @@ def _warn_user(base: Path) -> None:
 
 def prepare_env(base: Path, res: Path) -> None:
     """Configuration du serveur embarqué : SQLite + uploads dans data/."""
-    data = base / "data"
-    data.mkdir(parents=True, exist_ok=True)
+    data = data_dir(base)
     os.environ.setdefault(
         "COPRO_DATABASE_URL", "sqlite:///" + (data / "proprietas.db").as_posix()
     )
@@ -230,15 +286,16 @@ def main() -> None:
     threading.Thread(target=server.run, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     wait_server(port)
+    # URL du serveur local (diagnostic & CI ; retirée du zip livré)
+    try:
+        (base / "url.txt").write_text(url + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
     if os.environ.get("PROPRIETAS_NO_WINDOW") == "1":
         # mode headless (tests/CI) : stdout peut être absent (binaire windowed)
         try:
             print(url, flush=True)
-        except Exception:
-            pass
-        try:
-            (base / "url.txt").write_text(url + "\n", encoding="utf-8")
         except Exception:
             pass
         try:
@@ -249,7 +306,7 @@ def main() -> None:
         return
 
     def _open_window() -> None:
-        import webview  # fenêtre native (WebView2 sous Windows)
+        import webview  # fenêtre native (WebView2 sous Windows, WKWebView sous macOS)
 
         sw, sh = screen_size()
         w = min(1280, max(960, sw - 80))
@@ -262,7 +319,9 @@ def main() -> None:
             min_size=(900, 600),
             js_api=DesktopApi(),
         )
-        webview.start()  # bloque jusqu'à la fermeture de la fenêtre
+        # Le callback de start() s'exécute une fois la fenêtre affichée :
+        # preuve d'ouverture consignée dans desktop.log (support & CI).
+        webview.start(lambda: _write_desktop_log([f"fenêtre native ouverte — {url}"]))
 
     try:
         _open_window()

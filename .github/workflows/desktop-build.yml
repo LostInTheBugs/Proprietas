@@ -130,6 +130,7 @@ jobs:
         run: |
           Remove-Item dist\Proprietas\url.txt -ErrorAction SilentlyContinue
           Remove-Item dist\Proprietas\error.log -ErrorAction SilentlyContinue
+          Remove-Item dist\Proprietas\desktop.log -ErrorAction SilentlyContinue
           Remove-Item dist\Proprietas\data -Recurse -Force -ErrorAction SilentlyContinue
           Copy-Item desktop\LISEZ-MOI.txt dist\Proprietas\
           Copy-Item desktop\README.txt dist\Proprietas\
@@ -142,4 +143,108 @@ jobs:
         with:
           name: ProprietasDesktop-windows
           path: Proprietas-Windows.zip
+          retention-days: 30
+
+  macos:
+    runs-on: macos-latest      # arm64 (Apple Silicon)
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the SPA (embarquée dans l'app)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pyinstaller pywebview
+
+      - name: Build Proprietas.app
+        run: pyinstaller --clean --noconfirm desktop/proprietas.spec
+
+      - name: Ad-hoc signing (required on Apple Silicon)
+        run: |
+          codesign --force --deep --sign - --timestamp=none dist/Proprietas.app
+          codesign -dv dist/Proprietas.app 2>&1 | grep -i signature
+
+      - name: "Smoke test (headless: server + API + UI + SQLite database)"
+        env:
+          PROPRIETAS_NO_WINDOW: '1'
+        run: |
+          ./dist/Proprietas.app/Contents/MacOS/Proprietas &
+          PID=$!
+          for i in $(seq 1 60); do
+            sleep 2
+            [ -s dist/url.txt ] && break
+          done
+          if [ -f dist/error.log ]; then echo '--- error.log ---'; cat dist/error.log; fi
+          LINE="$(head -n 1 dist/url.txt 2>/dev/null || true)"
+          echo "launcher url: $LINE"
+          case "$LINE" in http://127.0.0.1:*) ;; *) echo "launcher did not start"; kill $PID 2>/dev/null || true; exit 1;; esac
+          BASE="${LINE%/}"
+          curl -fsS "$BASE/api/health"; echo
+          curl -fsS "$BASE/api/health" | grep -q Proprietas
+          curl -fsS "$BASE/" | grep -q Proprietas
+          test -f dist/data/proprietas.db
+          echo "UI check: Proprietas found in bundle HTML; SQLite database created"
+          kill $PID 2>/dev/null || true
+
+      - name: "Window smoke test (best effort: real window)"
+        continue-on-error: true
+        run: |
+          rm -f dist/url.txt
+          open dist/Proprietas.app
+          sleep 25
+          LINE="$(head -n 1 dist/url.txt 2>/dev/null || true)"
+          echo "windowed url: $LINE"
+          if [ -n "$LINE" ]; then curl -fsS "${LINE%/}/api/health"; echo; fi
+          pgrep -fl 'Proprietas.app/Contents/MacOS' || echo 'process not found'
+          pkill -f '[P]roprietas.app/Contents/MacOS' || true
+
+      - name: Debug files (always)
+        if: always()
+        run: |
+          mkdir -p debug
+          cp dist/url.txt debug/ 2>/dev/null || true
+          cp dist/error.log debug/ 2>/dev/null || true
+          cp dist/desktop.log debug/ 2>/dev/null || true
+          ls -la debug/ || true
+
+      - name: Upload debug files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProprietasDesktop-macos-debug
+          path: debug/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: "Package (zip with user guides in 4 languages)"
+        run: |
+          rm -rf "Proprietas-macOS"
+          mkdir -p "Proprietas-macOS"
+          ditto dist/Proprietas.app "Proprietas-macOS/Proprietas.app"
+          cp desktop/macos/LISEZ-MOI.txt desktop/macos/README.txt desktop/macos/LIESMICH.txt desktop/macos/LIES-MICH.txt "Proprietas-macOS/"
+          rm -f "Proprietas-macOS/url.txt" "Proprietas-macOS/desktop.log" "Proprietas-macOS/error.log"
+          ditto -c -k --sequesterRsrc --keepParent "Proprietas-macOS" "Proprietas-macOS.zip"
+          unzip -l "Proprietas-macOS.zip" | head -20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProprietasDesktop-macos
+          path: Proprietas-macOS.zip
           retention-days: 30

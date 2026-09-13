@@ -29,3 +29,7 @@ desktop/version_info.txt
 desktop/build/
 desktop/dist/
 build/
+
+# Desktop — fichiers d'exécution locaux (diagnostic)
+url.txt
+data/

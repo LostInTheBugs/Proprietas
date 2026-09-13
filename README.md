@@ -184,6 +184,21 @@ L'ancien `test_e2e.py` (script urllib contre une instance réelle) vit désormai
 dans `backend/scripts/smoke_e2e.py` : conservé comme smoke test manuel d'un
 déploiement réel, le parcours équivalent tournant en CI dans `test_flux_complet.py`.
 
+## Applications de bureau (Windows / macOS)
+
+Des versions autonomes (aucun serveur, aucun Docker) sont produites par la CI
+(`desktop/`) et jointes à chaque release GitHub :
+
+- `Proprietas-Windows.zip` — double-clic sur `Proprietas.exe` ; données dans le
+  dossier `data/` à côté de l'exécutable ;
+- `Proprietas-macOS.zip` — double-clic sur `Proprietas.app` (Apple Silicon ;
+  premier lancement : clic droit → Ouvrir) ; données dans `data/` à côté de
+  l'application (repli : `~/Library/Application Support/Proprietas` si
+  l'emplacement est en lecture seule).
+
+Les deux archives incluent le guide utilisateur en FR / EN / DE / LU.
+Téléchargement : [dernière release](https://github.com/LostInTheBugs/Proprietas/releases/latest).
+
 ## Déploiement
 
 Production : **https://proprietas.cloudfr.net** + legacy **https://copro.cloudfr.net**

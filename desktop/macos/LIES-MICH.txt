@@ -1,0 +1,46 @@
+PROPRIETAS — macOS-VERSIOUN (Desktop-App)
+=========================================
+
+Wat ass dat?
+  Proprietas ass eng App fir d'Gestioun vun enger Coproprietéit fir
+  fräiwëlleg Syndiken. Dës macOS-Versioun ass autonom: Server an
+  Interface sinn am Dossier agebaut — näischt anescht ze installéieren,
+  keng Internetverbindung néideg. Är Donnéeë bleiwen op dësem Computer.
+
+Installatioun
+  1. Entpackt d'Archiv « Proprietas-macOS.zip » wou Dir wëllt
+     (z. B. Dokumenter). Loosst alles zesummen: d'Donnéeë kommen
+     niewent d'Applikatioun.
+  2. Duebelklick op « Proprietas.app » — d'Fënster geet op.
+
+     Éischten Start: macOS weist eventuell "macOS kann den Entwéckler
+     vun dëser Applikatioun net iwwerpréiwen" (normal fir eng net
+     signéiert Applikatioun). Rietsklick op « Proprietas.app » →
+     "Opmaachen", duerno "Opmaachen" confirméieren. Duerno geet en
+     Duebelklick.
+  3. Beim éischten Start: erstellt Äre Syndic-Kont (Tab « Premier compte
+     (syndic) »). D'Interface ass op Franséisch.
+
+Är Donnéeën
+  - Si leien am Dossier « data », NIEVERNT Proprietas.app.
+  - Sécherung = den Dossier « data » kopéieren (USB-Stick, extern Plack…).
+  - Trennt d'Applikatioun ni vun sengem Dossier « data »: si ginn
+    zesummen. Wann den Dossier « data » net niewent der Applikatioun
+    erschéngt (geschützten Emplacement): Finder → Menü "Aller" →
+    "Aller au dossier…" → ~/Library/Application Support/Proprietas
+
+macOS / Gatekeeper
+  - D'App ass net digital signéiert: beim éischte Start kann macOS eng
+    Warnung weisen ("macOS kann den Entwéckler net iwwerpréiwen") —
+    kuckt Schrëtt 2 (Rietsklick → Opmaachen). Nëmmen eemol.
+  - Keng Telemetrie: d'Applikatioun verbënnt sech mat näischt.
+
+Gutt ze wëssen
+  - Experimentell App, als Demonstratioun: et ass keng juristesch
+    Berodung a net garantéiert konform mat der Gesetzgebung. Fir
+    juristesch Froen konsultéiert e Professionnel.
+  - Update: déi nei Versioun eroflueden an Proprietas.app ersetzen
+    (behält Ären Dossier « data »).
+  - Quellcode: https://github.com/LostInTheBugs/Proprietas
+
+Vill Erfolleg!

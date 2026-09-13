@@ -1,0 +1,47 @@
+PROPRIETAS — macOS-VERSION (Desktop-Anwendung)
+==============================================
+
+Was ist das?
+  Proprietas ist eine Verwaltungsanwendung für Wohnungseigentümer-
+  gemeinschaften (Copropriété), für ehrenamtliche Verwalter. Diese
+  macOS-Version ist eigenständig: Server und Oberfläche sind im Ordner
+  enthalten — nichts weiter zu installieren, keine Internetverbindung
+  nötig. Ihre Daten bleiben auf diesem Computer.
+
+Installation
+  1. Entpacken Sie das Archiv « Proprietas-macOS.zip » an einen
+     beliebigen Ort (z. B. Dokumente). Lassen Sie alles zusammen: Ihre
+     Daten liegen neben der Anwendung.
+  2. Doppelklick auf « Proprietas.app » — das Fenster öffnet sich.
+
+     Erster Start: macOS meldet eventuell „macOS kann den Entwickler
+     dieser Anwendung nicht überprüfen" (normal für eine nicht
+     signierte Anwendung). Rechtsklick auf « Proprietas.app » →
+     „Öffnen", dann „Öffnen" bestätigen. Danach genügt ein Doppelklick.
+  3. Beim ersten Start: Verwalterkonto anlegen (Tab « Premier compte
+     (syndic) »). Die Oberfläche ist auf Französisch.
+
+Ihre Daten
+  - Sie liegen im Ordner « data », NEBEN Proprietas.app.
+  - Sicherung = den Ordner « data » kopieren (USB-Stick, externe
+    Festplatte…).
+  - Trennen Sie die Anwendung nie von ihrem Ordner « data »: sie
+    gehören zusammen. Falls der Ordner « data » nicht neben der
+    Anwendung erscheint (geschützter Ort): Finder → Menü „Gehe zu" →
+    „Gehe zum Ordner…" → ~/Library/Application Support/Proprietas
+
+macOS / Gatekeeper
+  - Die Anwendung ist nicht digital signiert: beim ersten Start kann
+    macOS eine Warnung anzeigen („macOS kann den Entwickler nicht
+    überprüfen") — siehe Schritt 2 (Rechtsklick → Öffnen). Nur einmalig.
+  - Keine Telemetrie: die Anwendung verbindet sich mit nichts.
+
+Gut zu wissen
+  - Experimentelle Anwendung, als Demonstration bereitgestellt: sie ist
+    keine Rechtsberatung und nicht garantiert gesetzeskonform. Für
+    Rechtsfragen wenden Sie sich an einen Fachmann.
+  - Update: neue Version herunterladen und Proprietas.app ersetzen (den
+    Ordner « data » behalten).
+  - Quellcode: https://github.com/LostInTheBugs/Proprietas
+
+Viel Erfolg!

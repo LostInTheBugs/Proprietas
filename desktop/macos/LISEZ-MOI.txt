@@ -1,0 +1,47 @@
+PROPRIETAS — VERSION macOS (application de bureau)
+==================================================
+
+Qu'est-ce que c'est ?
+  Proprietas est une application de gestion de copropriété pour syndic
+  bénévole. Cette version macOS est autonome : le serveur et l'interface
+  sont embarqués dans le dossier — rien d'autre à installer, aucune
+  connexion internet requise. Vos données restent sur cet ordinateur.
+
+Installation
+  1. Décompressez l'archive « Proprietas-macOS.zip » où vous voulez
+     (ex. Documents). Gardez l'ensemble tel quel : les données vivront
+     à côté de l'application.
+  2. Double-cliquez sur « Proprietas.app » — la fenêtre s'ouvre.
+
+     Premier lancement : macOS peut afficher « macOS ne peut pas vérifier
+     le développeur de cette application » (normal pour une application
+     non signée). Faites un clic droit sur « Proprietas.app » → « Ouvrir »,
+     puis confirmez « Ouvrir ». Les fois suivantes, un double-clic suffit.
+  3. Au premier lancement : créez votre compte syndic (onglet « Premier
+     compte (syndic) »). L'interface est en français.
+
+Vos données
+  - Elles vivent dans le dossier « data », À CÔTÉ de Proprietas.app.
+  - Sauvegarder = copier le dossier « data » (clé USB, disque externe…).
+  - Ne séparez jamais l'application de son dossier « data » : ils vont
+    ensemble. Si le dossier « data » n'apparaît pas à côté de
+    l'application (emplacement protégé) : Finder → menu « Aller » →
+    « Aller au dossier… » → ~/Bibliothèque/Application Support/Proprietas
+
+macOS / Gatekeeper
+  - L'application n'est pas signée numériquement : au premier lancement,
+    macOS peut afficher un avertissement (« macOS ne peut pas vérifier
+    le développeur ») — voir l'étape 2 (clic droit → Ouvrir). Une seule
+    fois.
+  - Aucune télémétrie : l'application ne se connecte à rien.
+
+Bon à savoir
+  - Application expérimentale, fournie à titre de démonstration : elle ne
+    constitue pas un conseil juridique et n'est pas garantie conforme à
+    la législation. Pour toute question de droit, consultez un
+    professionnel.
+  - Mise à jour : téléchargez la nouvelle version et remplacez
+    Proprietas.app (conservez votre dossier « data »).
+  - Code source : https://github.com/LostInTheBugs/Proprietas
+
+Bon usage !
