@@ -10,7 +10,10 @@ données réelle, config SMTP…) :
     uvicorn app.main:app --port 8000 &
     python scripts/smoke_e2e.py
 
-Exige un compte `syndic@test.fr` / `test1234` (créé par seed_demo.py).
+Exige un compte `syndic@test.fr` / `test1234` (créé par seed_demo.py — compte de
+démonstration, exempté de double authentification). Si le compte utilisé exige la
+2FA (politique de sa copropriété), le script s'arrête proprement au login :
+complétez l'enrôlement à la main ou utilisez un compte exempté.
 """
 import json
 import urllib.request
@@ -42,7 +45,10 @@ def check(name, cond):
 
 # 1. Login
 r = call("POST", "/api/auth/login", {"email": "syndic@test.fr", "password": "test1234"})
-TOKEN = r["access_token"] if r else None
+if r and not r.get("access_token"):
+    print("  ⚠️ ce compte exige la double authentification — utilisez un compte exempté (démo) "
+          "ou complétez l'enrôlement manuellement.")
+TOKEN = r.get("access_token") if r else None
 check("login", bool(TOKEN))
 
 # 2. Copro (auto-création)
@@ -184,6 +190,12 @@ call("DELETE", f"/api/contrats/{k1['id']}", token=TOKEN)
 call("DELETE", f"/api/contacts/{ca['id']}", token=TOKEN)
 call("DELETE", f"/api/contacts/{ct['id']}", token=TOKEN)
 check("nettoyage contacts/contrats", len(call("GET", "/api/contacts", token=TOKEN)) == 0 and len(call("GET", "/api/contrats", token=TOKEN)) == 0)
+
+# 13. Sécurité : statut 2FA + journal d'audit
+st = call("GET", "/api/auth/2fa/status", token=TOKEN)
+check("statut 2fa", bool(st) and "enabled" in st and "policy" in st)
+journal = call("GET", "/api/audit?limit=5", token=TOKEN)
+check("journal d'audit accessible", isinstance(journal, list) and len(journal) >= 1)
 
 print()
 if FAIL:

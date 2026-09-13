@@ -15,6 +15,9 @@ from sqlalchemy.pool import StaticPool
 # Base de données et uploads jetables pour toute la session de tests.
 os.environ["COPRO_DATABASE_URL"] = "sqlite://"
 os.environ["COPRO_UPLOAD_DIR"] = tempfile.mkdtemp(prefix="copro-tests-uploads-")
+# Les tests contrôlent explicitement la politique 2FA de chaque copro : pas de
+# 2FA imposée par défaut (les tests dédiés activent la politique qu'ils testent).
+os.environ["COPRO_TOTP_DEFAULT_POLICY"] = "off"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -76,6 +79,23 @@ def _make_syndic(db, email: str, copro: Copropriete) -> User:
         password_hash=hash_password("test1234"),
         nom=f"Syndic {email}",
         role="syndic",
+        copropriete_id=copro.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.add(UserCopro(user_id=user.id, copropriete_id=copro.id, principale=True))
+    db.commit()
+    return user
+
+
+def _make_membre(db, email: str, copro: Copropriete) -> User:
+    """Crée un compte membre (lecture seule) lié à la copropriété donnée."""
+    user = User(
+        email=email,
+        password_hash=hash_password("test1234"),
+        nom=f"Membre {email}",
+        role="membre",
         copropriete_id=copro.id,
     )
     db.add(user)
