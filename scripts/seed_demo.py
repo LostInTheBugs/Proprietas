@@ -79,6 +79,7 @@ def main():
             frontend_url=FRONT_URL,
             relance_frequence="hebdo", relance_jour=5, relance_heure="09:00",
             relance_minimum=50.0, relance_auto=False,
+            totp_policy="off",  # comptes démo : jamais de 2FA imposée
         )
         db.add(c)
         db.flush()

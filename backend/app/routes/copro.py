@@ -5,6 +5,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
 from app.schemas import CoproOut, CoproUpdate
+from app.services.two_factor import politique_defaut
 
 router = APIRouter(prefix="/api/copro", tags=["copro"])
 
@@ -36,7 +37,7 @@ def get_or_create_copro(db: Session, user: User) -> Copropriete:
     # Aucune liaison : on ne s'attribue JAMAIS une copropriété existante qui n'est
     # pas liée au compte — elle appartient potentiellement à un autre syndic.
     # Premier login (base vide) : création d'une copropriété neuve, liée au compte.
-    copro = Copropriete(nom="Ma copropriété")
+    copro = Copropriete(nom="Ma copropriété", totp_policy=politique_defaut())
     db.add(copro)
     db.commit()
     db.refresh(copro)

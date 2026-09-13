@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # Origines CORS autorisées (JSON dans l'environnement, ex. '["https://app.example.fr"]').
     # Vide en production : le frontend est servi par le même backend, le CORS ne sert à rien.
     cors_origins: list[str] = []
+    # Politique 2FA (TOTP) appliquée par défaut aux NOUVELLES copropriétés :
+    # « off » | « syndic » (le syndic doit activer la double authentification) | « all ».
+    # Défaut pensé pour une instance exposée sur internet ; l'app desktop la passe à « off ».
+    totp_default_policy: str = "syndic"
     model_config = {"env_prefix": "COPRO_", "env_file": ".env"}
 
     @property

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -21,8 +21,21 @@ class User(Base):
     role = Column(String, default="membre")  # syndic | membre
     is_demo = Column(Boolean, default=False)  # compte de démonstration (n'ouvre pas/ne ferme pas l'inscription)
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=True)
+    # Double authentification (TOTP, RFC 6238) — secret CHIFFRÉ, codes de secours HACHÉS.
+    totp_secret = Column(Text, default="")
+    totp_enabled = Column(Boolean, default=False)
+    recovery_hashes = Column(Text, default="[]")
+    # Dernière connexion (alertes « nouvelle connexion »)
+    last_login_at = Column(DateTime, nullable=True)
+    last_login_ip = Column(String, default="")
+    last_login_ua = Column(String, default="")
     copropriete = relationship("Copropriete", back_populates="users")
     coproprietes = relationship(
         "UserCopro", backref="user", cascade="all, delete-orphan",
         foreign_keys="UserCopro.user_id",
     )
+
+    @property
+    def two_factor_enabled(self) -> bool:
+        """Vue Pydantic (UserOut) : la 2FA est-elle activée pour ce compte ?"""
+        return bool(self.totp_enabled)

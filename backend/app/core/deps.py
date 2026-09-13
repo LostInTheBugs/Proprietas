@@ -8,26 +8,63 @@ from app.models.user import User
 security = HTTPBearer(auto_error=False)
 
 
+def _charger_user(db: Session, raw: str) -> User:
+    """Décode le jeton et charge l'utilisateur (payload + portée posés sur l'objet)."""
+    payload = decode_access_token(raw)
+    if not payload:
+        raise HTTPException(401, "Token invalide ou expiré")
+    try:
+        user_id = int(payload.get("sub", ""))
+    except (TypeError, ValueError):
+        raise HTTPException(401, "Token invalide ou expiré")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(401, "Utilisateur introuvable")
+    user._token_data = payload
+    user._token_scope = str(payload.get("scope") or "")
+    return user
+
+
+def _raw_token(credentials: HTTPAuthorizationCredentials | None, token: str) -> str:
+    return credentials.credentials if credentials else (token or "")
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     token: str = "",
     db: Session = Depends(get_db),
 ) -> User:
-    """Auth par header Bearer, avec fallback ?token=... (liens de téléchargement directs)."""
-    raw = credentials.credentials if credentials else (token or "")
+    """Auth par header Bearer, avec fallback ?token=... (liens de téléchargement directs).
+
+    Les jetons à portée (« 2fa_challenge », « 2fa_setup ») sont REFUSÉS ici : ils ne
+    servent qu'aux étapes intermédiaires de la double authentification.
+    """
+    raw = _raw_token(credentials, token)
     if not raw:
-        raise HTTPException(401, detail="Authentification requise")
-    payload = decode_access_token(raw)
-    if not payload:
-        raise HTTPException(401, detail="Token invalide ou expiré")
-    user = db.query(User).filter(User.id == int(payload["sub"])).first()
-    if not user:
-        raise HTTPException(401, detail="Utilisateur introuvable")
-    user._token_data = payload
+        raise HTTPException(401, "Authentification requise")
+    user = _charger_user(db, raw)
+    if user._token_scope:
+        raise HTTPException(401, "Double authentification requise")
+    return user
+
+
+def get_current_user_2fa(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str = "",
+    db: Session = Depends(get_db),
+) -> User:
+    """Comme get_current_user, mais accepte AUSSI les jetons d'enrôlement forcé
+    (« 2fa_setup ») — utilisé uniquement par les routes setup/verify de la 2FA."""
+    raw = _raw_token(credentials, token)
+    if not raw:
+        raise HTTPException(401, "Authentification requise")
+    user = _charger_user(db, raw)
+    if user._token_scope not in ("", "2fa_setup"):
+        raise HTTPException(401, "Jeton à portée insuffisante")
     return user
 
 
 def require_syndic(user: User = Depends(get_current_user)) -> User:
     if user.role != "syndic":
-        raise HTTPException(403, detail="Réservé au syndic")
+        raise HTTPException(403, "Réservé au syndic")
     return user

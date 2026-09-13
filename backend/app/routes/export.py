@@ -1,8 +1,9 @@
 import csv
 import io
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
+from app.core import audit
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 
 @router.get("/rapport-annuel/{exercice_id}")
-def rapport_annuel(exercice_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def rapport_annuel(exercice_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Rapport annuel complet en PDF : garde + KPI + compte de gestion + statistiques + PPT."""
     from app.models.copropriete import Copropriete
     copro = get_or_create_copro(db, user)
@@ -31,6 +32,9 @@ def rapport_annuel(exercice_id: int, db: Session = Depends(get_db), user: User =
     if not ex:
         raise HTTPException(404, "Exercice introuvable")
     pdf = generer_rapport_annuel_pdf(copro, ex, db)
+    audit.enregistrer(db, "export_rapport_annuel", user=user, copro_id=copro.id,
+                      detail=f"Exercice {ex.annee}", request=request)
+    db.commit()
     nom = f"Rapport_annuel_{ex.annee}_{copro.nom.replace(' ', '_')}.pdf"
     return Response(
         content=pdf.getvalue(),
@@ -40,7 +44,7 @@ def rapport_annuel(exercice_id: int, db: Session = Depends(get_db), user: User =
 
 
 @router.get("/compte-gestion/{exercice_id}")
-def compte_gestion(exercice_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def compte_gestion(exercice_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Compte de gestion annuel en PDF (présenté en AG pour approbation)."""
     from app.models.copropriete import Copropriete
     copro = get_or_create_copro(db, user)
@@ -48,6 +52,9 @@ def compte_gestion(exercice_id: int, db: Session = Depends(get_db), user: User =
     if not ex:
         raise HTTPException(404, "Exercice introuvable")
     pdf = generer_compte_gestion_pdf(copro, ex, db)
+    audit.enregistrer(db, "export_compte_gestion", user=user, copro_id=copro.id,
+                      detail=f"Exercice {ex.annee}", request=request)
+    db.commit()
     nom = f"Compte_de_gestion_{ex.annee}_{copro.nom.replace(' ', '_')}.pdf"
     return Response(
         content=pdf.getvalue(),
@@ -57,7 +64,7 @@ def compte_gestion(exercice_id: int, db: Session = Depends(get_db), user: User =
 
 
 @router.get("/quittances/{exercice_id}")
-def quittances(exercice_id: int, lot_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def quittances(exercice_id: int, request: Request, lot_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Quittances d'appels de fonds de l'exercice, groupées en un PDF (une page par lot).
 
     - lot_id absent : toutes les quittances de l'exercice
@@ -68,6 +75,10 @@ def quittances(exercice_id: int, lot_id: int | None = None, db: Session = Depend
     if not ex:
         raise HTTPException(404, "Exercice introuvable")
     pdf = generer_quittances_pdf(copro, ex, db, lot_ids={lot_id} if lot_id else None)
+    audit.enregistrer(db, "export_quittances", user=user, copro_id=copro.id,
+                      detail=f"Exercice {ex.annee}" + (f", lot {lot_id}" if lot_id else ""),
+                      request=request)
+    db.commit()
     suffixe = f"_lot{lot_id}" if lot_id else ""
     nom = f"Quittances_{ex.annee}{suffixe}_{copro.nom.replace(' ', '_')}.pdf"
     return Response(
@@ -78,7 +89,7 @@ def quittances(exercice_id: int, lot_id: int | None = None, db: Session = Depend
 
 
 @router.post("/situation-fonds")
-def envoyer_situation_fonds(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def envoyer_situation_fonds(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """Envoie à chaque copropriétaire la situation du fonds de travaux et de son lot."""
     from app.models.exercice import Exercice, BudgetLine
     from app.models.copropriete import Copropriete
@@ -117,6 +128,9 @@ def envoyer_situation_fonds(db: Session = Depends(get_db), user: User = Depends(
             envoye += 1
         except EmailError as err:
             erreurs.append(f"{p.prenom} {p.nom}: {err}")
+    audit.enregistrer(db, "situation_fonds", user=user, copro_id=copro.id,
+                      detail=f"{envoye} envoi(s), {sans_email} sans email", request=request)
+    db.commit()
     return InvitationsResult(envoyes=envoye, sans_email=sans_email, erreurs=erreurs)
 
 
@@ -134,10 +148,13 @@ def _csv(data: list[list], headers: list[str]) -> StreamingResponse:
 
 
 @router.get("/registre")
-def export_registre(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def export_registre(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Données utiles pour la déclaration au registre des copropriétés
     (registre.coproprietes.gouv.fr)."""
     copro = get_or_create_copro(db, user)
+    audit.enregistrer(db, "export_registre", user=user, copro_id=copro.id,
+                      detail=copro.nom, request=request)
+    db.commit()
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     personnes = db.query(Personne).filter(Personne.copropriete_id == copro.id).all()
     rows = []
@@ -156,9 +173,12 @@ def export_registre(db: Session = Depends(get_db), user: User = Depends(get_curr
 
 
 @router.get("/compte-gestion")
-def export_compte_gestion(exercice_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def export_compte_gestion(request: Request, exercice_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Grand livre comptable de l'exercice en CSV (dates, appels par lot, mouvements, totaux)."""
     copro = get_or_create_copro(db, user)
+    audit.enregistrer(db, "export_csv", user=user, copro_id=copro.id,
+                      detail=f"Exercice {exercice_id or 'dernier'}", request=request)
+    db.commit()
     ex = None
     if exercice_id:
         ex = db.query(Exercice).filter(Exercice.id == exercice_id, Exercice.copropriete_id == copro.id).first()

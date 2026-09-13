@@ -150,6 +150,9 @@ def prepare_env(base: Path, res: Path) -> None:
     )
     os.environ.setdefault("COPRO_UPLOAD_DIR", str(data / "uploads"))
     os.environ.setdefault("COPRO_FRONTEND_DIST", str(res / "frontend_dist"))
+    # Instance mono-poste (pas d'accès internet) : pas de 2FA obligatoire — elle
+    # reste activable à la main dans la page Sécurité.
+    os.environ.setdefault("COPRO_TOTP_DEFAULT_POLICY", "off")
     # Clé secrète persistée dans data/ : les sessions survivent au redémarrage.
     if "COPRO_SECRET_KEY" not in os.environ:
         keyfile = data / "secret.key"

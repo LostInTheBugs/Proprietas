@@ -32,6 +32,10 @@ class Copropriete(Base):
     relance_jour = Column(Integer, default=1)  # 1-7 (hebdo, lundi=1) ou 1-28 (mensuel)
     relance_heure = Column(String, default="09:00")  # "HH:00" ou "HH:30"
     relance_minimum = Column(Float, default=0.0)  # seuil : ne relancer que les soldes > ce montant
+    # Double authentification exigée des comptes : off | syndic | all.
+    # Défini à la création de la copropriété (COPRO_TOTP_DEFAULT_POLICY) ;
+    # les bases existantes restent en « off » après migration.
+    totp_policy = Column(String, default="off")
     notes = Column(String, default="")
 
     users = relationship("User", back_populates="copropriete")

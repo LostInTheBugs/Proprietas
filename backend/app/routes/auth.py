@@ -1,25 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from app.core import audit
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    create_access_token,
+    create_scoped_token,
+    hash_password,
+    verify_password,
+)
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
 from app.routes.copro import get_or_create_copro
-from app.schemas import RegisterRequest, LoginRequest, TokenResponse, UserOut, UserCreate, CoproCreate
+from app.schemas import RegisterRequest, LoginRequest, LoginResponse, TokenResponse, UserOut, UserCreate, CoproCreate
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
+from app.services import two_factor
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-def _copro_principale(db: Session, user: User) -> int | None:
-    """Id de la copropriété principale du user (liaison), sinon None."""
-    lien = (db.query(UserCopro).filter(UserCopro.user_id == user.id)
-            .order_by(UserCopro.principale.desc(), UserCopro.id).first())
-    return lien.copropriete_id if lien else None
-
-
-@router.post("/register", response_model=TokenResponse)
+@router.post("/register", response_model=LoginResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     """Création du premier compte (syndic). Fermé dès qu'un utilisateur non-démo existe."""
     if db.query(User).filter(User.is_demo == False).count() > 0:  # noqa: E712
@@ -33,19 +33,47 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return TokenResponse(access_token=create_access_token(user.id))
+    # La politique par défaut de l'installation peut exiger l'enrôlement immédiat
+    # de la double authentification (instance exposée) : l'app enchaîne sur le QR.
+    if two_factor.politique_requise(db, user):
+        return LoginResponse(
+            must_enroll_2fa=True,
+            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30),
+        )
+    return LoginResponse(access_token=create_access_token(user.id))
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db), request: Request = None):  # noqa: E501
-    ip = request.client.host if request and request.client else "?"
+    """Étape 1 : mot de passe. Réponse : jeton complet, ou étape 2FA à poursuivre
+    (two_factor_required = code à saisir ; must_enroll_2fa = activation exigée)."""
+    ip = audit.client_ip(request)
     check_login_allowed(req.email, ip)
     user = db.query(User).filter(User.email == req.email.lower().strip()).first()
     if not user or not verify_password(req.password, user.password_hash):
         record_failure(req.email, ip)
+        audit.enregistrer(
+            db, "login_failed", user=user,
+            copro_id=two_factor.copro_principale_id(db, user) if user else None,
+            detail=req.email.lower().strip(), request=request,
+        )
+        db.commit()
         raise HTTPException(401, "Email ou mot de passe incorrect")
     clear_failures(req.email, ip)
-    return TokenResponse(access_token=create_access_token(user.id, _copro_principale(db, user)))
+    # Double authentification (les comptes démo en sont exemptés)
+    if user.totp_enabled and not user.is_demo:
+        return LoginResponse(
+            two_factor_required=True,
+            challenge_token=create_scoped_token(user.id, "2fa_challenge"),
+        )
+    if not user.totp_enabled and two_factor.politique_requise(db, user):
+        return LoginResponse(
+            must_enroll_2fa=True,
+            challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30),
+        )
+    two_factor.finaliser_connexion(db, user, request)  # journal + alerte nouvelle IP
+    return LoginResponse(
+        access_token=create_access_token(user.id, two_factor.copro_principale_id(db, user)))
 
 
 @router.get("/coproprietes")
@@ -89,11 +117,13 @@ def creer_copropriete(data: CoproCreate, db: Session = Depends(get_db), user: Us
     copro = Copropriete(
         nom=data.nom, adresse=data.adresse, ville=data.ville, code_postal=data.code_postal,
         annee_construction=data.annee_construction,
+        totp_policy=two_factor.politique_defaut(),
     )
     db.add(copro)
     db.commit()
     db.refresh(copro)
     db.add(UserCopro(user_id=user.id, copropriete_id=copro.id, principale=True))
+    audit.enregistrer(db, "copro_created", user=user, copro_id=copro.id, detail=copro.nom)
     db.commit()
     return TokenResponse(access_token=create_access_token(user.id, copro.id))
 
@@ -104,7 +134,7 @@ def me(user: User = Depends(get_current_user)):
 
 
 @router.post("/users", response_model=UserOut)
-def create_user(req: UserCreate, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def create_user(req: UserCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     if db.query(User).filter(User.email == req.email.lower().strip()).first():
         raise HTTPException(400, "Cet email est déjà utilisé")
     # Le compte créé est lié à la copropriété active du syndic
@@ -120,6 +150,8 @@ def create_user(req: UserCreate, db: Session = Depends(get_db), user: User = Dep
     db.commit()
     db.refresh(new_user)
     db.add(UserCopro(user_id=new_user.id, copropriete_id=copro.id, principale=True))
+    audit.enregistrer(db, "user_created", user=user, copro_id=copro.id,
+                      detail=f"{new_user.email} ({new_user.role})", request=request)
     db.commit()
     return new_user
 
@@ -135,7 +167,7 @@ def list_users(db: Session = Depends(get_db), user: User = Depends(require_syndi
 
 
 @router.delete("/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Depends(require_syndic)):
+def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), current: User = Depends(require_syndic)):
     if user_id == current.id:
         raise HTTPException(400, "Impossible de supprimer son propre compte")
     copro = get_or_create_copro(db, current)
@@ -145,6 +177,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current: User = Dep
             .first())
     if not user:
         raise HTTPException(404, "Utilisateur introuvable")
+    audit.enregistrer(db, "user_deleted", user=current, copro_id=copro.id,
+                      detail=f"{user.email} ({user.role})", request=request)
     db.delete(user)
     db.commit()
     return {"ok": True}

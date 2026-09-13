@@ -13,10 +13,11 @@ from app.models.relance import Relance
 from app.models.travaux import Travaux
 from app.models.contact import Contact
 from app.models.contrat import Contrat
+from app.models.audit import AuditLog
 
 __all__ = [
     "User", "UserCopro", "Copropriete", "Personne", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
-    "Travaux", "Contact", "Contrat",
+    "Travaux", "Contact", "Contrat", "AuditLog",
 ]

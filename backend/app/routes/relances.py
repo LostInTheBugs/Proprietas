@@ -1,6 +1,7 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from app.core import audit
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
@@ -59,8 +60,13 @@ def liste_etat(db: Session = Depends(get_db), user: User = Depends(get_current_u
     return out
 
 
-def envoyer_relance_lot(db: Session, copro: Copropriete, e: dict, syndic_nom: str) -> str:
-    """Envoie la relance d'un lot et journalise (retour : envoye | sans_email | erreur)."""
+def envoyer_relance_lot(db: Session, copro: Copropriete, e: dict, syndic_nom: str,
+                        acteur: User | None = None, request: Request | None = None) -> str:
+    """Envoie la relance d'un lot et journalise (retour : envoye | sans_email | erreur).
+
+    `acteur` = syndic à l'origine de l'envoi manuel ; None pour l'envoi automatique
+    (cron) — le journal d'audit distingue les deux.
+    """
     p = e["personne"]
     if not p or not p.email:
         return "sans_email"
@@ -82,11 +88,16 @@ def envoyer_relance_lot(db: Session, copro: Copropriete, e: dict, syndic_nom: st
         date_envoi=datetime.now(), statut=statut,
         montant_du=e["solde"], message=message,
     ))
+    audit.enregistrer(
+        db, "relance_envoyee", user=acteur, copro_id=copro.id, request=request,
+        detail=(f"Lot {e['lot'].numero} → {p.email} "
+                f"({'automatique' if acteur is None else 'manuelle'}, {statut})"),
+    )
     return statut
 
 
 @router.post("/envoyer", response_model=InvitationsResult)
-def envoyer_relances(data: RelanceEnvoiIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def envoyer_relances(data: RelanceEnvoiIn, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """Envoie une relance par email aux propriétaires des lots sélectionnés (ceux en retard)."""
     copro = get_or_create_copro(db, user)
     lots_par_id = {e["lot"].id: e for e in _etat_lots(db, copro)}
@@ -98,7 +109,8 @@ def envoyer_relances(data: RelanceEnvoiIn, db: Session = Depends(get_db), user: 
         e = lots_par_id.get(lot_id)
         if not e or e["solde"] <= 0.005:
             continue  # lot inconnu ou sans impayé
-        statut = envoyer_relance_lot(db, copro, e, user.nom or "Le syndic")
+        statut = envoyer_relance_lot(db, copro, e, user.nom or "Le syndic",
+                                     acteur=user, request=request)
         if statut == "envoye":
             envoyes += 1
         elif statut == "sans_email":

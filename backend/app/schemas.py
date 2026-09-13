@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional, List
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # ---------- Auth / Users ----------
@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     email: str
     nom: str
     role: str
+    two_factor_enabled: bool = False  # propriété du modèle User (totp_enabled)
 
 
 class UserCreate(BaseModel):
@@ -62,6 +63,7 @@ class CoproOut(BaseModel):
     relance_jour: int = 1
     relance_heure: str = "09:00"
     relance_minimum: float = 0.0
+    totp_policy: str = "off"  # double authentification : off | syndic | all
     notes: str = ""
 
 
@@ -95,7 +97,15 @@ class CoproUpdate(BaseModel):
     relance_jour: Optional[int] = None
     relance_heure: Optional[str] = None
     relance_minimum: Optional[float] = None
+    totp_policy: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("totp_policy")
+    @classmethod
+    def _valider_totp_policy(cls, v):
+        if v is not None and v not in ("off", "syndic", "all"):
+            raise ValueError("politique 2FA invalide (off | syndic | all)")
+        return v
 
 
 # ---------- Personnes ----------
@@ -494,3 +504,67 @@ class EntretienIn(BaseModel):
 class EntretienOut(EntretienIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+# ---------- Sécurité : 2FA + journal d'audit ----------
+class LoginResponse(BaseModel):
+    """Réponse du login : soit un jeton complet, soit une étape 2FA à poursuivre."""
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    two_factor_required: bool = False  # saisir un code (TOTP ou code de secours)
+    must_enroll_2fa: bool = False      # la politique exige l'activation de la 2FA
+    challenge_token: Optional[str] = None
+
+
+class TwoFactorSetupOut(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_svg: str  # data:image/svg+xml;base64,...
+
+
+class TwoFactorVerifyIn(BaseModel):
+    code: str
+
+
+class TwoFactorVerifyOut(BaseModel):
+    ok: bool = True
+    recovery_codes: List[str] = []
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+
+
+class TwoFactorRecoveryOut(BaseModel):
+    recovery_codes: List[str] = []
+
+
+class TwoFactorVerifyLoginIn(BaseModel):
+    challenge_token: str
+    code: str
+
+
+class TwoFactorDisableIn(BaseModel):
+    password: str
+    code: str
+
+
+class TwoFactorRecoveryIn(BaseModel):
+    password: str
+    code: str
+
+
+class TwoFactorStatusOut(BaseModel):
+    enabled: bool
+    recovery_codes_left: int = 0
+    policy: str = "off"
+    required: bool = False
+
+
+class AuditOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    created_at: datetime
+    user_email: str = ""
+    user_nom: str = ""
+    action: str = ""
+    detail: str = ""
+    ip: str = ""
