@@ -13,7 +13,7 @@ import Contacts from "./pages/Contacts";
 import Contrats from "./pages/Contrats";
 import Carnet from "./pages/Carnet";
 import Settings from "./pages/Settings";
-import Relances from "./pages/Relances";
+import Recouvrement from "./pages/Recouvrement";
 import TravauxPage from "./pages/Travaux";
 import Consolide from "./pages/Consolide";
 import Securite from "./pages/Securite";
@@ -47,7 +47,8 @@ export default function App() {
           <Route path="contacts" element={<Contacts />} />
           <Route path="contrats" element={<Contrats />} />
           <Route path="carnet" element={<Carnet />} />
-          <Route path="relances" element={<Relances />} />
+          <Route path="recouvrement" element={<Recouvrement />} />
+          <Route path="relances" element={<Navigate to="/recouvrement" replace />} />
           <Route path="travaux" element={<TravauxPage />} />
           <Route path="consolide" element={<Consolide />} />
           <Route path="securite" element={<Securite />} />

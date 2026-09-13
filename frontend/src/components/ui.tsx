@@ -87,18 +87,20 @@ export function Modal({
   open,
   title,
   onClose,
+  wide = false,
   children,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl"
+        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl bg-white shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">

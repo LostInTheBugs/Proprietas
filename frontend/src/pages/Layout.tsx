@@ -13,7 +13,7 @@ const NAV = [
   { to: "/contacts", label: "Contacts", icon: "👥" },
   { to: "/contrats", label: "Contrats", icon: "📄" },
   { to: "/carnet", label: "Carnet d'entretien", icon: "🔧" },
-  { to: "/relances", label: "Relances", icon: "📧" },
+  { to: "/recouvrement", label: "Recouvrement", icon: "💶" },
   { to: "/travaux", label: "Travaux", icon: "🔨" },
   { to: "/consolide", label: "Consolidé", icon: "🗂" },
   { to: "/securite", label: "Sécurité", icon: "🔐" },

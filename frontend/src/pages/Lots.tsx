@@ -236,6 +236,7 @@ function PersonneModal({ item, onClose, onSaved, onError }: {
     prenom: item?.prenom ?? "",
     email: item?.email ?? "",
     telephone: item?.telephone ?? "",
+    adresse: item?.adresse ?? "",
     est_proprietaire: item?.est_proprietaire ?? true,
     est_occupant: item?.est_occupant ?? true,
     notes: "",
@@ -261,6 +262,7 @@ function PersonneModal({ item, onClose, onSaved, onError }: {
         </div>
         <Input label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
         <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
+        <Input label="Adresse postale (mises en demeure)" value={f.adresse} onChange={(e) => set("adresse", e.target.value)} />
         <div className="flex gap-4">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={f.est_proprietaire} onChange={(e) => set("est_proprietaire", e.target.checked)} />

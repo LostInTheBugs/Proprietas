@@ -85,6 +85,7 @@ export interface Personne {
   prenom: string;
   email: string;
   telephone: string;
+  adresse: string;
   est_proprietaire: boolean;
   est_occupant: boolean;
   notes: string;
@@ -361,3 +362,76 @@ export const toLocalInput = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+// ---------- Recouvrement ----------
+export interface RecouvrementLot {
+  lot_id: number;
+  lot_numero: string;
+  personne_id: number | null;
+  personne_nom: string;
+  personne_email: string;
+  solde: number;
+  retard_depuis: string | null;
+  statut: string;
+  statut_label: string;
+  md_date: string | null;
+  md_jours: number | null;
+  jours_restants: number | null;
+  frais_total: number;
+  interets: number;
+  total_reclame: number;
+}
+
+export interface DecompteLigne {
+  exercice: number | null;
+  libelle: string;
+  echeance: string | null;
+  charges: number;
+  fonds: number;
+  montant: number;
+  restant_du: number;
+  echu: boolean;
+}
+
+export interface RecouvrementActe {
+  id: number;
+  type: string;
+  date_acte: string;
+  date_envoi: string | null;
+  mode_envoi: string;
+  reference: string;
+  montant: number;
+  libelle: string;
+  auteur: string;
+}
+
+export interface RecouvrementDossier {
+  lot_id: number;
+  lot_numero: string;
+  personne_nom: string;
+  personne_email: string;
+  personne_adresse: string;
+  solde: number;
+  arriere_echu: number;
+  retard_depuis: string | null;
+  statut: string;
+  statut_label: string;
+  md_date: string | null;
+  md_jours: number | null;
+  jours_restants: number | null;
+  frais_total: number;
+  interets: number;
+  taux_legal: number;
+  total_reclame: number;
+  decompte: DecompteLigne[];
+  actes: RecouvrementActe[];
+  relances: Relance[];
+}
+
+export interface Mise19_2 {
+  lignes: DecompteLigne[];
+  total: number;
+  arriere_echu: number;
+  exercice: number | null;
+}
+
