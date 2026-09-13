@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { getToken } from "./api";
+import { useUser } from "./auth";
 import { UserProvider } from "./auth";
 import Login from "./pages/Login";
 import Layout from "./pages/Layout";
@@ -19,10 +18,12 @@ import Consolide from "./pages/Consolide";
 import Securite from "./pages/Securite";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
-  if (!ready) return null;
-  if (!getToken()) return <Navigate to="/login" replace />;
+  // Session en cookie httpOnly : on ne peut pas la tester en JS — on rend la
+  // main à /auth/me (UserProvider). Sans profil après vérification → /login
+  // (et l'intercepteur 401 d'api.ts gère l'expiration en cours de session).
+  const { user, pret } = useUser();
+  if (!pret) return null;
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 

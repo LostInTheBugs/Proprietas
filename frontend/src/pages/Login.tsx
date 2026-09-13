@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, postAuthStep, setToken } from "../api";
+import { api, postAuthStep } from "../api";
 import type { LoginResponse } from "../types";
 import TwoFactorWizard from "../components/TwoFactorWizard";
 
@@ -17,10 +17,9 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
 
-  function entrer(accessToken: string) {
-    setToken(accessToken);
-    // Rechargement complet : UserProvider (déjà monté) re-lit /auth/me avec le
-    // nouveau token → le profil syndic/copropriétaire est chargé.
+  function entrer() {
+    // La session vit dans un cookie httpOnly posé par le serveur : un simple
+    // rechargement suffit (le UserProvider relit /auth/me avec le cookie).
     window.location.href = "/";
   }
 
@@ -33,7 +32,7 @@ export default function Login() {
         ? await api.post<LoginResponse>("/auth/login", { email, password })
         : await api.post<LoginResponse>("/auth/register", { email, password, nom });
       if (res.access_token) {
-        entrer(res.access_token);
+        entrer();
         return;
       }
       if (res.challenge_token) {
@@ -56,7 +55,7 @@ export default function Login() {
         challenge_token: challenge,
         code,
       });
-      if (res.access_token) entrer(res.access_token);
+      if (res.access_token) entrer();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     } finally {
@@ -192,7 +191,7 @@ export default function Login() {
             <TwoFactorWizard
               token={challenge}
               intro={`La double authentification est exigée pour le compte ${email} (politique de la copropriété ou accès depuis internet). Activez-la maintenant : elle ne prend qu'une minute et ne vous sera plus redemandée.`}
-              onDone={(tok) => tok && entrer(tok)}
+              onDone={(tok) => tok && entrer()}
               onCancel={retourCreds}
             />
           </div>

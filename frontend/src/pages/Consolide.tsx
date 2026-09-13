@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, setToken } from "../api";
+import { api } from "../api";
 import { Badge, Card } from "../components/ui";
 
 interface Immeuble {
@@ -67,8 +67,7 @@ export default function Consolide() {
   async function ouvrir(id: number) {
     setBusyId(id);
     try {
-      const r = await api.post<{ access_token: string }>(`/auth/switch-copro/${id}`);
-      setToken(r.access_token);
+      await api.post(`/auth/switch-copro/${id}`);
       window.location.href = "/";
     } catch {
       setBusyId(null);

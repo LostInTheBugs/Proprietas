@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, getToken } from "../api";
+import { api } from "../api";
 import { useUser } from "../auth";
 import type { Recap, Mouvement, Travaux, InvitationsResult } from "../types";
 import { fmtEUR, fmtDate } from "../types";
@@ -280,7 +280,7 @@ export default function Dashboard() {
                     </td>
                     <td className="py-2.5 text-right">
                       <a
-                        href={`/api/export/quittances/${recap.exercice_id}?lot_id=${l.lot.id}&token=${encodeURIComponent(getToken() ?? "")}`}
+                        href={`/api/export/quittances/${recap.exercice_id}?lot_id=${l.lot.id}`}
                         className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
                         title="Quittance du lot en PDF"
                       >

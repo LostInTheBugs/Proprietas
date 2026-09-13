@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, uploadDocument, getToken } from "../api";
+import { api, uploadDocument } from "../api";
 import { useUser } from "../auth";
 import type { Document } from "../types";
 import { fmtDate } from "../types";
@@ -103,7 +103,7 @@ export default function Documents() {
               </div>
               <div className="flex shrink-0 gap-1">
                 <a
-                  href={`/api/documents/${d.id}/download?token=${encodeURIComponent(getToken() ?? "")}`}
+                  href={`/api/documents/${d.id}/download`}
                   className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
                 >
                   ↓

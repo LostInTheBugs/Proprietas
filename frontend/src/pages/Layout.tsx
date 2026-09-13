@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { api, clearToken, setToken } from "../api";
+import { api, clearToken } from "../api";
 import { useUser } from "../auth";
 import type { Copro } from "../types";
 
@@ -56,8 +56,7 @@ export default function Layout() {
   async function switcher(id: number) {
     setBusy(true);
     try {
-      const r = await api.post<{ access_token: string }>(`/auth/switch-copro/${id}`);
-      setToken(r.access_token);
+      await api.post(`/auth/switch-copro/${id}`);
       window.location.reload();
     } catch {
       setBusy(false);
@@ -68,11 +67,10 @@ export default function Layout() {
     if (!nvNom.trim() || busy) return;
     setBusy(true);
     try {
-      const r = await api.post<{ access_token: string }>("/auth/coproprietes", {
+      await api.post("/auth/coproprietes", {
         nom: nvNom.trim(),
         ville: nvVille.trim(),
       });
-      setToken(r.access_token);
       window.location.reload();
     } catch (e) {
       setBusy(false);
@@ -80,8 +78,9 @@ export default function Layout() {
     }
   }
 
-  function logout() {
-    clearToken();
+  async function logout() {
+    await api.post("/auth/logout").catch(() => {});
+    clearToken(); // nettoyage d'un éventuel jeton hérité
     nav("/login");
   }
 

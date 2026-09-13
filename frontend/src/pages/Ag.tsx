@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, getToken } from "../api";
+import { api } from "../api";
 import { useUser } from "../auth";
 import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult } from "../types";
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
@@ -270,7 +270,7 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
             <p className="text-sm font-semibold text-slate-700">✉️ Convocations et procès-verbal</p>
             <div className="flex items-center gap-2">
               <a
-                href={`/api/ag/${agId}/pv?token=${encodeURIComponent(getToken() ?? "")}`}
+                href={`/api/ag/${agId}/pv`}
                 className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
                 title="Télécharger le procès-verbal en PDF"
               >

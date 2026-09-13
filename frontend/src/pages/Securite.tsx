@@ -208,7 +208,8 @@ export default function Securite() {
     setError("");
     try {
       await api.post("/auth/logout-all");
-      clearToken();
+      await api.post("/auth/logout").catch(() => {});
+      clearToken(); // nettoyage d'un éventuel jeton hérité
       window.location.href = "/login";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");

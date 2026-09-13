@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, getToken } from "../api";
+import { api } from "../api";
 import { useUser } from "../auth";
 import type {
   DecompteLigne,
@@ -484,7 +484,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                 <div className="flex flex-wrap gap-2">
                   <a
                     className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-                    href={`/api/recouvrement/lot/${d.lot_id}/mise-en-demeure.pdf?token=${encodeURIComponent(getToken() ?? "")}`}
+                    href={`/api/recouvrement/lot/${d.lot_id}/mise-en-demeure.pdf`}
                     target="_blank"
                     rel="noopener"
                   >
@@ -512,7 +512,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                 <div className="flex flex-wrap items-center gap-2">
                   <a
                     className="inline-flex items-center rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                    href={`/api/recouvrement/lot/${d.lot_id}/mise-en-demeure.pdf?token=${encodeURIComponent(getToken() ?? "")}`}
+                    href={`/api/recouvrement/lot/${d.lot_id}/mise-en-demeure.pdf`}
                     target="_blank"
                     rel="noopener"
                   >

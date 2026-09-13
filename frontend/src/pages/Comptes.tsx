@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, getToken } from "../api";
+import { api } from "../api";
 import { useUser } from "../auth";
 import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot } from "../types";
 import { fmtEUR, fmtDate } from "../types";
@@ -63,28 +63,28 @@ export default function Comptes() {
           {exId && (
             <div className="flex items-center gap-2">
               <a
-                href={`/api/export/quittances/${exId}?token=${encodeURIComponent(getToken() ?? "")}`}
+                href={`/api/export/quittances/${exId}`}
                 className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 title="Télécharger les quittances de tous les lots en PDF"
               >
                 🧾 Quittances (PDF)
               </a>
               <a
-                href={`/api/export/compte-gestion/${exId}?token=${encodeURIComponent(getToken() ?? "")}`}
+                href={`/api/export/compte-gestion/${exId}`}
                 className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 title="Télécharger le compte de gestion de l'exercice en PDF"
               >
                 📊 Compte de gestion (PDF)
               </a>
               <a
-                href={`/api/export/rapport-annuel/${exId}?token=${encodeURIComponent(getToken() ?? "")}`}
+                href={`/api/export/rapport-annuel/${exId}`}
                 className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
                 title="Rapport annuel complet : garde + compte de gestion + statistiques + plan de travaux (PDF)"
               >
                 📑 Rapport annuel (PDF)
               </a>
               <a
-                href={`/api/export/compte-gestion?exercice_id=${exId}&token=${encodeURIComponent(getToken() ?? "")}`}
+                href={`/api/export/compte-gestion?exercice_id=${exId}`}
                 className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 title="Grand livre comptable de l'exercice au format CSV (Excel)"
               >
