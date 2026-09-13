@@ -90,6 +90,12 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
 - **Rate limiting sur `/api/auth/login`** : 5 tentatives échouées par email et
   par IP sur 15 minutes, puis `429` (limiteur en mémoire, adapté à une instance
   mono-serveur).
+- **Session par cookie `HttpOnly`** : le jeton de session n'est pas accessible au
+  JavaScript (rien dans `localStorage`), posé à la connexion — `SameSite=Lax`,
+  `Secure` derrière HTTPS, supprimé au logout. Le header `Bearer` et `?token=`
+  restent acceptés pour l'API/CLI (scripts, tests) ; les jetons hérités des
+  versions précédentes sont migrés automatiquement en cookie au premier
+  chargement (aucune reconnexion nécessaire).
 - **Upload de documents** : plafond configurable `COPRO_UPLOAD_MAX_MB` (défaut
   25 Mo, `413` au-delà) et liste blanche d'extensions
   (`.pdf .jpg .jpeg .png .doc .docx .xls .xlsx .odt .ods`, `400` sinon).
@@ -158,7 +164,7 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 108 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 114 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
@@ -170,7 +176,8 @@ usage unique, politiques par copropriété, réinitialisation par le syndic), jo
 d'audit (droits, isolation inter-copro, pagination), fonds de travaux 5 %,
 recouvrement (décompte FIFO et imputation, statuts du dossier, mise en demeure
 générée, article 19-2, permissions syndic), thème utilisateur (défaut, mise à
-jour, validation, NULL lisible), génération PDF (non vide + régression
+jour, validation, NULL lisible), sessions (cookie HttpOnly, priorité d'auth,
+migration, logout), génération PDF (non vide + régression
 du compte de gestion) et un flux complet de bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
 
 L'ancien `test_e2e.py` (script urllib contre une instance réelle) vit désormais
