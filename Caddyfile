@@ -1,3 +1,23 @@
-copro.cloudfr.net, proprietas.cloudfr.net {
+# Caddyfile — proxy TLS automatique du profil « internet ».
+#
+# Le(s) domaine(s) public(s) viennent de la variable d'environnement COPRO_DOMAIN
+# (un seul nom, ou plusieurs séparés par des virgules pour des alias) :
+#   COPRO_DOMAIN="copro.exemple.fr"          → un domaine
+#   COPRO_DOMAIN="copro.fr, ancien.fr"       → domaine principal + alias
+#
+# Sans le profil internet (réseau local), ce fichier n'est pas utilisé.
+# Lancement :  COPRO_DOMAIN="copro.exemple.fr" docker compose --profile internet up -d --build
+
+{$COPRO_DOMAIN:localhost} {
 	reverse_proxy backend:8000
+
+	# En-têtes de sécurité à la lisière (l'application les envoie aussi) :
+	# défense en profondeur, y compris si un CDN/proxy est retiré devant.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 }

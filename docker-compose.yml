@@ -39,10 +39,17 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    # Profil « internet » : expose l'application derrière un proxy TLS à certificats
+    # Let's Encrypt automatiques. L'activer :
+    #   COPRO_DOMAIN="copro.exemple.fr" docker compose --profile internet up -d --build
+    # (sans ce profil, seuls db + backend tournent — accès réseau local uniquement)
+    profiles: ["internet"]
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      COPRO_DOMAIN: ${COPRO_DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
