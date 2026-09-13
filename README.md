@@ -52,6 +52,8 @@ se créer normalement depuis la page de connexion.
 - **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
   Authenticator…), codes de secours, réinitialisation assistée par le syndic,
   journal d'audit, alertes email de connexion
+- **Thème clair / sombre** : au choix par compte (Réglages → Apparence) — clair, sombre
+  ou système (suit l'appareil), appliqué dès le chargement sans clignotement
 - **Multi-pays** : module de règles par pays (France en V1, extensible)
 
 ## Stack
@@ -156,7 +158,7 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 105 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 108 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
@@ -167,7 +169,8 @@ double authentification (enrôlement, connexion en deux étapes, codes de secour
 usage unique, politiques par copropriété, réinitialisation par le syndic), journal
 d'audit (droits, isolation inter-copro, pagination), fonds de travaux 5 %,
 recouvrement (décompte FIFO et imputation, statuts du dossier, mise en demeure
-générée, article 19-2, permissions syndic), génération PDF (non vide + régression
+générée, article 19-2, permissions syndic), thème utilisateur (défaut, mise à
+jour, validation, NULL lisible), génération PDF (non vide + régression
 du compte de gestion) et un flux complet de bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
 
 L'ancien `test_e2e.py` (script urllib contre une instance réelle) vit désormais
