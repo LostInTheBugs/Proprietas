@@ -51,6 +51,10 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('taux_legal_retard', sa.Float(), nullable=True))
     with op.batch_alter_table('personnes', schema=None) as batch_op:
         batch_op.add_column(sa.Column('adresse', sa.String(), nullable=True))
+    # Colonnes ajoutées = NULL sur les lignes existantes → normaliser, sinon les
+    # schémas de sortie refusent None (500 sur /api/copro et /api/personnes).
+    op.execute("UPDATE coproprietes SET taux_legal_retard = 0 WHERE taux_legal_retard IS NULL")
+    op.execute("UPDATE personnes SET adresse = '' WHERE adresse IS NULL")
 
 
 def downgrade() -> None:

@@ -196,3 +196,25 @@ def test_recouvrement_reserve_au_syndic(client, db, copro_a, syndic_a, token_a):
     from app.core.security import create_access_token
     tok_membre = create_access_token(membre.id, copro_a.id)
     assert client.get("/api/recouvrement", headers=auth(tok_membre)).status_code == 403
+
+
+def test_colonnes_ajoutees_null_sur_lignes_existantes(client, db, syndic_a, copro_a, token_a):
+    """Régression : ALTER TABLE laisse NULL sur les lignes existantes — les schémas
+    de sortie doivent rester lisibles (même piège que totp_policy / ags.heure)."""
+    from sqlalchemy import text
+
+    db.execute(text("UPDATE coproprietes SET taux_legal_retard = NULL WHERE id = :i"), {"i": copro_a.id})
+    p = Personne(copropriete_id=copro_a.id, nom="SansAdresse", prenom="Test")
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    db.execute(text("UPDATE personnes SET adresse = NULL WHERE id = :i"), {"i": p.id})
+    db.commit()
+    db.expire_all()  # force la relecture depuis la base (pas d'identity map)
+
+    r = client.get("/api/copro", headers=auth(token_a))
+    assert r.status_code == 200, r.text
+    assert r.json()["taux_legal_retard"] == 0.0
+    r = client.get("/api/personnes", headers=auth(token_a))
+    assert r.status_code == 200, r.text
+    assert any(x["nom"] == "SansAdresse" and x["adresse"] == "" for x in r.json())

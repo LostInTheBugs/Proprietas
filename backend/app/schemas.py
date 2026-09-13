@@ -64,6 +64,12 @@ class CoproOut(BaseModel):
     relance_heure: str = "09:00"
     relance_minimum: float = 0.0
     taux_legal_retard: float = 0.0  # intérêts de retard de recouvrement (%)
+
+    @field_validator("taux_legal_retard", mode="before")
+    @classmethod
+    def _taux_none(cls, v):
+        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+        return 0.0 if v is None else v
     totp_policy: str = "off"  # double authentification : off | syndic | all
 
     @field_validator("totp_policy", mode="before")
@@ -128,6 +134,12 @@ class PersonneIn(BaseModel):
     est_proprietaire: bool = True
     est_occupant: bool = True
     notes: str = ""
+
+    @field_validator("adresse", mode="before")
+    @classmethod
+    def _adresse_none(cls, v):
+        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+        return "" if v is None else v
 
 
 class PersonneOut(PersonneIn):
