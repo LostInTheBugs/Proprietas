@@ -45,6 +45,9 @@ se créer normalement depuis la page de connexion.
 - **Carnet d'entretien** : interventions, prestataires, coûts
 - **Exports** : registre des copropriétés, compte de gestion annuel
 - **Multi-copropriétés** : un compte, plusieurs immeubles isolés, vue consolidée
+- **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
+  Authenticator…), codes de secours, réinitialisation assistée par le syndic,
+  journal d'audit, alertes email de connexion
 - **Multi-pays** : module de règles par pays (France en V1, extensible)
 
 ## Stack
@@ -89,6 +92,25 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   (SQLite), `http://localhost:5173` est autorisé automatiquement.
 - **Isolation multi-copropriétés** : tout accès par identifiant est scopé à la
   copropriété active du token (404 si l'objet appartient à une autre copro).
+- **Double authentification (TOTP, RFC 6238)** : par compte, sans dépendance
+  externe — compatible avec toute application d'authentification (FreeOTP, Aegis,
+  Google Authenticator…). Codes de secours à usage unique (affichés une seule fois),
+  désactivation protégée par mot de passe + code, réinitialisation assistée par le
+  syndic (tracée). Politique par copropriété : `off` | `syndic` | `all` — les
+  nouvelles copropriétés reçoivent `COPRO_TOTP_DEFAULT_POLICY` (défaut `syndic` ;
+  l'app desktop la force à `off`). Le secret TOTP est chiffré en base (clé dérivée
+  de `COPRO_SECRET_KEY` : **changer cette clé impose aux comptes de ré-enrôler leur
+  2FA**). Les jetons intermédiaires (vérification du code, enrôlement forcé) sont à
+  portée limitée et courts (10 / 30 min) ; les tentatives 2FA partagent le
+  rate-limit du login.
+- **Journal d'audit** : connexions (succès et échecs), activation / désactivation /
+  réinitialisation 2FA, usage des codes de secours, création et suppression de
+  comptes, exports (compte de gestion, quittances, rapport annuel, CSV, registre) et
+  envois de relances — consultable par le syndic (page « 🔐 Sécurité ») pour la
+  copropriété active.
+- **Alertes email de sécurité** (best effort, via le SMTP de la copropriété) :
+  connexion depuis une nouvelle IP, 2FA désactivée ou réinitialisée, code de
+  secours utilisé.
 
 ## Tests
 
@@ -96,15 +118,18 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 67 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 83 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
 majorités légales (art. 24/25/26, unanimité, régime 2 copropriétaires, passerelle
 25-1), tantièmes et appels de fonds (total ≠ 1000, arrondis au centime), soldes
 par lot, authentification (register fermé, login, switch-copro, expiration),
-fonds de travaux 5 %, génération PDF (non vide + régression du compte de gestion)
-et un flux complet de bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
+double authentification (enrôlement, connexion en deux étapes, codes de secours à
+usage unique, politiques par copropriété, réinitialisation par le syndic), journal
+d'audit (droits, isolation inter-copro, pagination), fonds de travaux 5 %,
+génération PDF (non vide + régression du compte de gestion) et un flux complet de
+bout en bout. CI : `.github/workflows/ci.yml` (push + PR).
 
 L'ancien `test_e2e.py` (script urllib contre une instance réelle) vit désormais
 dans `backend/scripts/smoke_e2e.py` : conservé comme smoke test manuel d'un
