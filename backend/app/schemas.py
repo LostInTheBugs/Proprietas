@@ -64,6 +64,14 @@ class CoproOut(BaseModel):
     relance_heure: str = "09:00"
     relance_minimum: float = 0.0
     totp_policy: str = "off"  # double authentification : off | syndic | all
+
+    @field_validator("totp_policy", mode="before")
+    @classmethod
+    def _totp_policy_jamais_none(cls, v):
+        # Copropriétés créées avant la 2FA : NULL en base (NULL ≡ « off ») —
+        # ne jamais renvoyer None (ResponseValidationError → 500 sur /api/copro).
+        return v or "off"
+
     notes: str = ""
 
 

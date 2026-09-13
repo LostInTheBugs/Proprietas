@@ -205,3 +205,12 @@ def test_rate_limit_2fa_partage_avec_le_login(client, db, copro_a, syndic_a, tok
         assert "Trop de tentatives" in r.text
     finally:
         rate_limit._failures.clear()
+
+
+def test_copro_totp_policy_null_reste_lisible(client, db, copro_a, token_a):
+    """Copros pré-2FA : NULL en base (NULL ≡ « off ») — /api/copro ne doit jamais 500."""
+    copro_a.totp_policy = None
+    db.commit()
+    r = client.get("/api/copro", headers=auth(token_a))
+    assert r.status_code == 200, r.text
+    assert r.json()["totp_policy"] == "off"
