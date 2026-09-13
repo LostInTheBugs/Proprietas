@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from app.core import audit
 from app.core.database import get_db
@@ -14,13 +14,14 @@ from app.models.copropriete import Copropriete
 from app.routes.copro import get_or_create_copro
 from app.schemas import RegisterRequest, LoginRequest, LoginResponse, TokenResponse, UserOut, UserCreate, CoproCreate, ThemeIn
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
+from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
 from app.services import two_factor
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=LoginResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Création du premier compte (syndic). Fermé dès qu'un utilisateur non-démo existe."""
     if db.query(User).filter(User.is_demo == False).count() > 0:  # noqa: E712
         raise HTTPException(403, "Inscription fermée : un compte existe déjà")
@@ -41,11 +42,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             challenge_token=create_scoped_token(user.id, "2fa_setup", minutes=30,
                                                 ver=user.token_version or 0),
         )
-    return LoginResponse(access_token=create_access_token(user.id, ver=user.token_version or 0))
+    token = create_access_token(user.id, ver=user.token_version or 0)
+    poser_cookie_session(request, response, token)
+    return LoginResponse(access_token=token)
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db), request: Request = None):  # noqa: E501
+def login(req: LoginRequest, response: Response, db: Session = Depends(get_db), request: Request = None):  # noqa: E501
     """Étape 1 : mot de passe. Réponse : jeton complet, ou étape 2FA à poursuivre
     (two_factor_required = code à saisir ; must_enroll_2fa = activation exigée)."""
     ip = audit.client_ip(request)
@@ -75,9 +78,10 @@ def login(req: LoginRequest, db: Session = Depends(get_db), request: Request = N
                                                 ver=user.token_version or 0),
         )
     two_factor.finaliser_connexion(db, user, request)  # journal + alerte nouvelle IP
-    return LoginResponse(
-        access_token=create_access_token(user.id, two_factor.copro_principale_id(db, user),
-                                         ver=user.token_version or 0))
+    token = create_access_token(user.id, two_factor.copro_principale_id(db, user),
+                                ver=user.token_version or 0)
+    poser_cookie_session(request, response, token)
+    return LoginResponse(access_token=token)
 
 
 @router.get("/coproprietes")
@@ -105,19 +109,20 @@ def mes_coproprietes(db: Session = Depends(get_db), user: User = Depends(get_cur
 
 
 @router.post("/switch-copro/{copro_id}", response_model=TokenResponse)
-def switch_copro(copro_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def switch_copro(copro_id: int, request: Request, response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Bascule la copropriété active du user (nouveau token avec copro_id)."""
     lien = (db.query(UserCopro)
             .filter(UserCopro.user_id == user.id, UserCopro.copropriete_id == copro_id)
             .first())
     if not lien:
         raise HTTPException(403, "Accès refusé à cette copropriété")
-    return TokenResponse(access_token=create_access_token(user.id, copro_id,
-                                                          ver=user.token_version or 0))
+    token = create_access_token(user.id, copro_id, ver=user.token_version or 0)
+    poser_cookie_session(request, response, token)
+    return TokenResponse(access_token=token)
 
 
 @router.post("/coproprietes", response_model=TokenResponse)
-def creer_copropriete(data: CoproCreate, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def creer_copropriete(data: CoproCreate, request: Request, response: Response, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """Crée une nouvelle copropriété pour le syndic (devient la copro active)."""
     copro = Copropriete(
         nom=data.nom, adresse=data.adresse, ville=data.ville, code_postal=data.code_postal,
@@ -130,8 +135,9 @@ def creer_copropriete(data: CoproCreate, db: Session = Depends(get_db), user: Us
     db.add(UserCopro(user_id=user.id, copropriete_id=copro.id, principale=True))
     audit.enregistrer(db, "copro_created", user=user, copro_id=copro.id, detail=copro.nom)
     db.commit()
-    return TokenResponse(access_token=create_access_token(user.id, copro.id,
-                                                          ver=user.token_version or 0))
+    token = create_access_token(user.id, copro.id, ver=user.token_version or 0)
+    poser_cookie_session(request, response, token)
+    return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserOut)
@@ -145,6 +151,26 @@ def maj_theme(data: ThemeIn, db: Session = Depends(get_db), user: User = Depends
     user.theme = data.theme
     db.commit()
     return {"theme": user.theme}
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Ferme la session du navigateur (suppression du cookie).
+
+    Le jeton n'est pas révoqué côté serveur (il expire de lui-même) : pour une
+    révocation immédiate de toutes les sessions, utiliser « Déconnecter tous mes
+    appareils » (POST /logout-all)."""
+    supprimer_cookie_session(response)
+    return {"ok": True}
+
+
+@router.post("/session")
+def migrer_session(request: Request, response: Response,
+                   user: User = Depends(get_current_user)):
+    """Convertit une session à jeton (Bearer hérité) en cookie httpOnly.
+    Appelé une fois par le front après la mise à jour — idempotent."""
+    poser_cookie_session(request, response, jeton_entrant(request))
+    return {"ok": True}
 
 
 @router.post("/users", response_model=UserOut)

@@ -31,7 +31,8 @@ app = FastAPI(title="Proprietas", version="2026.09.005", lifespan=lifespan)
 
 # CORS : en dev (SQLite) on autorise le serveur Vite ; en prod le frontend est
 # servi par le même backend, donc liste vide par défaut (configurable via
-# COPRO_CORS_ORIGINS, JSON : '["https://app.example.fr"]').
+# COPRO_CORS_ORIGINS, JSON : '["https://app.example.fr"]'). allow_credentials
+# nécessaire au cookie de session en dev (Vite 5173 → API 8000).
 origins = settings.cors_origins
 if not origins and settings.is_sqlite:
     origins = ["http://localhost:5173"]
@@ -39,7 +40,7 @@ if not origins and settings.is_sqlite:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

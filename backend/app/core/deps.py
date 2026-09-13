@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.core.session import COOKIE_SESSION
 from app.models.user import User
 
 security = HTTPBearer(auto_error=False)
@@ -29,21 +30,36 @@ def _charger_user(db: Session, raw: str) -> User:
     return user
 
 
-def _raw_token(credentials: HTTPAuthorizationCredentials | None, token: str) -> str:
-    return credentials.credentials if credentials else (token or "")
+def _raw_token(
+    credentials: HTTPAuthorizationCredentials | None, token: str, request: Request | None
+) -> str:
+    """Jeton entrant par ordre de priorité : Bearer > ?token= > cookie httpOnly.
+
+    L'explicite (header/query) gagne sur le cookie : les scripts, l'API directe et
+    les tests restent inchangés, et une requête portant deux identités différentes
+    (cas des tests d'isolation) ne peut pas être « détournée » par le cookie.
+    """
+    if credentials and credentials.credentials:
+        return credentials.credentials
+    if token:
+        return token
+    if request is not None:
+        return request.cookies.get(COOKIE_SESSION) or ""
+    return ""
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     token: str = "",
+    request: Request = None,
     db: Session = Depends(get_db),
 ) -> User:
-    """Auth par header Bearer, avec fallback ?token=... (liens de téléchargement directs).
+    """Auth par header Bearer, `?token=` ou cookie de session httpOnly.
 
     Les jetons à portée (« 2fa_challenge », « 2fa_setup ») sont REFUSÉS ici : ils ne
     servent qu'aux étapes intermédiaires de la double authentification.
     """
-    raw = _raw_token(credentials, token)
+    raw = _raw_token(credentials, token, request)
     if not raw:
         raise HTTPException(401, "Authentification requise")
     user = _charger_user(db, raw)
@@ -55,11 +71,12 @@ def get_current_user(
 def get_current_user_2fa(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     token: str = "",
+    request: Request = None,
     db: Session = Depends(get_db),
 ) -> User:
     """Comme get_current_user, mais accepte AUSSI les jetons d'enrôlement forcé
     (« 2fa_setup ») — utilisé uniquement par les routes setup/verify de la 2FA."""
-    raw = _raw_token(credentials, token)
+    raw = _raw_token(credentials, token, request)
     if not raw:
         raise HTTPException(401, "Authentification requise")
     user = _charger_user(db, raw)

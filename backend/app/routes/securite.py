@@ -4,7 +4,7 @@ Les routes 2FA vivent sous /api/auth (continuité du login, y compris le flux
 d'enrôlement forcé pendant la connexion) ; le journal sous /api/audit, réservé
 au syndic pour la copropriété active.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.core import audit, crypto
 from app.core.database import get_db
 from app.core.deps import get_current_user, get_current_user_2fa, require_syndic
 from app.core.rate_limit import check_login_allowed, clear_failures, record_failure
+from app.core.session import poser_cookie_session
 from app.core.security import (
     create_access_token,
     create_scoped_token,
@@ -89,7 +90,7 @@ def configurer_2fa(db: Session = Depends(get_db), user: User = Depends(get_curre
 
 
 @router.post("/2fa/verify", response_model=TwoFactorVerifyOut)
-def verifier_enrolement(req: TwoFactorVerifyIn, request: Request,
+def verifier_enrolement(req: TwoFactorVerifyIn, request: Request, response: Response,
                         db: Session = Depends(get_db),
                         user: User = Depends(get_current_user_2fa)):
     """Valide le premier code → active la 2FA et renvoie les codes de secours
@@ -108,15 +109,17 @@ def verifier_enrolement(req: TwoFactorVerifyIn, request: Request,
     db.commit()
     out = TwoFactorVerifyOut(recovery_codes=codes)
     if getattr(user, "_token_scope", "") == "2fa_setup":
-        out.access_token = create_access_token(user.id, two_factor.copro_principale_id(db, user),
-                                               ver=user.token_version or 0)
+        token = create_access_token(user.id, two_factor.copro_principale_id(db, user),
+                                    ver=user.token_version or 0)
+        poser_cookie_session(request, response, token)
+        out.access_token = token
     return out
 
 
 # ---------- Connexion (2e étape) ----------
 
 @router.post("/2fa/verify-login", response_model=LoginResponse)
-def verifier_connexion(req: TwoFactorVerifyLoginIn, request: Request,
+def verifier_connexion(req: TwoFactorVerifyLoginIn, request: Request, response: Response,
                        db: Session = Depends(get_db)):
     """2e étape du login : code TOTP ou code de secours → jeton d'accès complet."""
     ip = audit.client_ip(request)
@@ -147,8 +150,10 @@ def verifier_connexion(req: TwoFactorVerifyLoginIn, request: Request,
         alertes.alerte_evenement(
             db, user, "Un code de secours vient d'être utilisé pour vous connecter.")
     two_factor.finaliser_connexion(db, user, request)  # journal + dernière connexion + alerte
-    return LoginResponse(access_token=create_access_token(
-        user.id, two_factor.copro_principale_id(db, user), ver=user.token_version or 0))
+    token = create_access_token(user.id, two_factor.copro_principale_id(db, user),
+                                ver=user.token_version or 0)
+    poser_cookie_session(request, response, token)
+    return LoginResponse(access_token=token)
 
 
 # ---------- Gestion ----------
