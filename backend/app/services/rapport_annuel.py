@@ -100,7 +100,6 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
     from app.models.mouvement import Mouvement
     from app.models.travaux import Travaux
     from app.models.lot import Lot
-    from app.models.personne import Personne
 
     register_fonts()
     buf = BytesIO()

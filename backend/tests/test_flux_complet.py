@@ -30,10 +30,13 @@ def test_flux_complet(client):
     assert r.status_code == 200
     assert r.json()["nom"] == "Résidence Les Lilas"
 
-    # 3. Personnes
-    p1 = client.post("/api/personnes", json={"nom": "Durand", "prenom": "Paul", "email": "paul@test.fr"}, headers=h).json()
-    p2 = client.post("/api/personnes", json={"nom": "Martin", "prenom": "Sophie"}, headers=h).json()
-    p3 = client.post("/api/personnes", json={"nom": "Bernard", "prenom": "Luc"}, headers=h).json()
+    # 3. Comptes copropriétaires (« zéro fiche » : le compte EST la personne)
+    p1 = client.post("/api/auth/users", json={"email": "paul@test.fr", "password": "test1234",
+                     "nom": "Durand", "prenom": "Paul", "role": "membre"}, headers=h).json()
+    p2 = client.post("/api/auth/users", json={"email": "sophie@test.fr", "password": "test1234",
+                     "nom": "Martin", "prenom": "Sophie", "role": "membre"}, headers=h).json()
+    p3 = client.post("/api/auth/users", json={"email": "luc@test.fr", "password": "test1234",
+                     "nom": "Bernard", "prenom": "Luc", "role": "membre"}, headers=h).json()
     assert all([p1, p2, p3])
 
     # 4. Lots (total 1000 millièmes)

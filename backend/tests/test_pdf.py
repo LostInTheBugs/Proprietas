@@ -32,7 +32,8 @@ def _texte_pdf(data: bytes) -> str:
 def _setup(client, token_a, db, copro_a):
     """Copro avec exercice, budget, lots, mouvements, AG + résolution."""
     h = auth(token_a)
-    r = client.post("/api/personnes", json={"nom": "Durand", "prenom": "Paul"}, headers=h)
+    r = client.post("/api/auth/users", json={"email": "durand@test.fr", "password": "test1234",
+                                             "nom": "Durand", "prenom": "Paul", "role": "membre"}, headers=h)
     p = r.json()
     r = client.post("/api/lots", json={"numero": "1", "designation": "Appartement 1",
                                        "tantiemes": 1000, "proprietaire_id": p["id"]},

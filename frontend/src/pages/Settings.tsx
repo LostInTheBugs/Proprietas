@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Copro, Personne, User } from "../types";
+import type { Copro, Lot, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 
 export default function Settings() {
-  const { user: me } = useUser();
+  const { user: me, refresh } = useUser();
   const isSyndic = me?.role === "syndic";
   const [copro, setCopro] = useState<Copro | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [personnes, setPersonnes] = useState<Personne[]>([]);
+  // Mes coordonnées (Réglages → Mes informations) — auto-édition PUT /auth/me.
+  const [moi, setMoi] = useState({ prenom: "", nom: "", email: "", adresse: "", telephone: "" });
+  const [moiSaved, setMoiSaved] = useState(false);
+  // Mes lots : lots dont JE suis propriétaire — j'en règle l'occupation.
+  const [mesLots, setMesLots] = useState<Lot[]>([]);
   // null = fermé ; { } = création ; { user } = édition de la fiche
   const [modal, setModal] = useState<null | { user?: User }>(null);
   const [saved, setSaved] = useState(false);
@@ -28,9 +32,29 @@ export default function Settings() {
   }, [me?.theme]);
 
   async function loadComptes() {
-    const [u, p] = await Promise.all([api.get<User[]>("/auth/users"), api.get<Personne[]>("/personnes")]);
-    setUsers(u);
-    setPersonnes(p);
+    setUsers(await api.get<User[]>("/auth/users"));
+  }
+
+  async function saveMoi() {
+    setError("");
+    setMoiSaved(false);
+    try {
+      await api.put("/auth/me", moi);
+      setMoiSaved(true);
+      refresh(); // met à jour le nom affiché dans la barre latérale
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    }
+  }
+
+  async function majOccupation(lot: Lot, statut: string) {
+    setError("");
+    try {
+      const maj = await api.put<Lot>(`/lots/${lot.id}/occupation`, { statut_occupation: statut });
+      setMesLots((prev) => prev.map((x) => (x.id === lot.id ? { ...x, ...maj } : x)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    }
   }
 
   async function supprimerCompte(u: User) {
@@ -64,6 +88,19 @@ export default function Settings() {
     if (!isSyndic) return;
     loadComptes().catch(() => {});
   }, [isSyndic]);
+
+  // Préremplissage de « Mes informations » à partir du compte connecté.
+  useEffect(() => {
+    if (!me) return;
+    setMoi({ prenom: me.prenom ?? "", nom: me.nom ?? "", email: me.email ?? "",
+             adresse: me.adresse ?? "", telephone: me.telephone ?? "" });
+  }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // « Mes lots » : uniquement les lots dont je suis propriétaire.
+  useEffect(() => {
+    if (!me) return;
+    api.get<Lot[]>("/lots").then((l) => setMesLots(l.filter((x) => x.proprietaire_id === me.id))).catch(() => {});
+  }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveCopro() {
     if (!copro) return;
@@ -180,6 +217,60 @@ export default function Settings() {
           « Système » suit le réglage clair / sombre de l'appareil. La préférence est conservée sur votre compte.
         </p>
       </Card>
+
+      <Card title="Mes informations">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Prénom" value={moi.prenom} onChange={(e) => setMoi({ ...moi, prenom: e.target.value })} />
+            <Input label="Nom" value={moi.nom} onChange={(e) => setMoi({ ...moi, nom: e.target.value })} />
+          </div>
+          <Input label="Email (pour la connexion)" type="email" value={moi.email} onChange={(e) => setMoi({ ...moi, email: e.target.value })} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Téléphone" value={moi.telephone} onChange={(e) => setMoi({ ...moi, telephone: e.target.value })} />
+            <Input label="Adresse postale (mises en demeure)" value={moi.adresse} onChange={(e) => setMoi({ ...moi, adresse: e.target.value })} />
+          </div>
+          <div className="flex items-center gap-3">
+            <Button onClick={saveMoi}>Enregistrer</Button>
+            {moiSaved && <span className="text-sm text-emerald-700">Coordonnées enregistrées ✓</span>}
+          </div>
+          <p className="text-xs text-slate-500">
+            Ces informations sont celles de votre compte : votre nom et votre adresse servent au
+            syndic pour les courriers officiels (mise en demeure).
+          </p>
+        </div>
+      </Card>
+
+      {mesLots.length > 0 && (
+        <Card title="Mes lots">
+          <div className="space-y-2">
+            {mesLots.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    Lot {l.numero}{l.designation ? ` — ${l.designation}` : ""}
+                  </p>
+                  <p className="text-xs text-slate-500">{l.tantiemes} millièmes</p>
+                </div>
+                <Select
+                  aria-label={`Occupation du lot ${l.numero}`}
+                  value={l.statut_occupation}
+                  onChange={(e) => majOccupation(l, e.target.value)}
+                  className="max-w-xs"
+                >
+                  <option value="">Non renseigné</option>
+                  <option value="occupant">Propriétaire occupant (j'y habite)</option>
+                  <option value="loue">Loué</option>
+                  <option value="vacant">Vacant</option>
+                </Select>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Déclarez l'occupation de chacun de vos lots (vous pouvez en louer une partie seulement).
+            Les noms des locataires ne sont jamais enregistrés (RGPD).
+          </p>
+        </Card>
+      )}
 
       {isSyndic && (<Card title="Copropriété">
         <div className="space-y-3">
@@ -352,7 +443,6 @@ export default function Settings() {
         >
           <div className="space-y-2">
             {users.map((u) => {
-              const liee = personnes.find((p) => p.id === u.personne_id);
               return (
                 <div key={u.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
                   <div>
@@ -360,10 +450,7 @@ export default function Settings() {
                       {[u.prenom, u.nom].filter(Boolean).join(" ")}
                       {u.id === me?.id && <span className="ml-2 text-xs font-normal text-slate-500">(vous)</span>}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      {u.email}
-                      {liee && <span className="ml-2 text-slate-400">🔗 {[liee.prenom, liee.nom].filter(Boolean).join(" ")}</span>}
-                    </p>
+                    <p className="text-xs text-slate-500">{u.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge color={u.role === "syndic" ? "indigo" : "slate"}>
@@ -397,7 +484,6 @@ export default function Settings() {
       {modal && (
         <UserModal
           item={modal.user}
-          personnes={personnes}
           isSelf={modal.user?.id === me?.id}
           onClose={() => setModal(null)}
           onSaved={async () => { setModal(null); await loadComptes(); }}
@@ -408,8 +494,8 @@ export default function Settings() {
   );
 }
 
-function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
-  item?: User; personnes: Personne[]; isSelf?: boolean;
+function UserModal({ item, isSelf, onClose, onSaved, onError }: {
+  item?: User; isSelf?: boolean;
   onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [f, setF] = useState({
@@ -417,28 +503,11 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
     nom: item?.nom ?? "",
     email: item?.email ?? "",
     role: item?.role ?? "membre",
-    personne_id: item?.personne_id != null ? String(item.personne_id) : "",
-    est_occupant: item?.est_occupant ?? false,
-    creer_fiche: false,
+    adresse: item?.adresse ?? "",
+    telephone: item?.telephone ?? "",
     password: "",
   });
   const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
-  // Fiches déjà liées à un autre compte exclues (un compte par personne) ;
-  // celle du compte en cours d'édition reste sélectionnable.
-  const disponibles = personnes.filter((p) => p.id === item?.personne_id || !p.a_un_compte);
-
-  function choisirPersonne(id: string) {
-    const p = personnes.find((x) => String(x.id) === id);
-    setF((prev) => ({
-      ...prev,
-      personne_id: id,
-      creer_fiche: id === "" ? prev.creer_fiche : false,
-      // La fiche sert de modèle : les champs restent modifiables ensuite.
-      prenom: p?.prenom || prev.prenom,
-      nom: p?.nom || prev.nom,
-      email: p?.email || prev.email,
-    }));
-  }
 
   async function save() {
     if (!f.email.trim() || !f.nom.trim()) {
@@ -450,18 +519,9 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
       return;
     }
     try {
-      // « Créer la fiche » : les comptes créés avant les fiches se relient en un clic.
-      let personneId = f.personne_id === "" ? null : Number(f.personne_id);
-      if (f.creer_fiche && personneId === null) {
-        const nouvelle = await api.post<{ id: number }>("/personnes", {
-          prenom: f.prenom, nom: f.nom, email: f.email,
-        });
-        personneId = nouvelle.id;
-      }
       const payload = {
         email: f.email, nom: f.nom, prenom: f.prenom, role: f.role,
-        personne_id: personneId,
-        est_occupant: f.est_occupant,
+        adresse: f.adresse, telephone: f.telephone,
         password: f.password || null, // vide = mot de passe conservé (édition)
       };
       if (item) await api.put(`/auth/users/${item.id}`, payload);
@@ -490,52 +550,14 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
         {isSelf && (
           <p className="text-xs text-slate-500">Vous ne pouvez pas modifier votre propre rôle.</p>
         )}
-        <Select label="Fiche liée (Lots & occupants)" value={f.personne_id} onChange={(e) => choisirPersonne(e.target.value)}>
-          <option value="">— Aucune —</option>
-          {disponibles.map((p) => {
-            const qualites = p.est_proprietaire ? "propriétaire" : "";
-            return (
-              <option key={p.id} value={p.id}>
-                {[p.prenom, p.nom].filter(Boolean).join(" ")}{qualites ? ` — ${qualites}` : ""}
-              </option>
-            );
-          })}
-        </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
+          <Input label="Adresse postale" value={f.adresse} onChange={(e) => set("adresse", e.target.value)} />
+        </div>
         <p className="text-xs text-slate-500">
-          Relie le compte à une personne de « Lots & occupants » : prénom, nom et email se préremplissent à la sélection.
+          Le copropriétaire peut modifier lui-même ces coordonnées (Réglages → Mes informations) ;
+          les lots se règlent dans « Lots &amp; occupants ».
         </p>
-        {f.personne_id === "" && (
-          <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={f.creer_fiche}
-              onChange={(e) => setF((prev) => ({ ...prev, creer_fiche: e.target.checked }))}
-            />
-            <span>
-              Créer la fiche « {[f.prenom, f.nom].filter(Boolean).join(" ") || "…"} » dans « Lots &amp; occupants »
-            </span>
-          </label>
-        )}
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={f.est_occupant}
-            onChange={(e) => setF((prev) => ({ ...prev, est_occupant: e.target.checked }))}
-          />
-          Propriétaire occupant (occupe son logement)
-        </label>
-        <p className="text-xs text-slate-500">
-          Coché : les lots de la fiche liée sont affichés « propriétaire occupant » dans « Lots & occupants ».
-          Les noms des locataires ne sont jamais enregistrés (RGPD) — un logement non occupé par son
-          propriétaire est indiqué « loué » ou « vacant » sur le lot.
-        </p>
-        {f.est_occupant && f.personne_id === "" && !f.creer_fiche && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Aucune fiche liée : « propriétaire occupant » n'aura aucun effet dans « Lots &amp; occupants »
-            tant que le compte n'est pas relié à une fiche — créez-la ou sélectionnez-la ci-dessus.
-          </p>
-        )}
         <Input
           label={item ? "Nouveau mot de passe (laisser vide pour conserver)" : "Mot de passe initial"}
           type="password"

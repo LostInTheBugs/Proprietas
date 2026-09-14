@@ -23,7 +23,7 @@ ART_19_2_TEXTE = (
 )
 
 
-def generer_mise_en_demeure_pdf(copro, lot, personne, lignes, syndic_nom: str) -> BytesIO:
+def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: str) -> BytesIO:
     """PDF de mise en demeure (délai 30 jours, mécanisme de l'article 19-2).
 
     `lignes` : décompte des provisions ÉCHUES impayées (dicts de recouvrement.appels_lot).
@@ -37,8 +37,8 @@ def generer_mise_en_demeure_pdf(copro, lot, personne, lignes, syndic_nom: str) -
     )
 
     adresse_copro = f"{copro.adresse or ''} {copro.code_postal or ''} {copro.ville or ''}".strip()
-    nom_dest = f"{personne.prenom or ''} {personne.nom or ''}".strip() if personne else "—"
-    adresse_dest = ((getattr(personne, "adresse", "") or "").strip() if personne else "") or "—"
+    nom_dest = f"{proprietaire.prenom or ''} {proprietaire.nom or ''}".strip() if proprietaire else "—"
+    adresse_dest = ((getattr(proprietaire, "adresse", "") or "").strip() if proprietaire else "") or "—"
     total = round(sum(l["restant_du"] for l in lignes), 2)
 
     el = []

@@ -53,8 +53,6 @@ def test_membre_ne_peut_pas_gerer_les_comptes_ni_les_donnees(client, db, copro_a
     # Données de structure
     assert client.post("/api/lots", headers=auth(token),
                        json={"numero": "9", "designation": "Lot pirate", "tantiemes": 10}).status_code == 403
-    assert client.post("/api/personnes", headers=auth(token),
-                       json={"nom": "Pirate", "prenom": "X"}).status_code == 403
     # Le syndic conserve l'accès (sanity)
     assert client.get("/api/auth/users", headers=auth(token_a)).status_code == 200
 
@@ -63,7 +61,7 @@ def test_membre_peut_consulter(client, db, copro_a, token_a):
     """Consultation : ce que le copropriétaire DOIT garder (situation, AG, documents)."""
     token, _ = _token_membre(db, copro_a)
     assert client.get("/api/lots", headers=auth(token)).status_code == 200
-    assert client.get("/api/personnes", headers=auth(token)).status_code == 200
+    assert client.get("/api/auth/me", headers=auth(token)).status_code == 200
     assert client.get("/api/ag", headers=auth(token)).status_code == 200
     assert client.get("/api/recap", headers=auth(token)).status_code == 200
     assert client.get("/api/copro", headers=auth(token)).status_code == 200

@@ -4,7 +4,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.09.014**.
+> Version courante : **2026.09.015**.
 
 Gestion de copropriété pour syndic bénévole, conçue pour le régime « petite copropriété »
 français (art. 41-8 de la loi du 10 juillet 1965, issu de l'ordonnance n° 2019-1101 :
@@ -24,8 +24,12 @@ plan pluriannuel de travaux ; Lyon : 3 lots) :
 | Email | `demo@proprietas.cloudfr.net` |
 | Mot de passe | `demo123456` |
 
-Un second compte illustre la vue « copropriétaire » (consultation) et la case
-« Propriétaire occupant » (le lot 1 des Tilleuls s'affiche « propriétaire occupant ») :
+Un second compte illustre la vue « copropriétaire » (consultation) : Marie Dubois
+possède le lot 1 des Tilleuls et le déclare « propriétaire occupant » (Réglages →
+Mes lots), et modifie ses coordonnées (Réglages → Mes informations). Tous les
+propriétaires de la démo ont un compte (mot de passe `demo123456`) : `marie.dubois@`,
+`jean.martin@`, `sophie.bernard@`, `paul.petit@`, `contact.sci-lilas@`,
+`karim.benali@`, `claire.fontaine@`, `enzo.rossi@` (tous en `@example.com`).
 
 | Champ | Valeur |
 |-------|--------|
@@ -37,9 +41,10 @@ se créer normalement depuis la page de connexion.
 
 ## Fonctionnalités
 
-- **Immeuble & lots** : lots, tantièmes (millièmes), propriétaires, **occupation des
-  lots** (« propriétaire occupant » depuis le compte utilisateur, « loué » / « vacant »
-  sur le lot — aucun nom de locataire enregistré, RGPD)
+- **Immeuble & lots** : lots, tantièmes (millièmes), propriétaires (des **comptes
+  utilisateurs** — « zéro fiche »), **occupation des lots** (« propriétaire occupant »,
+  « loué » ou « vacant » — déclarée lot par lot par son propriétaire dans Réglages →
+  Mes lots ; aucun nom de locataire enregistré, RGPD)
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
   encaissements / dépenses, solde par lot, état daté, quittances
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
@@ -59,13 +64,14 @@ se créer normalement depuis la page de connexion.
 - **Carnet d'entretien** : interventions, prestataires, coûts
 - **Exports** : registre des copropriétés, compte de gestion annuel
 - **Multi-copropriétés** : un compte, plusieurs immeubles isolés, vue consolidée
-- **Comptes utilisateurs** : fiches éditables (prénom, nom, email, rôle, mot de passe),
-  lien optionnel vers une personne de « Lots & occupants » (la fiche préremplit le
-  compte), case « propriétaire occupant », suppression confirmée et tracée
+- **Comptes utilisateurs** : les propriétaires sont des comptes (prénom, nom, email,
+  téléphone, adresse, rôle, mot de passe) ; chacun modifie ses propres coordonnées
+  (Réglages → Mes informations) et déclare l'occupation de ses lots (Mes lots) ;
+  suppression confirmée et tracée, historique conservé (relances / convocations / actes)
 - **Rôle copropriétaire (consultation)** : les jetons d'écriture (copropriété, fonds de
   travaux, emails, relances, comptes utilisateurs, recouvrement, sécurité) sont refusés
   par l'API ; les écrans correspondants sont masqués — le copropriétaire consulte la
-  situation, les assemblées et les documents
+  situation, les assemblées et les documents, et gère ses propres informations
 - **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
   Authenticator…), codes de secours, réinitialisation assistée par le syndic,
   journal d'audit, alertes email de connexion
@@ -151,7 +157,7 @@ contentieux.
   anciens ; distinction échu / à échoir. La mise en demeure liste la nature et le
   montant de chaque provision échue impayée (exigence de précision — cf. Cass. 3e
   civ., 18 juin 2026, n° 24-19.950).
-- **Mise en demeure (PDF)** : générée depuis le dossier (mentions de la fiche
+- **Mise en demeure (PDF)** : générée depuis le dossier (mentions du compte
   Service-Public F2603 : identité et adresse du copropriétaire, décompte, délai de
   30 jours, conséquences). L'app trace le mode d'envoi et la référence (lettre
   recommandée électronique — la voie électronique est la règle, le papier
@@ -181,7 +187,7 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 139 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 138 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,

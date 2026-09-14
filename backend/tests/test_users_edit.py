@@ -1,8 +1,11 @@
-"""Comptes utilisateurs — édition des fiches et lien « Lots & occupants ».
+"""Comptes utilisateurs — édition des fiches, auto-édition et suppression.
 
 Réglages → Comptes utilisateurs : le syndic modifie l'email, le prénom, le nom,
-le rôle et le mot de passe d'un compte de SA copropriété, et peut lier un compte
-à une fiche personne (un compte par personne au maximum).
+le rôle, l'adresse et le téléphone d'un compte de SA copropriété. Chacun peut
+aussi modifier SES PROPRES coordonnées (Réglages → Mes informations, PUT /auth/me).
+
+Modèle « zéro fiche » : les comptes utilisateurs SONT les personnes — les fiches
+« Lots & occupants » n'existent plus.
 """
 from datetime import datetime
 
@@ -12,23 +15,15 @@ from tests.conftest import auth, _make_membre
 from app.core import rate_limit
 from app.core.security import create_access_token
 from app.models.lot import Lot
-from app.models.personne import Personne
-from app.models.recouvrement import ActeRecouvrement
+from app.models.invitation import Invitation
 from app.models.relance import Relance
+from app.models.recouvrement import ActeRecouvrement
 from app.models.user import User
-
-
-def _personne(db, copro, nom="Durand", prenom="Paul", email="paul@test.fr"):
-    p = Personne(copropriete_id=copro.id, nom=nom, prenom=prenom, email=email)
-    db.add(p)
-    db.commit()
-    db.refresh(p)
-    return p
 
 
 def _payload(**kwargs):
     base = {"email": "membre.a@test.fr", "nom": "Membre", "prenom": "Alice",
-            "role": "membre", "personne_id": None}
+            "role": "membre", "adresse": "", "telephone": ""}
     base.update(kwargs)
     return base
 
@@ -55,6 +50,19 @@ def test_update_user_champs_ok(client, db, copro_a, syndic_a, token_a):
     assert r.status_code == 200
     entrees = r.json()
     assert len(entrees) == 1 and "nouveau@test.fr" in entrees[0]["detail"]
+
+
+def test_update_user_coordonnees(client, db, copro_a, syndic_a, token_a):
+    """Adresse et téléphone modifiables par le syndic (traçés dans l'audit)."""
+    membre = _make_membre(db, "membre.a@test.fr", copro_a)
+    r = client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a), json=_payload(
+        adresse="9 rue de la Roquette, 75011 Paris", telephone="06 12 34 56 78"))
+    assert r.status_code == 200, r.text
+    assert r.json()["adresse"] == "9 rue de la Roquette, 75011 Paris"
+    assert r.json()["telephone"] == "06 12 34 56 78"
+    r = client.get("/api/audit?action=user_updated", headers=auth(token_a))
+    detail = r.json()[0]["detail"]
+    assert "adresse" in detail and "téléphone" in detail
 
 
 def test_update_user_scopes_copro(client, db, copro_a, copro_b, syndic_a, syndic_b, token_a):
@@ -125,74 +133,69 @@ def test_edition_reservee_au_syndic(client, db, copro_a, syndic_a):
                       json=_payload(email="membre.a@test.fr")).status_code == 403
 
 
-def test_lien_personne_creation_edition(client, db, copro_a, syndic_a, token_a):
-    """Lien compte ↔ fiche personne : posé à la création, retiré à l'édition."""
-    p = _personne(db, copro_a)
-    r = client.post("/api/auth/users", headers=auth(token_a), json={
-        "email": "paul@test.fr", "password": "test1234", "nom": "Durand",
-        "prenom": "Paul", "role": "membre", "personne_id": p.id})
-    assert r.status_code == 200, r.text
-    uid = r.json()["id"]
-    assert r.json()["personne_id"] == p.id
-
-    # Badge « compte » côté Lots & occupants
-    rp = client.get("/api/personnes", headers=auth(token_a))
-    assert rp.status_code == 200
-    item = next(x for x in rp.json() if x["id"] == p.id)
-    assert item["a_un_compte"] is True
-
-    # Retrait du lien (personne_id null)
-    r = client.put(f"/api/auth/users/{uid}", headers=auth(token_a),
-                   json=_payload(email="paul@test.fr", nom="Durand", prenom="Paul"))
-    assert r.status_code == 200, r.text
-    assert r.json()["personne_id"] is None
-    rp = client.get("/api/personnes", headers=auth(token_a))
-    assert next(x for x in rp.json() if x["id"] == p.id)["a_un_compte"] is False
-
-
-def test_personne_liee_autre_copro_404(client, db, copro_a, copro_b, syndic_a, token_a):
-    p_b = _personne(db, copro_b, nom="Autre")
-    r = client.post("/api/auth/users", headers=auth(token_a), json={
-        "email": "paul@test.fr", "password": "test1234", "nom": "Durand",
-        "prenom": "Paul", "role": "membre", "personne_id": p_b.id})
-    assert r.status_code == 404
-
+# ---------- Auto-édition (Réglages → Mes informations) ----------
+def test_profil_auto_edition(client, db, copro_a, syndic_a):
+    """Un copropriétaire modifie SES coordonnées (pas le rôle, pas les autres)."""
     membre = _make_membre(db, "membre.a@test.fr", copro_a)
-    r = client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a),
-                   json=_payload(email="membre.a@test.fr", personne_id=p_b.id))
-    assert r.status_code == 404
+    token = create_access_token(membre.id, copro_a.id)
+    r = client.put("/api/auth/me", headers=auth(token), json={
+        "prenom": "Alice", "nom": "Martin", "email": "alice.martin@test.fr",
+        "adresse": "2 rue du Test, 75011 Paris", "telephone": "06 98 76 54 32"})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["email"] == "alice.martin@test.fr"
+    assert data["adresse"] == "2 rue du Test, 75011 Paris"
+    assert data["telephone"] == "06 98 76 54 32"
+    assert data["role"] == "membre"  # le rôle n'est jamais modifiable ici
+
+    # Le nouvel email sert à se connecter
+    assert client.post("/api/auth/login", json={"email": "alice.martin@test.fr",
+                                                "password": "test1234"}).status_code == 200
+
+    # Audit « profil_updated »
+    r = client.get("/api/audit?action=profil_updated", headers=auth(create_access_token(syndic_a.id, copro_a.id)))
+    assert r.status_code == 200
+    entrees = r.json()
+    assert len(entrees) == 1
+    assert "adresse" in entrees[0]["detail"] and "téléphone" in entrees[0]["detail"]
 
 
-def test_personne_deja_liee_400(client, db, copro_a, syndic_a, token_a):
-    p = _personne(db, copro_a)
+def test_profil_auto_edition_email_duplique(client, db, copro_a, syndic_a):
     membre = _make_membre(db, "membre.a@test.fr", copro_a)
-    assert client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a),
-                      json=_payload(email="membre.a@test.fr", personne_id=p.id)).status_code == 200
-    # Deuxième compte sur la même fiche → refusé
-    r = client.post("/api/auth/users", headers=auth(token_a), json={
-        "email": "doublon@test.fr", "password": "test1234", "nom": "Durand",
-        "prenom": "Paul", "role": "membre", "personne_id": p.id})
+    token = create_access_token(membre.id, copro_a.id)
+    r = client.put("/api/auth/me", headers=auth(token), json={
+        "prenom": "Alice", "nom": "Martin", "email": "syndic.a@test.fr",
+        "adresse": "", "telephone": ""})
     assert r.status_code == 400
-    assert "déjà liée" in r.text
-    # Ré-enregistrer le MÊME compte sur la même fiche reste possible
-    assert client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a),
-                      json=_payload(email="membre.a@test.fr", personne_id=p.id)).status_code == 200
+    assert "déjà utilisé" in r.text
+
+
+def test_profil_auto_edition_nom_requis(client, db, copro_a, syndic_a):
+    membre = _make_membre(db, "membre.a@test.fr", copro_a)
+    token = create_access_token(membre.id, copro_a.id)
+    r = client.put("/api/auth/me", headers=auth(token), json={
+        "prenom": "Alice", "nom": "  ", "email": "membre.a@test.fr",
+        "adresse": "", "telephone": ""})
+    assert r.status_code == 422
 
 
 def test_prenom_null_historique_tolere(client, db, copro_a, syndic_a, token_a):
-    """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes → lisible.
+    """Colonnes ajoutées par ALTER TABLE : NULL sur les lignes existantes → lisible.
 
     Régression classique (ResponseValidationError → 500) : on injecte NULL par
     SQL brut + expire_all (l'identity map masquerait le bug).
     """
-    db.execute(text("UPDATE users SET prenom = NULL WHERE id = :i"), {"i": syndic_a.id})
+    db.execute(text("UPDATE users SET prenom = NULL, adresse = NULL, telephone = NULL WHERE id = :i"),
+               {"i": syndic_a.id})
     db.commit()
     db.expire_all()
     r = client.get("/api/auth/users", headers=auth(token_a))
     assert r.status_code == 200, r.text
-    assert next(u for u in r.json() if u["id"] == syndic_a.id)["prenom"] == ""
+    u = next(x for x in r.json() if x["id"] == syndic_a.id)
+    assert u["prenom"] == "" and u["adresse"] == "" and u["telephone"] == ""
     r = client.get("/api/auth/me", headers=auth(token_a))
     assert r.status_code == 200 and r.json()["prenom"] == ""
+    assert r.json()["adresse"] == "" and r.json()["telephone"] == ""
 
 
 def test_register_avec_prenom(client):
@@ -205,8 +208,9 @@ def test_register_avec_prenom(client):
 
 
 # ---------- Suppression ----------
-def _lot(db, copro, numero="1", tantiemes=1000):
-    lot = Lot(copropriete_id=copro.id, numero=numero, tantiemes=tantiemes)
+def _lot(db, copro, numero="1", tantiemes=1000, proprietaire_id=None):
+    lot = Lot(copropriete_id=copro.id, numero=numero, tantiemes=tantiemes,
+              proprietaire_id=proprietaire_id)
     db.add(lot)
     db.commit()
     db.refresh(lot)
@@ -233,68 +237,39 @@ def test_delete_user_conserve_actes_recouvrement(client, db, copro_a, syndic_a, 
     assert reste.created_by_id is None
 
 
-def test_delete_compte_lie_ok(client, db, copro_a, syndic_a, token_a):
-    """Un compte lié à une fiche se supprime ; le badge « compte » redevient faux."""
-    p = _personne(db, copro_a)
-    r = client.post("/api/auth/users", headers=auth(token_a), json={
-        "email": "paul@test.fr", "password": "test1234", "nom": "Durand",
-        "prenom": "Paul", "role": "membre", "personne_id": p.id})
-    assert r.status_code == 200, r.text
-    assert client.delete(f"/api/auth/users/{r.json()['id']}",
-                         headers=auth(token_a)).status_code == 200
-    rp = client.get("/api/personnes", headers=auth(token_a))
-    assert next(x for x in rp.json() if x["id"] == p.id)["a_un_compte"] is False
+def test_delete_user_delie_lots_relances_convocations(client, db, copro_a, syndic_a, token_a):
+    """Suppression d'un compte propriétaire : l'historique survit, délié (RGPD).
 
-
-def test_delete_personne_delie_compte_et_actes(client, db, copro_a, syndic_a, token_a):
-    """Supprimer une fiche détache le compte lié et les actes — ils survivent."""
-    p = _personne(db, copro_a)
-    membre = _make_membre(db, "membre.a@test.fr", copro_a)
-    assert client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a),
-                      json=_payload(email="membre.a@test.fr", personne_id=p.id)).status_code == 200
-    lot = _lot(db, copro_a)
-    acte = ActeRecouvrement(copropriete_id=copro_a.id, lot_id=lot.id, type="note",
-                            libelle="Note", personne_id=p.id)
-    db.add(acte)
-    db.commit()
-    db.refresh(acte)
-
-    assert client.delete(f"/api/personnes/{p.id}", headers=auth(token_a)).status_code == 200
-    db.expire_all()
-    u = db.query(User).filter(User.id == membre.id).first()
-    assert u is not None and u.personne_id is None
-    a = db.query(ActeRecouvrement).filter(ActeRecouvrement.id == acte.id).first()
-    assert a is not None and a.personne_id is None
-
-
-def test_delete_personne_conserve_relances_et_convocations(client, db, copro_a, syndic_a, token_a):
-    """Suppression possible même avec un historique : les lignes survivent, déliées.
-
-    RGPD : le nom part, la preuve (relance pour le lot, convocation pour l'AG) reste.
+    Le lot repasse « sans propriétaire », les relances/convocations reçues
+    restent attachées au lot / à l'AG — seule la personne est supprimée.
     """
-    from app.models.invitation import Invitation
     from app.models.ag import AG
-    p = _personne(db, copro_a)
-    lot = _lot(db, copro_a)
+    membre = _make_membre(db, "membre.a@test.fr", copro_a)
+    lot = _lot(db, copro_a, proprietaire_id=membre.id)
     ag = AG(copropriete_id=copro_a.id, date=datetime(2026, 10, 1), statut="projet")
     db.add(ag)
     db.commit()
     db.refresh(ag)
-    relance = Relance(lot_id=lot.id, personne_id=p.id, date_envoi=datetime(2026, 1, 5),
+    relance = Relance(lot_id=lot.id, personne_id=membre.id, date_envoi=datetime(2026, 1, 5),
                       statut="envoye", montant_du=120.0)
-    invitation = Invitation(ag_id=ag.id, personne_id=p.id,
+    invitation = Invitation(ag_id=ag.id, personne_id=membre.id,
                             date_envoi=datetime(2026, 1, 6), statut="envoye")
+    acte = ActeRecouvrement(copropriete_id=copro_a.id, lot_id=lot.id, type="note",
+                            personne_id=membre.id)
     db.add(relance)
     db.add(invitation)
+    db.add(acte)
     db.commit()
-    db.refresh(relance)
-    db.refresh(invitation)
+    for obj in (relance, invitation, acte):
+        db.refresh(obj)
 
-    r = client.delete(f"/api/personnes/{p.id}", headers=auth(token_a))
-    assert r.status_code == 200, r.text
+    membre_id = membre.id  # capturé avant suppression (l'instance expire ensuite)
+    assert client.delete(f"/api/auth/users/{membre_id}", headers=auth(token_a)).status_code == 200
     db.expire_all()
-    reste_relance = db.query(Relance).filter(Relance.id == relance.id).first()
-    reste_invitation = db.query(Invitation).filter(Invitation.id == invitation.id).first()
-    assert reste_relance is not None and reste_relance.personne_id is None
-    assert reste_invitation is not None and reste_invitation.personne_id is None
-    assert reste_relance.lot_id == lot.id  # la preuve reste attachée au lot
+    lot_apres = db.query(Lot).filter(Lot.id == lot.id).first()
+    assert lot_apres is not None and lot_apres.proprietaire_id is None
+    for obj, champ in ((relance, "personne_id"), (invitation, "personne_id"), (acte, "personne_id")):
+        reste = db.query(type(obj)).filter(type(obj).id == obj.id).first()
+        assert reste is not None, f"{type(obj).__name__} doit survivre"
+        assert getattr(reste, champ) is None
+    assert db.query(User).filter(User.id == membre_id).count() == 0

@@ -10,16 +10,19 @@ from app.models.document import Document
 from tests.conftest import auth
 
 
-def _personne_a(client, token_a):
-    r = client.post("/api/personnes", json={"nom": "Durand", "prenom": "Paul"}, headers=auth(token_a))
+def _membre_a(client, token_a):
+    """Compte copropriétaire de A (modèle « zéro fiche » : le compte EST la personne)."""
+    r = client.post("/api/auth/users", json={
+        "email": "durand.a@test.fr", "password": "test1234", "nom": "Durand",
+        "prenom": "Paul", "role": "membre"}, headers=auth(token_a))
     assert r.status_code == 200, r.text
     return r.json()
 
 
-def _lot_a(client, token_a, personne=None):
+def _lot_a(client, token_a, proprietaire=None):
     data = {"numero": "1", "designation": "Appartement 1", "tantiemes": 1000}
-    if personne:
-        data["proprietaire_id"] = personne["id"]
+    if proprietaire:
+        data["proprietaire_id"] = proprietaire["id"]
     r = client.post("/api/lots", json=data, headers=auth(token_a))
     assert r.status_code == 200, r.text
     return r.json()
@@ -37,16 +40,20 @@ def _ag_a(client, token_a):
     return r.json()
 
 
-# ---------- Personnes ----------
-def test_personne_isolee(client, token_a, token_b):
-    p = _personne_a(client, token_a)
-    # B ne voit ni ne modifie la personne de A
-    assert client.put(f"/api/personnes/{p['id']}", json={"nom": "Piraté"}, headers=auth(token_b)).status_code == 404
-    assert client.delete(f"/api/personnes/{p['id']}", headers=auth(token_b)).status_code == 404
+# ---------- Comptes copropriétaires ----------
+def test_compte_isole(client, token_a, token_b):
+    """B ne voit ni ne modifie le compte de A (404) ; A le gère normalement."""
+    u = _membre_a(client, token_a)
+    payload = {"email": "durand.a@test.fr", "nom": "Piraté", "prenom": "Paul", "role": "membre"}
+    assert client.put(f"/api/auth/users/{u['id']}", json=payload, headers=auth(token_b)).status_code == 404
+    assert client.delete(f"/api/auth/users/{u['id']}", headers=auth(token_b)).status_code == 404
     # A y accède normalement
-    r = client.put(f"/api/personnes/{p['id']}", json={"nom": "Durand", "prenom": "Paul"}, headers=auth(token_a))
+    r = client.put(f"/api/auth/users/{u['id']}", json={
+        "email": "durand.a@test.fr", "nom": "Durand", "prenom": "Paul",
+        "role": "membre", "adresse": "1 rue A"}, headers=auth(token_a))
     assert r.status_code == 200
     assert r.json()["nom"] == "Durand"
+    assert r.json()["adresse"] == "1 rue A"
 
 
 # ---------- Lots ----------

@@ -8,7 +8,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.models.exercice import Exercice
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
@@ -156,7 +155,6 @@ def export_registre(request: Request, db: Session = Depends(get_db), user: User 
                       detail=copro.nom, request=request)
     db.commit()
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
-    personnes = db.query(Personne).filter(Personne.copropriete_id == copro.id).all()
     rows = []
     for lot in lots:
         prop = lot.proprietaire

@@ -9,13 +9,14 @@ class Relance(Base):
 
     id = Column(Integer, primary_key=True)
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=False)
-    # NULL possible : la fiche personne a pu être supprimée (RGPD) — l'historique
-    # de relance reste attaché au LOT (preuve conservée, nom retiré).
-    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
+    # Propriétaire relancé = un COMPTE UTILISATEUR (la colonne garde son nom
+    # historique, la FK pointe users.id). NULL possible : le compte a pu être
+    # supprimé (RGPD) — l'historique de relance reste attaché au LOT.
+    personne_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date_envoi = Column(DateTime, nullable=False)
     statut = Column(String, default="envoye")
     montant_du = Column(Float, default=0.0)
     message = Column(Text, default="")
 
     lot = relationship("Lot")
-    personne = relationship("Personne")
+    personne = relationship("User")

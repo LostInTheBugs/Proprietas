@@ -6,7 +6,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.models.appel import AppelLot
 from app.models.mouvement import Mouvement
 from app.models.relance import Relance
@@ -19,7 +18,10 @@ router = APIRouter(prefix="/api/relances", tags=["relances"])
 
 
 def _etat_lots(db: Session, copro: Copropriete) -> list[dict]:
-    """Solde par lot : appels (charges + fonds travaux) − encaissements du lot."""
+    """Solde par lot : appels (charges + fonds travaux) − encaissements du lot.
+
+    Le propriétaire est le compte utilisateur (modèle « zéro fiche »).
+    """
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     result = []
     for lot in lots:
@@ -27,7 +29,7 @@ def _etat_lots(db: Session, copro: Copropriete) -> list[dict]:
         appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
         enc = sum(m.montant for m in db.query(Mouvement).filter(
             Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
-        personne = db.query(Personne).filter(Personne.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+        personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         result.append({
             "lot": lot,
             "personne": personne,
@@ -140,7 +142,7 @@ def historique(db: Session = Depends(get_db), user: User = Depends(get_current_u
     out = []
     for r in relances:
         lot = db.query(Lot).filter(Lot.id == r.lot_id).first()
-        p = db.query(Personne).filter(Personne.id == r.personne_id).first()
+        p = db.query(User).filter(User.id == r.personne_id).first()
         out.append(RelanceOut(
             id=r.id,
             lot_id=r.lot_id,

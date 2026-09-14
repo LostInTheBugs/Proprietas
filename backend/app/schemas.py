@@ -41,15 +41,15 @@ class UserOut(BaseModel):
     nom: str
     prenom: str = ""
     role: str
-    personne_id: Optional[int] = None  # fiche « Lots & occupants » liée (optionnel)
-    est_occupant: bool = False  # « propriétaire occupant » : occupe son logement
+    adresse: str = ""  # coordonnées du copropriétaire (Réglages → Mes informations)
+    telephone: str = ""
     two_factor_enabled: bool = False  # propriété du modèle User (totp_enabled)
     theme: str = "system"  # light | dark | system
 
-    @field_validator("prenom", mode="before")
+    @field_validator("prenom", "adresse", "telephone", mode="before")
     @classmethod
-    def _prenom_none(cls, v):
-        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+    def _colonnes_none(cls, v):
+        """Colonnes ajoutées par ALTER TABLE : NULL sur les lignes existantes."""
         return "" if v is None else v
 
     @field_validator("theme", mode="before")
@@ -76,8 +76,8 @@ class UserCreate(BaseModel):
     nom: str
     prenom: str = ""
     role: str = "membre"
-    personne_id: Optional[int] = None  # fiche « Lots & occupants » liée (optionnel)
-    est_occupant: bool = False  # « propriétaire occupant » : occupe son logement
+    adresse: str = ""
+    telephone: str = ""
 
     @field_validator("email")
     @classmethod
@@ -111,8 +111,8 @@ class UserUpdate(BaseModel):
     nom: str
     prenom: str = ""
     role: str = "membre"
-    personne_id: Optional[int] = None
-    est_occupant: bool = False  # « propriétaire occupant » : occupe son logement
+    adresse: str = ""
+    telephone: str = ""
     # Nouveau mot de passe facultatif : absent/vide = mot de passe conservé.
     password: Optional[str] = None
 
@@ -232,39 +232,33 @@ class CoproUpdate(BaseModel):
         return v
 
 
-# ---------- Personnes ----------
-class PersonneIn(BaseModel):
-    nom: str
+# ---------- Profil (auto-édition du copropriétaire) ----------
+class ProfilIn(BaseModel):
+    """Réglages → « Mes informations » : chacun modifie ses propres
+    coordonnées (prénom, nom, email de connexion, adresse, téléphone)."""
     prenom: str = ""
-    email: str = ""
+    nom: str
+    email: str
+    adresse: str = ""
     telephone: str = ""
-    adresse: str = ""  # adresse postale (mise en demeure)
-    notes: str = ""
 
-    @field_validator("adresse", mode="before")
+    @field_validator("email")
     @classmethod
-    def _adresse_none(cls, v):
-        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+    def _email_ok(cls, v):
+        return _valider_email(v)
+
+    @field_validator("nom")
+    @classmethod
+    def _nom_ok(cls, v):
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("le nom est requis")
+        return v
+
+    @field_validator("adresse", "telephone", mode="before")
+    @classmethod
+    def _none_vide(cls, v):
         return "" if v is None else v
-
-
-class PersonneOut(PersonneIn):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-
-
-class PersonneAvecCompte(PersonneOut):
-    """Fiche « Lots & occupants » enrichie (GET /api/personnes uniquement).
-
-    - `a_un_compte` : un compte utilisateur est-il lié à la fiche ?
-    - `est_proprietaire` : DÉRIVÉ — la personne est propriétaire d'au moins un lot
-      (les cases historiques de la fiche ne sont plus utilisées).
-    - `compte_occupant` : le compte lié déclare « occupe son logement »
-      (→ lots affichés « propriétaire occupant »).
-    """
-    a_un_compte: bool = False
-    est_proprietaire: bool = False
-    compte_occupant: bool = False
 
 
 # ---------- Lots ----------
@@ -274,29 +268,52 @@ class LotIn(BaseModel):
     type: str = "appartement"
     tantiemes: int = 0
     surface_m2: Optional[float] = None
+    # Propriétaire = un COMPTE UTILISATEUR de la copropriété (modèle « zéro fiche »).
     proprietaire_id: Optional[int] = None
-    # "" = non renseigné | "loue" | "vacant" (jamais de nom de locataire — RGPD)
+    # "" = non renseigné | "occupant" (le propriétaire occupe son logement)
+    # | "loue" | "vacant" — jamais de nom de locataire (RGPD).
     statut_occupation: str = ""
     notes: str = ""
 
     @field_validator("statut_occupation")
     @classmethod
     def _statut_ok(cls, v):
-        if v not in ("", "loue", "vacant"):
-            raise ValueError("statut d'occupation invalide ('' | loue | vacant)")
+        if v not in ("", "occupant", "loue", "vacant"):
+            raise ValueError("statut d'occupation invalide ('' | occupant | loue | vacant)")
         return v
 
 
 class LotOut(LotIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    # DÉRIVÉ : le propriétaire (fiche liée à un compte) occupe son logement.
-    proprietaire_occupant: bool = False
+    # Enrichissements (GET/POST/PUT renseignés par _lots_out) :
+    proprietaire_nom: str = ""  # « Prénom Nom » du compte propriétaire
+    proprietaire_occupant: bool = False  # DÉRIVÉ : statut_occupation == "occupant"
+
+
+class ProprietaireOut(BaseModel):
+    """Compte propriétaire (vue publique : nom pour les états de soldes)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    prenom: str = ""
+    nom: str = ""
+
+
+class OccupationIn(BaseModel):
+    """Occupation d'un lot déclarée par son propriétaire (ou le syndic)."""
+    statut_occupation: str = ""
+
+    @field_validator("statut_occupation")
+    @classmethod
+    def _statut_ok(cls, v):
+        if v not in ("", "occupant", "loue", "vacant"):
+            raise ValueError("statut d'occupation invalide ('' | occupant | loue | vacant)")
+        return v
 
 
 class LotSolde(BaseModel):
     lot: LotOut
-    proprietaire: Optional[PersonneOut] = None
+    proprietaire: Optional[ProprietaireOut] = None
     total_appels: float = 0.0
     total_appels_fonds: float = 0.0
     total_encaisse: float = 0.0

@@ -6,8 +6,8 @@ export interface User {
   nom: string;
   prenom: string;
   role: string;
-  personne_id: number | null;
-  est_occupant: boolean; // « propriétaire occupant » : occupe son logement
+  adresse: string; // coordonnées du copropriétaire (Réglages → Mes informations)
+  telephone: string;
   two_factor_enabled?: boolean;
   theme?: string;
 }
@@ -83,20 +83,6 @@ export interface InstanceOut {
   version: string;
 }
 
-export interface Personne {
-  id: number;
-  nom: string;
-  prenom: string;
-  email: string;
-  telephone: string;
-  adresse: string;
-  notes: string;
-  // Enrichissements GET /api/personnes (aucun n'est stocké sur la fiche) :
-  est_proprietaire?: boolean; // dérivé : propriétaire d'au moins un lot
-  a_un_compte?: boolean; // un compte utilisateur est lié à cette fiche
-  compte_occupant?: boolean; // le compte lié déclare « occupe son logement »
-}
-
 export interface Lot {
   id: number;
   numero: string;
@@ -104,15 +90,16 @@ export interface Lot {
   type: string;
   tantiemes: number;
   surface_m2: number | null;
-  proprietaire_id: number | null;
-  statut_occupation: string; // "" | "loue" | "vacant" (jamais de nom de locataire — RGPD)
-  proprietaire_occupant?: boolean; // dérivé : le compte du propriétaire « occupe son logement »
+  proprietaire_id: number | null; // compte utilisateur propriétaire (« zéro fiche »)
+  proprietaire_nom?: string; // « Prénom Nom » du compte propriétaire (enrichi)
+  statut_occupation: string; // "" | "occupant" | "loue" | "vacant" (jamais de nom de locataire — RGPD)
+  proprietaire_occupant?: boolean; // dérivé : statut_occupation == "occupant"
   notes: string;
 }
 
 export interface LotSolde {
   lot: Lot;
-  proprietaire: Personne | null;
+  proprietaire: { id: number; prenom: string; nom: string } | null;
   total_appels: number;
   total_appels_fonds: number;
   total_encaisse: number;

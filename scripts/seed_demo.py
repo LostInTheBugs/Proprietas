@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Seed de démonstration Proprietas.
 
-Crée un compte démo + 2 copropriétés réalistes (lots, comptes, AG, PV/votes,
-documents, carnet, travaux, relances). Idempotent : ne fait rien si le compte
-démo existe déjà.
+Crée un compte démo + 2 copropriétés réalistes (lots, comptes copropriétaires,
+AG, PV/votes, documents, carnet, travaux, relances). Idempotent : ne fait rien
+si le compte démo existe déjà.
+
+MODÈLE « ZÉRO FICHE » : les propriétaires sont des COMPTES UTILISATEURS (plus de
+fiches « Lots & occupants ») — chaque copropriétaire de la démo a donc un compte,
+mot de passe `demo123456` (utile pour tester la vue consultation).
 
 Exécution en production (dans le conteneur backend) :
     sudo docker compose exec -T backend python /tmp/seed_demo.py
@@ -15,7 +19,6 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
-from app.models.personne import Personne
 from app.models.lot import Lot
 from app.models.exercice import Exercice, BudgetLine
 from app.models.appel import AppelFonds, AppelLot
@@ -86,6 +89,16 @@ def main():
         db.add(UserCopro(user_id=user.id, copropriete_id=c.id, principale=principale))
         return c
 
+    def compte_coproprietaire(copro, prenom, nom, email, telephone="", adresse=""):
+        """Compte copropriétaire (modèle « zéro fiche ») — mdp demo123456."""
+        u = User(email=email, password_hash=hash_password(MDP_DEMO),
+                 prenom=prenom, nom=nom, role="membre", is_demo=True,
+                 adresse=adresse, telephone=telephone, copropriete_id=copro.id)
+        db.add(u)
+        db.flush()
+        db.add(UserCopro(user_id=u.id, copropriete_id=copro.id, principale=True))
+        return u
+
     # ======================================================================
     # 1) RÉSIDENCE LES TILLEULS — copropriété principale (5 lots)
     # ======================================================================
@@ -93,23 +106,23 @@ def main():
                        "75011", 1932, principale=True)
 
     pers = {}
-    for p in [
+    for prenom, nom, email, tel in [
         ("Marie", "Dubois", "marie.dubois@example.com", "06 12 34 56 78"),
         ("Jean", "Martin", "jean.martin@example.com", "06 23 45 67 89"),
         ("Sophie", "Bernard", "sophie.bernard@example.com", "06 34 56 78 90"),
         ("Paul", "Petit", "paul.petit@example.com", "06 45 67 89 01"),
         ("SCI", "Les Lilas", "contact.sci-lilas@example.com", "01 42 00 11 22"),
     ]:
-        p_obj = Personne(copropriete_id=t.id, prenom=p[0], nom=p[1], email=p[2],
-                         telephone=p[3])
-        db.add(p_obj)
-        db.flush()
-        pers[p[1]] = p_obj
+        # Adresse postale : sert à la mise en demeure (démo recouvrement sur Bernard).
+        adresse = ""
+        if nom == "Bernard":
+            adresse = "9 rue de la Roquette, 75011 Paris"
+        pers[nom] = compte_coproprietaire(t, prenom, nom, email, tel, adresse)
 
-    # Occupation : "" = non renseigné | "loue" | "vacant". Aucun nom de
-    # locataire (RGPD) — lot 1 = propriétaire occupant (compte de Marie Dubois).
+    # Occupation : "" = non renseigné | "occupant" | "loue" | "vacant". Aucun
+    # nom de locataire (RGPD) — lot 1 = propriétaire occupant (compte de Marie).
     lots = [
-        ("1", "Appartement T2", "appartement", 210, 48.0, "Dubois", ""),
+        ("1", "Appartement T2", "appartement", 210, 48.0, "Dubois", "occupant"),
         ("2", "Appartement T3", "appartement", 230, 62.0, "Martin", ""),
         ("3", "Appartement T3", "appartement", 230, 65.0, "Bernard", "loue"),
         ("4", "Appartement T1", "appartement", 140, 32.0, "Petit", "loue"),
@@ -337,17 +350,6 @@ def main():
                        date_envoi=datetime(2026, 6, 15, 9, 0), statut="envoye",
                        montant_du=montant, message=""))
 
-    # --- Compte copropriétaire : Marie Dubois (propriétaire occupante)
-    # Démontre la vue consultation et la case « Occupe son logement » : le lot 1
-    # s'affiche « propriétaire occupant ». Les locataires ne sont jamais nommés
-    # (RGPD) — les lots non occupés par leur propriétaire sont « loué »/« vacant ».
-    marie = User(email="marie.dubois@example.com", password_hash=hash_password(MDP_DEMO),
-                 prenom="Marie", nom="Dubois", role="membre", is_demo=True,
-                 personne_id=pers["Dubois"].id, est_occupant=True)
-    db.add(marie)
-    db.flush()
-    db.add(UserCopro(user_id=marie.id, copropriete_id=t.id, principale=True))
-
     # ======================================================================
     # 2) RÉSIDENCE LES ACACIAS — 2e immeuble (sélecteur + vue consolidée)
     # ======================================================================
@@ -360,11 +362,7 @@ def main():
         ("Claire", "Fontaine", "claire.fontaine@example.com"),
         ("Enzo", "Rossi", "enzo.rossi@example.com"),
     ]:
-        p = Personne(copropriete_id=ac.id, prenom=prenom, nom=nom, email=email,
-                     telephone="")
-        db.add(p)
-        db.flush()
-        pers_a[nom] = p
+        pers_a[nom] = compte_coproprietaire(ac, prenom, nom, email)
 
     lots_a = []
     for num, desig, tant, prop, statut_occ in [
@@ -451,6 +449,8 @@ def main():
     print("Démo créée : demo@proprietas.cloudfr.net / demo123456")
     print("  - Résidence Les Tilleuls (Paris, 5 lots, comptes 2024-2026, AG, documents, PPT)")
     print("  - Résidence Les Acacias (Lyon, 3 lots)")
+    print("  - Comptes copropriétaires (mot de passe demo123456) : marie.dubois, jean.martin,")
+    print("    sophie.bernard, paul.petit, contact.sci-lilas, karim.benali, claire.fontaine, enzo.rossi")
 
 
 if __name__ == "__main__":

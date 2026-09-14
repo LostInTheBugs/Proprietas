@@ -17,7 +17,7 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     from app.models.mouvement import Mouvement
     from app.models.appel import AppelLot
     from app.models.lot import Lot
-    from app.models.personne import Personne
+    from app.models.user import User
 
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
     depenses = [m for m in mouvements if m.type == "depense"]
@@ -84,7 +84,7 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
         appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
         enc = sum(m.montant for m in db.query(Mouvement).filter(
             Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
-        p = db.query(Personne).filter(Personne.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+        p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         solde = appels_c + appels_f - enc
         couleur = "#dc2626" if solde > 0.005 else "#059669"
         rows.append([
@@ -117,7 +117,7 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
         rows = [[Paragraph("<b>Lot</b>", style("th")), Paragraph("<b>Propriétaire</b>", style("th")),
                  Paragraph("<b>Solde dû</b>", style("th"))]]
         for lot, solde in impayes:
-            p = db.query(Personne).filter(Personne.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+            p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
             rows.append([
                 Paragraph(f"Lot {lot.numero}", style("cell")),
                 Paragraph(f"{p.prenom} {p.nom}".strip() if p else "—", style("cell")),

@@ -15,7 +15,6 @@ from app.core.database import get_db
 from app.core.deps import require_syndic
 from app.models.copropriete import Copropriete
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.models.recouvrement import ActeRecouvrement
 from app.models.relance import Relance
 from app.models.user import User
@@ -52,11 +51,12 @@ def _lot_ou_404(db: Session, copro: Copropriete, lot_id: int) -> Lot:
     return lot
 
 
-def _proprio(db: Session, lot: Lot) -> Personne | None:
-    return db.query(Personne).filter(Personne.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+def _proprio(db: Session, lot: Lot) -> User | None:
+    """Propriétaire du lot = compte utilisateur (modèle « zéro fiche »)."""
+    return db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
 
 
-def _nom(p: Personne | None) -> str:
+def _nom(p: User | None) -> str:
     return f"{p.prenom} {p.nom}".strip() if p else "—"
 
 

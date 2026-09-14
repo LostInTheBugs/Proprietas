@@ -17,7 +17,7 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
     from app.models.appel import AppelFonds, AppelLot
     from app.models.mouvement import Mouvement
     from app.models.lot import Lot
-    from app.models.personne import Personne
+    from app.models.user import User
 
     register_fonts()
     buf = BytesIO()
@@ -34,7 +34,7 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
 
     el = []
     for i, lot in enumerate(lots):
-        personne = db.query(Personne).filter(Personne.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+        personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         proprietaire = f"{personne.prenom} {personne.nom}".strip() if personne else "—"
 
         el.append(Paragraph("QUITTANCE D'APPELS DE FONDS", style("titre", fontSize=15)))

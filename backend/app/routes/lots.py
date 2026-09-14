@@ -1,112 +1,42 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
-from app.models.invitation import Invitation
-from app.models.relance import Relance
-from app.models.recouvrement import ActeRecouvrement
 from app.core.scoping import get_owned
-from app.schemas import LotIn, LotOut, PersonneIn, PersonneOut, PersonneAvecCompte, LotSolde
+from app.schemas import LotIn, LotOut, LotSolde, OccupationIn
 from app.routes.copro import get_or_create_copro
 
 router = APIRouter(prefix="/api", tags=["lots"])
 
 
-# ---------- Personnes ----------
-@router.get("/personnes", response_model=list[PersonneAvecCompte])
-def list_personnes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Fiches « Lots & occupants » de la copro active.
-
-    Enrichies (aucun secret exposé) :
-    - `a_un_compte` : un compte utilisateur est-il lié à la fiche ?
-    - `est_proprietaire` : DÉRIVÉ — propriétaire d'au moins un lot ;
-    - `compte_occupant` : le compte lié déclare « occupe son logement ».
-    """
-    copro = get_or_create_copro(db, user)
-    personnes = db.query(Personne).filter(Personne.copropriete_id == copro.id).order_by(Personne.nom).all()
-    proprietaires = {l.proprietaire_id for l in db.query(Lot)
-                     .filter(Lot.copropriete_id == copro.id,
-                             Lot.proprietaire_id.isnot(None)).all()}
-    comptes = {u.personne_id: bool(u.est_occupant) for u in db.query(User)
-               .join(UserCopro, UserCopro.user_id == User.id)
-               .filter(UserCopro.copropriete_id == copro.id,
-                       User.personne_id.isnot(None)).all()}
-    resultat = []
-    for p in personnes:
-        item = PersonneAvecCompte.model_validate(p)
-        item.a_un_compte = p.id in comptes
-        item.est_proprietaire = p.id in proprietaires
-        item.compte_occupant = comptes.get(p.id, False)
-        resultat.append(item)
-    return resultat
-
-
-@router.post("/personnes", response_model=PersonneOut)
-def create_personne(data: PersonneIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    copro = get_or_create_copro(db, user)
-    p = Personne(copropriete_id=copro.id, **data.model_dump())
-    db.add(p)
-    db.commit()
-    db.refresh(p)
-    return p
-
-
-@router.put("/personnes/{personne_id}", response_model=PersonneOut)
-def update_personne(personne_id: int, data: PersonneIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    copro = get_or_create_copro(db, user)
-    p = get_owned(db, Personne, personne_id, copro, label="Personne")
-    for field, value in data.model_dump().items():
-        setattr(p, field, value)
-    db.commit()
-    db.refresh(p)
-    return p
-
-
-@router.delete("/personnes/{personne_id}")
-def delete_personne(personne_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    copro = get_or_create_copro(db, user)
-    p = get_owned(db, Personne, personne_id, copro, label="Personne")
-    # L'historique SURVIT à la fiche (RGPD : suppression = retrait du nom) :
-    # - compte utilisateur lié, actes de recouvrement, relances et convocations
-    #   gardent leurs lignes, le lien vers la personne est simplement délié ;
-    # - les lots sont détachés par la relation SQLAlchemy (proprietaire_id /
-    #   occupant_id → NULL).
-    db.query(User).filter(User.personne_id == p.id).update(
-        {"personne_id": None}, synchronize_session=False)
-    db.query(ActeRecouvrement).filter(ActeRecouvrement.personne_id == p.id).update(
-        {"personne_id": None}, synchronize_session=False)
-    db.query(Relance).filter(Relance.personne_id == p.id).update(
-        {"personne_id": None}, synchronize_session=False)
-    db.query(Invitation).filter(Invitation.personne_id == p.id).update(
-        {"personne_id": None}, synchronize_session=False)
-    db.delete(p)
-    db.commit()
-    return {"ok": True}
-
-
-# ---------- Lots ----------
-def _comptes_occupants(db: Session, copro) -> set:
-    """personne_id des comptes « occupent leur logement » de la copropriété."""
-    rows = (db.query(User.personne_id)
+def _utilisateur_de_la_copro(db: Session, copro, user_id: int) -> User | None:
+    """Compte de la copropriété active (isolation multi-copro)."""
+    return (db.query(User)
             .join(UserCopro, UserCopro.user_id == User.id)
-            .filter(UserCopro.copropriete_id == copro.id,
-                    User.est_occupant.is_(True),
-                    User.personne_id.isnot(None)).all())
-    return {r[0] for r in rows}
+            .filter(User.id == user_id, UserCopro.copropriete_id == copro.id)
+            .first())
 
 
 def _lots_out(db: Session, copro, lots: list[Lot]) -> list[LotOut]:
-    """LotOut enrichi : `proprietaire_occupant` (dérivé du compte du propriétaire)."""
-    occupants = _comptes_occupants(db, copro)
+    """LotOut enrichi : nom du propriétaire (compte) + occupation.
+
+    `proprietaire_occupant` est DÉRIVÉ de `statut_occupation == "occupant"`
+    (le propriétaire le déclare lot par lot — Réglages → Mes lots).
+    """
+    noms = {}
+    ids = {lot.proprietaire_id for lot in lots if lot.proprietaire_id}
+    if ids:
+        for u in db.query(User).filter(User.id.in_(ids)).all():
+            noms[u.id] = f"{u.prenom or ''} {u.nom or ''}".strip()
     resultat = []
     for lot in lots:
         item = LotOut.model_validate(lot)
-        item.proprietaire_occupant = lot.proprietaire_id in occupants
+        item.proprietaire_nom = noms.get(lot.proprietaire_id, "")
+        item.proprietaire_occupant = lot.statut_occupation == "occupant"
         resultat.append(item)
     return resultat
 
@@ -121,6 +51,8 @@ def list_lots(db: Session = Depends(get_db), user: User = Depends(get_current_us
 @router.post("/lots", response_model=LotOut)
 def create_lot(data: LotIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
+    if data.proprietaire_id is not None and not _utilisateur_de_la_copro(db, copro, data.proprietaire_id):
+        raise HTTPException(400, "Propriétaire introuvable dans cette copropriété")
     lot = Lot(copropriete_id=copro.id, **data.model_dump())
     db.add(lot)
     db.commit()
@@ -132,6 +64,8 @@ def create_lot(data: LotIn, db: Session = Depends(get_db), user: User = Depends(
 def update_lot(lot_id: int, data: LotIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     lot = get_owned(db, Lot, lot_id, copro, label="Lot")
+    if data.proprietaire_id is not None and not _utilisateur_de_la_copro(db, copro, data.proprietaire_id):
+        raise HTTPException(400, "Propriétaire introuvable dans cette copropriété")
     for field, value in data.model_dump().items():
         setattr(lot, field, value)
     db.commit()
@@ -146,6 +80,24 @@ def delete_lot(lot_id: int, db: Session = Depends(get_db), user: User = Depends(
     db.delete(lot)
     db.commit()
     return {"ok": True}
+
+
+@router.put("/lots/{lot_id}/occupation", response_model=LotOut)
+def maj_occupation(lot_id: int, data: OccupationIn, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    """Occupation d'un lot : le syndic, ou LE PROPRIÉTAIRE pour ses propres lots.
+
+    Chaque copropriétaire déclare ainsi « j'occupe ce lot / loué / vacant »
+    depuis Réglages → Mes lots (jamais le nom du locataire — RGPD).
+    """
+    copro = get_or_create_copro(db, user)
+    lot = get_owned(db, Lot, lot_id, copro, label="Lot")
+    if user.role != "syndic" and lot.proprietaire_id != user.id:
+        raise HTTPException(403, "Seul le propriétaire du lot (ou le syndic) peut régler son occupation")
+    lot.statut_occupation = data.statut_occupation
+    db.commit()
+    db.refresh(lot)
+    return _lots_out(db, copro, [lot])[0]
 
 
 # ---------- Soldes par lot (état daté) ----------

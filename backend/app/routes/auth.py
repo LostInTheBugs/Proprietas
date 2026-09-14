@@ -11,32 +11,19 @@ from app.core.security import (
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
-from app.models.personne import Personne
+from app.models.lot import Lot
 from app.models.recouvrement import ActeRecouvrement
+from app.models.relance import Relance
+from app.models.invitation import Invitation
 from app.routes.copro import get_or_create_copro
 from app.core.scoping import get_owned
 from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResponse,
-                         UserOut, UserCreate, UserUpdate, CoproCreate, ThemeIn)
+                         UserOut, UserCreate, UserUpdate, CoproCreate, ThemeIn, ProfilIn)
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
 from app.services import two_factor
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-
-def _personne_liee(db: Session, copro: Copropriete, personne_id: int, exclure_user_id: int | None = None) -> Personne:
-    """Fiche « Lots & occupants » liée à un compte : existe dans la copro active
-    et pas déjà liée à un autre compte (un compte par personne)."""
-    personne = get_owned(db, Personne, personne_id, copro, label="Personne")
-    deja = (db.query(User)
-            .join(UserCopro, UserCopro.user_id == User.id)
-            .filter(UserCopro.copropriete_id == copro.id,
-                    User.personne_id == personne.id,
-                    User.id != (exclure_user_id or 0))
-            .first())
-    if deja:
-        raise HTTPException(400, "Cette personne est déjà liée à un compte")
-    return personne
 
 
 @router.post("/register", response_model=LoginResponse)
@@ -200,29 +187,60 @@ def create_user(req: UserCreate, request: Request, db: Session = Depends(get_db)
         raise HTTPException(400, "Cet email est déjà utilisé")
     # Le compte créé est lié à la copropriété active du syndic
     copro = get_or_create_copro(db, user)
-    # Lien optionnel vers une fiche « Lots & occupants » (propriétaire/occupant)
-    personne = _personne_liee(db, copro, req.personne_id) if req.personne_id is not None else None
     new_user = User(
         email=email,
         password_hash=hash_password(req.password),
         prenom=req.prenom.strip(),
         nom=req.nom.strip(),
         role=req.role,
-        personne_id=personne.id if personne else None,
-        est_occupant=req.est_occupant,
+        adresse=(req.adresse or "").strip(),
+        telephone=(req.telephone or "").strip(),
         copropriete_id=copro.id,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     db.add(UserCopro(user_id=new_user.id, copropriete_id=copro.id, principale=True))
-    detail = f"{new_user.email} ({new_user.role})"
-    if personne:
-        detail += f" — lié à {(personne.prenom + ' ' + personne.nom).strip()}"
     audit.enregistrer(db, "user_created", user=user, copro_id=copro.id,
-                      detail=detail, request=request)
+                      detail=f"{new_user.email} ({new_user.role})", request=request)
     db.commit()
     return new_user
+
+
+@router.put("/me", response_model=UserOut)
+def maj_profil(req: ProfilIn, request: Request, db: Session = Depends(get_db),
+               user: User = Depends(get_current_user)):
+    """Réglages → « Mes informations » : chacun modifie ses propres coordonnées.
+
+    Le rôle n'est jamais modifiable ici (administration = syndic). L'adresse
+    sert notamment à la mise en demeure, le téléphone à joindre le copropriétaire.
+    """
+    email = req.email.lower().strip()
+    if db.query(User).filter(User.email == email, User.id != user.id).first():
+        raise HTTPException(400, "Cet email est déjà utilisé")
+    changements = []
+    if user.email != email:
+        changements.append(f"email : {user.email} → {email}")
+    if (user.prenom or "") != req.prenom.strip():
+        changements.append("prénom")
+    if (user.nom or "") != req.nom.strip():
+        changements.append("nom")
+    if (user.adresse or "") != (req.adresse or "").strip():
+        changements.append("adresse")
+    if (user.telephone or "") != (req.telephone or "").strip():
+        changements.append("téléphone")
+    user.email = email
+    user.prenom = req.prenom.strip()
+    user.nom = req.nom.strip()
+    user.adresse = (req.adresse or "").strip()
+    user.telephone = (req.telephone or "").strip()
+    if changements:
+        copro = get_or_create_copro(db, user)
+        audit.enregistrer(db, "profil_updated", user=user, copro_id=copro.id,
+                          detail=f"{user.email} — {', '.join(changements)}", request=request)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.put("/users/{user_id}", response_model=UserOut)
@@ -244,8 +262,6 @@ def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = D
     if user_id == current.id and req.role != current.role:
         # Ne pas se verrouiller soi-même hors de l'administration de l'app.
         raise HTTPException(400, "Impossible de modifier son propre rôle")
-    personne = (_personne_liee(db, copro, req.personne_id, exclure_user_id=user_id)
-                if req.personne_id is not None else None)
 
     # Journal d'audit : lister les champs réellement modifiés (jamais le mot de passe).
     changements = []
@@ -257,14 +273,10 @@ def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = D
         changements.append("nom")
     if target.role != req.role:
         changements.append(f"rôle : {target.role} → {req.role}")
-    nouveau_lien = personne.id if personne else None
-    if target.personne_id != nouveau_lien:
-        if personne:
-            changements.append(f"fiche liée : {(personne.prenom + ' ' + personne.nom).strip()}")
-        else:
-            changements.append("fiche liée retirée")
-    if bool(target.est_occupant) != bool(req.est_occupant):
-        changements.append("propriétaire occupant : " + ("oui" if req.est_occupant else "non"))
+    if (target.adresse or "") != (req.adresse or "").strip():
+        changements.append("adresse")
+    if (target.telephone or "") != (req.telephone or "").strip():
+        changements.append("téléphone")
     if req.password:
         changements.append("mot de passe")
 
@@ -272,8 +284,8 @@ def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = D
     target.prenom = req.prenom.strip()
     target.nom = req.nom.strip()
     target.role = req.role
-    target.personne_id = nouveau_lien
-    target.est_occupant = req.est_occupant
+    target.adresse = (req.adresse or "").strip()
+    target.telephone = (req.telephone or "").strip()
     if req.password:
         target.password_hash = hash_password(req.password)
     if changements:
@@ -305,11 +317,21 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), c
             .first())
     if not user:
         raise HTTPException(404, "Utilisateur introuvable")
-    # Les actes de recouvrement saisis par ce compte SURVIVENT à sa suppression
-    # (journal additif) : le lien créateur est délié — sans quoi la suppression
-    # échouerait en base (FK vers users). Les liaisons copro partent en cascade.
+    # L'historique SURVIT à la suppression du compte (journal additif, RGPD :
+    # le nom disparaît avec le compte, la preuve reste attachée au lot/l'AG) :
+    # - actes de recouvrement saisis par ce compte → auteur délié ;
+    # - lots dont il est propriétaire → sans propriétaire (à réassigner) ;
+    # - relances / convocations reçues → lignes conservées, lien délié.
     db.query(ActeRecouvrement).filter(ActeRecouvrement.created_by_id == user.id).update(
         {"created_by_id": None}, synchronize_session=False)
+    db.query(ActeRecouvrement).filter(ActeRecouvrement.personne_id == user.id).update(
+        {"personne_id": None}, synchronize_session=False)
+    db.query(Lot).filter(Lot.proprietaire_id == user.id).update(
+        {"proprietaire_id": None}, synchronize_session=False)
+    db.query(Relance).filter(Relance.personne_id == user.id).update(
+        {"personne_id": None}, synchronize_session=False)
+    db.query(Invitation).filter(Invitation.personne_id == user.id).update(
+        {"personne_id": None}, synchronize_session=False)
     audit.enregistrer(db, "user_deleted", user=current, copro_id=copro.id,
                       detail=f"{user.email} ({user.role})", request=request)
     db.delete(user)

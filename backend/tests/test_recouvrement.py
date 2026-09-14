@@ -10,7 +10,7 @@ from app.models.appel import AppelFonds, AppelLot
 from app.models.exercice import Exercice
 from app.models.lot import Lot
 from app.models.mouvement import Mouvement
-from app.models.personne import Personne
+from app.models.user import User
 from app.models.recouvrement import ActeRecouvrement
 from tests.conftest import _make_membre, auth
 
@@ -27,8 +27,8 @@ def _campagne(db, copro):
     lot = Lot(copropriete_id=copro.id, numero="1", designation="T2", tantiemes=500)
     db.add(lot)
     db.flush()
-    p = Personne(copropriete_id=copro.id, nom="Dupont", prenom="Jean",
-                 email="j.dupont@test.fr", adresse="1 rue de la Paix, 75011 Paris")
+    p = User(email="j.dupont@test.fr", password_hash="x", nom="Dupont", prenom="Jean",
+             role="membre", adresse="1 rue de la Paix, 75011 Paris", copropriete_id=copro.id)
     db.add(p)
     db.flush()
     lot.proprietaire_id = p.id
@@ -204,17 +204,21 @@ def test_colonnes_ajoutees_null_sur_lignes_existantes(client, db, syndic_a, copr
     from sqlalchemy import text
 
     db.execute(text("UPDATE coproprietes SET taux_legal_retard = NULL WHERE id = :i"), {"i": copro_a.id})
-    p = Personne(copropriete_id=copro_a.id, nom="SansAdresse", prenom="Test")
+    from app.models.user import UserCopro
+    p = User(email="sans.adresse@test.fr", password_hash="x", nom="SansAdresse",
+             prenom="Test", role="membre", copropriete_id=copro_a.id)
     db.add(p)
     db.commit()
     db.refresh(p)
-    db.execute(text("UPDATE personnes SET adresse = NULL WHERE id = :i"), {"i": p.id})
+    db.add(UserCopro(user_id=p.id, copropriete_id=copro_a.id, principale=True))
+    db.commit()
+    db.execute(text("UPDATE users SET adresse = NULL WHERE id = :i"), {"i": p.id})
     db.commit()
     db.expire_all()  # force la relecture depuis la base (pas d'identity map)
 
     r = client.get("/api/copro", headers=auth(token_a))
     assert r.status_code == 200, r.text
     assert r.json()["taux_legal_retard"] == 0.0
-    r = client.get("/api/personnes", headers=auth(token_a))
+    r = client.get("/api/auth/users", headers=auth(token_a))
     assert r.status_code == 200, r.text
     assert any(x["nom"] == "SansAdresse" and x["adresse"] == "" for x in r.json())

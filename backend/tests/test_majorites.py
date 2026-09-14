@@ -5,7 +5,6 @@ Un cas nominal et un cas limite par majorité.
 """
 from app.models.ag import Resolution, Vote
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.services.country_rules import calculer_statut_resolution
 
 

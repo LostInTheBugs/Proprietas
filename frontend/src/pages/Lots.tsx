@@ -1,46 +1,36 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Lot, Personne } from "../types";
+import type { Lot, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
 export default function Lots() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
   const [lots, setLots] = useState<Lot[]>([]);
-  const [personnes, setPersonnes] = useState<Personne[]>([]);
-  const [modal, setModal] = useState<null | { type: "lot" | "personne"; item?: Lot | Personne }>(null);
+  // Comptes copropriétaires : les propriétaires sont des COMPTES utilisateurs
+  // (modèle « zéro fiche ») — réservés au syndic (l'API refuse aux membres).
+  const [comptes, setComptes] = useState<User[]>([]);
+  const [modal, setModal] = useState<null | { item?: Lot }>(null);
   const [error, setError] = useState("");
 
   async function load() {
-    const [l, p] = await Promise.all([api.get<Lot[]>("/lots"), api.get<Personne[]>("/personnes")]);
+    const l = await api.get<Lot[]>("/lots");
     setLots(l);
-    setPersonnes(p);
+    if (isSyndic) {
+      setComptes(await api.get<User[]>("/auth/users"));
+    }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [isSyndic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalTantiemes = lots.reduce((s, l) => s + l.tantiemes, 0);
   const ecart = Math.abs(totalTantiemes - 1000);
-  const prop = (id: number | null) => personnes.find((p) => p.id === id);
 
   function occupationBadge(lot: Lot) {
     if (lot.proprietaire_occupant) return <Badge color="green">propriétaire occupant</Badge>;
     if (lot.statut_occupation === "loue") return <Badge color="amber">loué</Badge>;
     if (lot.statut_occupation === "vacant") return <Badge color="slate">vacant</Badge>;
     return <span className="text-slate-400">—</span>;
-  }
-
-  async function supprimerPersonne(p: Personne) {
-    const nom = [p.prenom, p.nom].filter(Boolean).join(" ");
-    const histoire = "Les relances et convocations déjà envoyées sont conservées (sans le nom).";
-    if (!confirm(`Supprimer la fiche de ${nom} ?\n${p.a_un_compte ? "Le compte utilisateur lié sera détaché. " : ""}${histoire}`)) return;
-    try {
-      await api.del(`/personnes/${p.id}`);
-      setError("");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
-    }
   }
 
   return (
@@ -63,7 +53,7 @@ export default function Lots() {
             )}
           </p>
         </div>
-        {isSyndic && <Button onClick={() => setModal({ type: "lot" })}>+ Ajouter un lot</Button>}
+        {isSyndic && <Button onClick={() => setModal({})}>+ Ajouter un lot</Button>}
       </div>
 
       <Card title="Lots">
@@ -89,14 +79,14 @@ export default function Lots() {
                     <td className="py-2.5 font-semibold text-slate-800">{lot.numero}</td>
                     <td className="py-2.5 text-slate-600">{lot.designation || "—"}</td>
                     <td className="py-2.5 text-right tabular-nums text-slate-700">{lot.tantiemes}</td>
-                    <td className="py-2.5 text-slate-600">{prop(lot.proprietaire_id)?.nom ?? "—"}</td>
+                    <td className="py-2.5 text-slate-600">{lot.proprietaire_nom || "—"}</td>
                     <td className="py-2.5">{occupationBadge(lot)}</td>
                     <td className="py-2.5">
                       <Badge>{lot.type}</Badge>
                     </td>
                     <td className="py-2.5 text-right">
                       {isSyndic && (
-                        <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ type: "lot", item: lot })}>
+                        <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ item: lot })}>
                           Modifier
                         </Button>
                       )}
@@ -107,74 +97,18 @@ export default function Lots() {
             </table>
           </div>
         )}
+        <p className="mt-3 text-xs text-slate-500">
+          Les propriétaires sont des comptes utilisateurs (Réglages → Comptes utilisateurs).
+          Chaque copropriétaire règle l'occupation de ses propres lots dans Réglages → Mes lots ;
+          le syndic peut tout régler ici. Jamais de nom de locataire (RGPD).
+        </p>
       </Card>
 
-      <Card
-        title="Personnes (propriétaires & occupants)"
-        action={isSyndic ? <Button onClick={() => setModal({ type: "personne" })}>+ Ajouter une personne</Button> : undefined}
-      >
-        {personnes.length === 0 ? (
-          <Empty text="Aucune personne enregistrée." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {personnes.map((p) => (
-              <div key={p.id} className="rounded-lg border border-slate-200 p-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-slate-800">
-                      {p.prenom} {p.nom}
-                    </p>
-                    <p className="text-xs text-slate-500">{p.email || "—"}</p>
-                  </div>
-                  {isSyndic && (
-                    <div className="flex shrink-0 items-start gap-1">
-                      <button
-                        onClick={() => setModal({ type: "personne", item: p })}
-                        className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                      >
-                        Modifier
-                      </button>
-                      <button
-                        onClick={() => supprimerPersonne(p)}
-                        className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2 flex gap-1.5">
-                  {p.est_proprietaire && <Badge color="indigo">propriétaire</Badge>}
-                  {p.compte_occupant && (
-                    <span title="Compte lié : occupe son logement (Réglages → Comptes utilisateurs)">
-                      <Badge color="green">occupant</Badge>
-                    </span>
-                  )}
-                  {p.a_un_compte && (
-                    <span title="Un compte utilisateur est lié à cette personne (Réglages → Comptes utilisateurs)">
-                      <Badge color="slate">compte</Badge>
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {modal?.type === "lot" && (
+      {modal && (
         <LotModal
-          item={modal.item as Lot | undefined}
-          personnes={personnes}
-          autresTotal={totalTantiemes - (modal.item ? (modal.item as Lot).tantiemes : 0)}
-          onClose={() => setModal(null)}
-          onSaved={() => { setModal(null); load(); }}
-          onError={setError}
-        />
-      )}
-      {modal?.type === "personne" && (
-        <PersonneModal
-          item={modal.item as Personne | undefined}
+          item={modal.item}
+          comptes={comptes}
+          autresTotal={totalTantiemes - (modal.item ? modal.item.tantiemes : 0)}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); load(); }}
           onError={setError}
@@ -185,8 +119,8 @@ export default function Lots() {
   );
 }
 
-function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
-  item?: Lot; personnes: Personne[]; autresTotal: number; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
+  item?: Lot; comptes: User[]; autresTotal: number; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [f, setF] = useState({
     numero: item?.numero ?? "",
@@ -198,10 +132,6 @@ function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
   });
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
   const totalProjete = autresTotal + Number(f.tantiemes || 0);
-  // « Propriétaire occupant » est dérivé du compte lié au propriétaire choisi :
-  // le statut loué/vacant n'a alors plus de sens pour ce lot.
-  const proprietaireSel = personnes.find((p) => String(p.id) === String(f.proprietaire_id));
-  const occupeParProprietaire = !!proprietaireSel?.compte_occupant;
 
   async function save() {
     try {
@@ -253,77 +183,25 @@ function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
         </Select>
         <Select label="Propriétaire" value={f.proprietaire_id} onChange={(e) => set("proprietaire_id", e.target.value)}>
           <option value="">— aucun —</option>
-          {personnes.filter((p) => p.est_proprietaire).map((p) => (
-            <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
+          {comptes.map((c) => (
+            <option key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ")}</option>
           ))}
         </Select>
         <Select
           label="Occupation du lot"
           value={f.statut_occupation}
           onChange={(e) => set("statut_occupation", e.target.value)}
-          disabled={occupeParProprietaire}
         >
           <option value="">Non renseigné</option>
+          <option value="occupant">Propriétaire occupant (le propriétaire y habite)</option>
           <option value="loue">Loué</option>
           <option value="vacant">Vacant</option>
         </Select>
-        {occupeParProprietaire ? (
-          <p className="text-xs text-emerald-700">
-            Ce lot est affiché « propriétaire occupant » : {(proprietaireSel?.prenom + " " + proprietaireSel?.nom).trim()} occupe son
-            logement (case du compte utilisateur, Réglages → Comptes utilisateurs).
-          </p>
-        ) : (
-          <p className="text-xs text-slate-500">
-            « Propriétaire occupant » se règle sur le compte utilisateur du propriétaire (case « Occupe son
-            logement »). Les noms des locataires ne sont pas enregistrés (RGPD) — indiquez seulement
-            « loué » ou « vacant ».
-          </p>
-        )}
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Enregistrer</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function PersonneModal({ item, onClose, onSaved, onError }: {
-  item?: Personne; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
-}) {
-  const [f, setF] = useState({
-    nom: item?.nom ?? "",
-    prenom: item?.prenom ?? "",
-    email: item?.email ?? "",
-    telephone: item?.telephone ?? "",
-    adresse: item?.adresse ?? "",
-    notes: "",
-  });
-  const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
-
-  async function save() {
-    try {
-      if (item) await api.put(`/personnes/${item.id}`, f);
-      else await api.post("/personnes", f);
-      onSaved();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Erreur");
-    }
-  }
-
-  return (
-    <Modal open title={item ? "Modifier la personne" : "Nouvelle personne"} onClose={onClose}>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Prénom" value={f.prenom} onChange={(e) => set("prenom", e.target.value)} />
-          <Input label="Nom" value={f.nom} onChange={(e) => set("nom", e.target.value)} required />
-        </div>
-        <Input label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
-        <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
-        <Input label="Adresse postale (mises en demeure)" value={f.adresse} onChange={(e) => set("adresse", e.target.value)} />
         <p className="text-xs text-slate-500">
-          « Propriétaire » et l'occupation ne se saisissent plus ici : ils se déduisent des lots
-          (propriétaire) et du compte utilisateur lié (case « Occupe son logement »).
+          « Propriétaire occupant » : le propriétaire habite son logement. Les noms des locataires
+          ne sont jamais enregistrés (RGPD) — un logement non occupé par son propriétaire est
+          indiqué « loué » ou « vacant ». Chaque copropriétaire peut régler ses propres lots
+          (Réglages → Mes lots).
         </p>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>

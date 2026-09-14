@@ -6,7 +6,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
-from app.models.personne import Personne
 from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote
 from app.models.invitation import Invitation
 from app.models.copropriete import Copropriete
@@ -251,7 +250,7 @@ def list_invitations(ag_id: int, db: Session = Depends(get_db), user: User = Dep
     invs = db.query(Invitation).filter(Invitation.ag_id == ag.id).order_by(Invitation.date_envoi.desc()).all()
     out = []
     for i in invs:
-        personne = db.query(Personne).filter(Personne.id == i.personne_id).first()
+        personne = db.query(User).filter(User.id == i.personne_id).first()
         out.append(InvitationOut(
             id=i.id,
             personne_nom=f"{personne.prenom} {personne.nom}".strip() if personne else "?",
@@ -270,7 +269,7 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
     for lot in lots:
         if lot.proprietaire_id:
             proprietaires[lot.proprietaire_id] = True
-    personnes = db.query(Personne).filter(Personne.id.in_(list(proprietaires.keys()))).all() if proprietaires else []
+    personnes = db.query(User).filter(User.id.in_(list(proprietaires.keys()))).all() if proprietaires else []
 
     corps = convocation_texte(copro, ag, ag.resolutions, syndic_nom)
     sujet = f"Convocation {ag.type_ag.replace('_', ' ')} — {copro.nom} ({ag.date.strftime('%d/%m/%Y')})"
@@ -337,7 +336,7 @@ def envoyer_pv(ag_id: int, db: Session = Depends(get_db), user: User = Depends(r
 
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     proprietaires = {lot.proprietaire_id for lot in lots if lot.proprietaire_id}
-    personnes = db.query(Personne).filter(Personne.id.in_(proprietaires)).all() if proprietaires else []
+    personnes = db.query(User).filter(User.id.in_(proprietaires)).all() if proprietaires else []
 
     type_label = _TYPE_AG_LABEL.get(ag.type_ag, "l'assemblée générale")
     corps = (

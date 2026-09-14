@@ -18,7 +18,9 @@ class ActeRecouvrement(Base):
     id = Column(Integer, primary_key=True)
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=False)
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=False)
-    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
+    # Propriétaire concerné = un COMPTE UTILISATEUR (nom historique conservé,
+    # FK vers users.id). NULL = compte supprimé (l'acte survit, délié).
+    personne_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # mise_en_demeure | frais | activation_19_2 | conciliation | commissaire_justice | tribunal | note
     type = Column(String, nullable=False)
     date_acte = Column(DateTime, default=datetime.now)  # date de saisie dans l'app
@@ -31,4 +33,6 @@ class ActeRecouvrement(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     lot = relationship("Lot")
-    personne = relationship("Personne")
+    # foreign_keys explicite : la table a DEUX FK vers users (personne_id,
+    # created_by_id) — sans quoi SQLAlchemy ne peut pas choisir la jointure.
+    personne = relationship("User", foreign_keys=[personne_id])

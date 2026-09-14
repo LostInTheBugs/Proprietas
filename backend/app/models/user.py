@@ -22,13 +22,17 @@ class User(Base):
     role = Column(String, default="membre")  # syndic | membre
     is_demo = Column(Boolean, default=False)  # compte de démonstration (n'ouvre pas/ne ferme pas l'inscription)
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=True)
-    # Fiche « Lots & occupants » liée à ce compte (optionnel) : un compte par
-    # personne au maximum — le lien préremplit les fiches et relie l'annuaire.
+    # Coordonnées du copropriétaire (maintenues par lui-même dans Réglages →
+    # Mes informations, ou par le syndic) — l'adresse sert notamment à la mise
+    # en demeure. Ces champs vivaient sur la fiche « Lots & occupants » avant
+    # le passage au modèle « zéro fiche » (le compte EST la personne).
+    adresse = Column(String, default="", server_default="")
+    telephone = Column(String, default="", server_default="")
+    # Colonne historique : ancien lien vers une fiche « Lots & occupants »
+    # (le modèle est passé aux comptes : plus aucun code ne la lit/écrit).
     personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
-    # « Propriétaire occupant » : ce compte occupe son logement (affiché dans
-    # « Lots & occupants » pour les lots dont la personne liée est propriétaire).
-    # L'occupation vit ICI, plus sur les fiches personnes (RGPD : jamais de nom
-    # de locataire — un lot non occupé par son propriétaire est « loué »/« vacant »).
+    # Colonne historique : ancienne case « propriétaire occupant » du compte —
+    # l'occupation se règle désormais lot par lot (lots.statut_occupation).
     est_occupant = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     # Double authentification (TOTP, RFC 6238) — secret CHIFFRÉ, codes de secours HACHÉS.
     totp_secret = Column(Text, default="")
@@ -48,8 +52,6 @@ class User(Base):
         "UserCopro", backref="user", cascade="all, delete-orphan",
         foreign_keys="UserCopro.user_id",
     )
-    # Fiche « Lots & occupants » liée (optionnelle) — lecture seule côté compte.
-    personne = relationship("Personne", foreign_keys=[personne_id])
 
     @property
     def two_factor_enabled(self) -> bool:
