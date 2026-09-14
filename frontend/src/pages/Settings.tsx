@@ -406,6 +406,7 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
     role: item?.role ?? "membre",
     personne_id: item?.personne_id != null ? String(item.personne_id) : "",
     est_occupant: item?.est_occupant ?? false,
+    creer_fiche: false,
     password: "",
   });
   const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
@@ -418,6 +419,7 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
     setF((prev) => ({
       ...prev,
       personne_id: id,
+      creer_fiche: id === "" ? prev.creer_fiche : false,
       // La fiche sert de modèle : les champs restent modifiables ensuite.
       prenom: p?.prenom || prev.prenom,
       nom: p?.nom || prev.nom,
@@ -435,9 +437,17 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
       return;
     }
     try {
+      // « Créer la fiche » : les comptes créés avant les fiches se relient en un clic.
+      let personneId = f.personne_id === "" ? null : Number(f.personne_id);
+      if (f.creer_fiche && personneId === null) {
+        const nouvelle = await api.post<{ id: number }>("/personnes", {
+          prenom: f.prenom, nom: f.nom, email: f.email,
+        });
+        personneId = nouvelle.id;
+      }
       const payload = {
         email: f.email, nom: f.nom, prenom: f.prenom, role: f.role,
-        personne_id: f.personne_id === "" ? null : Number(f.personne_id),
+        personne_id: personneId,
         est_occupant: f.est_occupant,
         password: f.password || null, // vide = mot de passe conservé (édition)
       };
@@ -481,6 +491,19 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
         <p className="text-xs text-slate-500">
           Relie le compte à une personne de « Lots & occupants » : prénom, nom et email se préremplissent à la sélection.
         </p>
+        {f.personne_id === "" && (
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={f.creer_fiche}
+              onChange={(e) => setF((prev) => ({ ...prev, creer_fiche: e.target.checked }))}
+            />
+            <span>
+              Créer la fiche « {[f.prenom, f.nom].filter(Boolean).join(" ") || "…"} » dans « Lots &amp; occupants »
+            </span>
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input
             type="checkbox"
@@ -494,6 +517,12 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
           Les noms des locataires ne sont jamais enregistrés (RGPD) — un logement non occupé par son
           propriétaire est indiqué « loué » ou « vacant » sur le lot.
         </p>
+        {f.est_occupant && f.personne_id === "" && !f.creer_fiche && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Aucune fiche liée : « propriétaire occupant » n'aura aucun effet dans « Lots &amp; occupants »
+            tant que le compte n'est pas relié à une fiche — créez-la ou sélectionnez-la ci-dessus.
+          </p>
+        )}
         <Input
           label={item ? "Nouveau mot de passe (laisser vide pour conserver)" : "Mot de passe initial"}
           type="password"
