@@ -8,6 +8,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     nom: str
+    prenom: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -20,14 +21,35 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+def _valider_email(v) -> str:
+    v = (v or "").strip()
+    if "@" not in v or v.startswith("@") or v.endswith("@") or " " in v:
+        raise ValueError("email invalide")
+    return v
+
+
+def _valider_role(v) -> str:
+    if v not in ("syndic", "membre"):
+        raise ValueError("rôle invalide (syndic | membre)")
+    return v
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     email: str
     nom: str
+    prenom: str = ""
     role: str
+    personne_id: Optional[int] = None  # fiche « Lots & occupants » liée (optionnel)
     two_factor_enabled: bool = False  # propriété du modèle User (totp_enabled)
     theme: str = "system"  # light | dark | system
+
+    @field_validator("prenom", mode="before")
+    @classmethod
+    def _prenom_none(cls, v):
+        """Colonne ajoutée par ALTER TABLE : NULL sur les lignes existantes."""
+        return "" if v is None else v
 
     @field_validator("theme", mode="before")
     @classmethod
@@ -51,7 +73,72 @@ class UserCreate(BaseModel):
     email: str
     password: str
     nom: str
+    prenom: str = ""
     role: str = "membre"
+    personne_id: Optional[int] = None  # fiche « Lots & occupants » liée (optionnel)
+
+    @field_validator("email")
+    @classmethod
+    def _email_ok(cls, v):
+        return _valider_email(v)
+
+    @field_validator("role")
+    @classmethod
+    def _role_ok(cls, v):
+        return _valider_role(v)
+
+    @field_validator("nom")
+    @classmethod
+    def _nom_ok(cls, v):
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("le nom est requis")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _mdp_ok(cls, v):
+        if len(v or "") < 6:
+            raise ValueError("mot de passe trop court (6 caractères minimum)")
+        return v
+
+
+class UserUpdate(BaseModel):
+    """Édition d'une fiche de compte (Réglages → Comptes utilisateurs)."""
+    email: str
+    nom: str
+    prenom: str = ""
+    role: str = "membre"
+    personne_id: Optional[int] = None
+    # Nouveau mot de passe facultatif : absent/vide = mot de passe conservé.
+    password: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def _email_ok(cls, v):
+        return _valider_email(v)
+
+    @field_validator("role")
+    @classmethod
+    def _role_ok(cls, v):
+        return _valider_role(v)
+
+    @field_validator("nom")
+    @classmethod
+    def _nom_ok(cls, v):
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("le nom est requis")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _mdp_ok(cls, v):
+        if v is None or not v.strip():
+            return None  # laisser vide = conserver le mot de passe actuel
+        if len(v) < 6:
+            raise ValueError("mot de passe trop court (6 caractères minimum)")
+        return v
 
 
 # ---------- Copropriete ----------
@@ -163,6 +250,15 @@ class PersonneIn(BaseModel):
 class PersonneOut(PersonneIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+class PersonneAvecCompte(PersonneOut):
+    """Fiche « Lots & occupants » enrichie : un compte utilisateur y est-il lié ?
+
+    Réservé à GET /api/personnes (liste) — les personnes imbriquées dans les
+    lots restent des PersonneOut purs.
+    """
+    a_un_compte: bool = False
 
 
 # ---------- Lots ----------

@@ -115,6 +115,11 @@ export default function Lots() {
                 <div className="mt-2 flex gap-1.5">
                   {p.est_proprietaire && <Badge color="indigo">propriétaire</Badge>}
                   {p.est_occupant && <Badge color="green">occupant</Badge>}
+                  {p.a_un_compte && (
+                    <span title="Un compte utilisateur est lié à cette personne (Réglages → Comptes utilisateurs)">
+                      <Badge color="slate">compte</Badge>
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

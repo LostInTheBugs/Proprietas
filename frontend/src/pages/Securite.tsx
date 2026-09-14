@@ -14,6 +14,7 @@ const LIBELLES_ACTIONS: Record<string, string> = {
   "2fa_recovery_used": "Code de secours utilisé",
   "2fa_codes_regenerated": "Codes de secours régénérés",
   user_created: "Compte créé",
+  user_updated: "Compte modifié",
   user_deleted: "Compte supprimé",
   copro_created: "Copropriété créée",
   instance_updated: "Profil d'accès mis à jour",

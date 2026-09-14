@@ -11,13 +11,31 @@ from app.core.security import (
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
+from app.models.personne import Personne
 from app.routes.copro import get_or_create_copro
-from app.schemas import RegisterRequest, LoginRequest, LoginResponse, TokenResponse, UserOut, UserCreate, CoproCreate, ThemeIn
+from app.core.scoping import get_owned
+from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResponse,
+                         UserOut, UserCreate, UserUpdate, CoproCreate, ThemeIn)
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
 from app.services import two_factor
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _personne_liee(db: Session, copro: Copropriete, personne_id: int, exclure_user_id: int | None = None) -> Personne:
+    """Fiche « Lots & occupants » liée à un compte : existe dans la copro active
+    et pas déjà liée à un autre compte (un compte par personne)."""
+    personne = get_owned(db, Personne, personne_id, copro, label="Personne")
+    deja = (db.query(User)
+            .join(UserCopro, UserCopro.user_id == User.id)
+            .filter(UserCopro.copropriete_id == copro.id,
+                    User.personne_id == personne.id,
+                    User.id != (exclure_user_id or 0))
+            .first())
+    if deja:
+        raise HTTPException(400, "Cette personne est déjà liée à un compte")
+    return personne
 
 
 @router.post("/register", response_model=LoginResponse)
@@ -28,6 +46,7 @@ def register(req: RegisterRequest, request: Request, response: Response, db: Ses
     user = User(
         email=req.email.lower().strip(),
         password_hash=hash_password(req.password),
+        prenom=req.prenom.strip(),
         nom=req.nom.strip(),
         role="syndic",
     )
@@ -175,25 +194,88 @@ def migrer_session(request: Request, response: Response,
 
 @router.post("/users", response_model=UserOut)
 def create_user(req: UserCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    if db.query(User).filter(User.email == req.email.lower().strip()).first():
+    email = req.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
         raise HTTPException(400, "Cet email est déjà utilisé")
     # Le compte créé est lié à la copropriété active du syndic
     copro = get_or_create_copro(db, user)
+    # Lien optionnel vers une fiche « Lots & occupants » (propriétaire/occupant)
+    personne = _personne_liee(db, copro, req.personne_id) if req.personne_id is not None else None
     new_user = User(
-        email=req.email.lower().strip(),
+        email=email,
         password_hash=hash_password(req.password),
+        prenom=req.prenom.strip(),
         nom=req.nom.strip(),
         role=req.role,
+        personne_id=personne.id if personne else None,
         copropriete_id=copro.id,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     db.add(UserCopro(user_id=new_user.id, copropriete_id=copro.id, principale=True))
+    detail = f"{new_user.email} ({new_user.role})"
+    if personne:
+        detail += f" — lié à {(personne.prenom + ' ' + personne.nom).strip()}"
     audit.enregistrer(db, "user_created", user=user, copro_id=copro.id,
-                      detail=f"{new_user.email} ({new_user.role})", request=request)
+                      detail=detail, request=request)
     db.commit()
     return new_user
+
+
+@router.put("/users/{user_id}", response_model=UserOut)
+def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = Depends(get_db),
+                current: User = Depends(require_syndic)):
+    """Édition d'une fiche de compte : email, prénom, nom, rôle, fiche « Lots &
+    occupants » liée, et mot de passe (facultatif — vide = conservé)."""
+    copro = get_or_create_copro(db, current)
+    target = (db.query(User)
+              .join(UserCopro, UserCopro.user_id == User.id)
+              .filter(User.id == user_id, UserCopro.copropriete_id == copro.id)
+              .first())
+    if not target:
+        raise HTTPException(404, "Utilisateur introuvable")
+    email = req.email.lower().strip()
+    if db.query(User).filter(User.email == email, User.id != user_id).first():
+        raise HTTPException(400, "Cet email est déjà utilisé")
+    if user_id == current.id and req.role != current.role:
+        # Ne pas se verrouiller soi-même hors de l'administration de l'app.
+        raise HTTPException(400, "Impossible de modifier son propre rôle")
+    personne = (_personne_liee(db, copro, req.personne_id, exclure_user_id=user_id)
+                if req.personne_id is not None else None)
+
+    # Journal d'audit : lister les champs réellement modifiés (jamais le mot de passe).
+    changements = []
+    if target.email != email:
+        changements.append(f"email : {target.email} → {email}")
+    if (target.prenom or "") != req.prenom.strip():
+        changements.append("prénom")
+    if target.nom != req.nom.strip():
+        changements.append("nom")
+    if target.role != req.role:
+        changements.append(f"rôle : {target.role} → {req.role}")
+    nouveau_lien = personne.id if personne else None
+    if target.personne_id != nouveau_lien:
+        if personne:
+            changements.append(f"fiche liée : {(personne.prenom + ' ' + personne.nom).strip()}")
+        else:
+            changements.append("fiche liée retirée")
+    if req.password:
+        changements.append("mot de passe")
+
+    target.email = email
+    target.prenom = req.prenom.strip()
+    target.nom = req.nom.strip()
+    target.role = req.role
+    target.personne_id = nouveau_lien
+    if req.password:
+        target.password_hash = hash_password(req.password)
+    if changements:
+        audit.enregistrer(db, "user_updated", user=current, copro_id=copro.id,
+                          detail=f"{target.email} — {', '.join(changements)}", request=request)
+    db.commit()
+    db.refresh(target)
+    return target
 
 
 @router.get("/users", response_model=list[UserOut])

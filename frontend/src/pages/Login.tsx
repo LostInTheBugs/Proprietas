@@ -7,6 +7,7 @@ import TwoFactorWizard from "../components/TwoFactorWizard";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [prenom, setPrenom] = useState("");
   const [nom, setNom] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   // Étape 2FA : « creds » (mot de passe) → « totp » (code) ou « setup » (enrôlement exigé)
@@ -30,7 +31,7 @@ export default function Login() {
     try {
       const res = mode === "login"
         ? await api.post<LoginResponse>("/auth/login", { email, password })
-        : await api.post<LoginResponse>("/auth/register", { email, password, nom });
+        : await api.post<LoginResponse>("/auth/register", { email, password, nom, prenom });
       if (res.access_token) {
         entrer();
         return;
@@ -96,16 +97,27 @@ export default function Login() {
               ))}
             </div>
             {mode === "register" && (
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-600">Nom du syndic</span>
-                <input
-                  value={nom}
-                  onChange={(e) => setNom(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Marie Dupont"
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-600">Prénom</span>
+                  <input
+                    value={prenom}
+                    onChange={(e) => setPrenom(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Marie"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-600">Nom</span>
+                  <input
+                    value={nom}
+                    onChange={(e) => setNom(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Dupont"
+                  />
+                </label>
+              </div>
             )}
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-slate-600">Email</span>

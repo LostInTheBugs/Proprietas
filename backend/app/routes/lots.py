@@ -2,23 +2,38 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
-from app.models.user import User
+from app.models.user import User, UserCopro
 from app.models.lot import Lot
 from app.models.personne import Personne
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
 from app.core.scoping import get_owned
-from app.schemas import LotIn, LotOut, PersonneIn, PersonneOut, LotSolde
+from app.schemas import LotIn, LotOut, PersonneIn, PersonneOut, PersonneAvecCompte, LotSolde
 from app.routes.copro import get_or_create_copro
 
 router = APIRouter(prefix="/api", tags=["lots"])
 
 
 # ---------- Personnes ----------
-@router.get("/personnes", response_model=list[PersonneOut])
+@router.get("/personnes", response_model=list[PersonneAvecCompte])
 def list_personnes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Fiches « Lots & occupants » de la copro active.
+
+    Enrichies de `a_un_compte` : un compte utilisateur est-il lié à la fiche ?
+    (badge dans l'UI, aucun secret exposé).
+    """
     copro = get_or_create_copro(db, user)
-    return db.query(Personne).filter(Personne.copropriete_id == copro.id).order_by(Personne.nom).all()
+    personnes = db.query(Personne).filter(Personne.copropriete_id == copro.id).order_by(Personne.nom).all()
+    comptes = {u.personne_id for u in db.query(User)
+               .join(UserCopro, UserCopro.user_id == User.id)
+               .filter(UserCopro.copropriete_id == copro.id,
+                       User.personne_id.isnot(None)).all()}
+    resultat = []
+    for p in personnes:
+        item = PersonneAvecCompte.model_validate(p)
+        item.a_un_compte = p.id in comptes
+        resultat.append(item)
+    return resultat
 
 
 @router.post("/personnes", response_model=PersonneOut)

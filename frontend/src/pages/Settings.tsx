@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Copro, User } from "../types";
+import type { Copro, Personne, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 
@@ -10,7 +10,9 @@ export default function Settings() {
   const isSyndic = me?.role === "syndic";
   const [copro, setCopro] = useState<Copro | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [modal, setModal] = useState(false);
+  const [personnes, setPersonnes] = useState<Personne[]>([]);
+  // null = fermé ; { } = création ; { user } = édition de la fiche
+  const [modal, setModal] = useState<null | { user?: User }>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [smtpTest, setSmtpTest] = useState<{ ok: boolean; detail: string } | null>(null);
@@ -25,6 +27,12 @@ export default function Settings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.theme]);
 
+  async function loadComptes() {
+    const [u, p] = await Promise.all([api.get<User[]>("/auth/users"), api.get<Personne[]>("/personnes")]);
+    setUsers(u);
+    setPersonnes(p);
+  }
+
   function changerTheme(t: Theme) {
     setChoixTheme(t);
     applyTheme(t);
@@ -38,7 +46,7 @@ export default function Settings() {
         api.get<{ prochaine: string | null }>("/relances/prochaine").then((r) => setProchaineDate(r.prochaine ? new Date(r.prochaine).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : null)).catch(() => {});
       }
     }).catch(() => {});
-    api.get<User[]>("/auth/users").then(setUsers).catch(() => {});
+    loadComptes().catch(() => {});
   }, []);
 
   async function saveCopro() {
@@ -317,30 +325,46 @@ export default function Settings() {
       {me?.role === "syndic" && (
         <Card
           title="Comptes utilisateurs"
-          action={<Button onClick={() => setModal(true)}>+ Ajouter</Button>}
+          action={<Button onClick={() => setModal({})}>+ Ajouter</Button>}
         >
           <div className="space-y-2">
-            {users.map((u) => (
-              <div key={u.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{u.nom}</p>
-                  <p className="text-xs text-slate-500">{u.email}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge color={u.role === "syndic" ? "indigo" : "slate"}>
-                    {u.role === "syndic" ? "Syndic" : "Copropriétaire"}
-                  </Badge>
-                  {u.id !== me.id && (
-                    <button
-                      onClick={async () => { await api.del(`/auth/users/${u.id}`); setUsers(await api.get("/auth/users")); }}
-                      className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+            {users.map((u) => {
+              const liee = personnes.find((p) => p.id === u.personne_id);
+              return (
+                <div key={u.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {[u.prenom, u.nom].filter(Boolean).join(" ")}
+                      {u.id === me?.id && <span className="ml-2 text-xs font-normal text-slate-500">(vous)</span>}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {u.email}
+                      {liee && <span className="ml-2 text-slate-400">🔗 {[liee.prenom, liee.nom].filter(Boolean).join(" ")}</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge color={u.role === "syndic" ? "indigo" : "slate"}>
+                      {u.role === "syndic" ? "Syndic" : "Copropriétaire"}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => setModal({ user: u })}
                     >
-                      ✕
-                    </button>
-                  )}
+                      Modifier
+                    </Button>
+                    {u.id !== me?.id && (
+                      <button
+                        onClick={async () => { await api.del(`/auth/users/${u.id}`); await loadComptes(); }}
+                        className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <p className="pt-1 text-xs text-slate-500">
               Les copropriétaires peuvent consulter la situation de la copropriété. Seul le syndic peut modifier.
             </p>
@@ -348,35 +372,115 @@ export default function Settings() {
         </Card>
       )}
 
-      {modal && <UserModal onClose={() => setModal(false)} onSaved={async () => { setModal(false); setUsers(await api.get("/auth/users")); }} onError={setError} />}
+      {modal && (
+        <UserModal
+          item={modal.user}
+          personnes={personnes}
+          isSelf={modal.user?.id === me?.id}
+          onClose={() => setModal(null)}
+          onSaved={async () => { setModal(null); await loadComptes(); }}
+          onError={setError}
+        />
+      )}
     </div>
   );
 }
 
-function UserModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
-  const [nom, setNom] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("membre");
+function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
+  item?: User; personnes: Personne[]; isSelf?: boolean;
+  onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+}) {
+  const [f, setF] = useState({
+    prenom: item?.prenom ?? "",
+    nom: item?.nom ?? "",
+    email: item?.email ?? "",
+    role: item?.role ?? "membre",
+    personne_id: item?.personne_id != null ? String(item.personne_id) : "",
+    password: "",
+  });
+  const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
+  // Fiches déjà liées à un autre compte exclues (un compte par personne) ;
+  // celle du compte en cours d'édition reste sélectionnable.
+  const disponibles = personnes.filter((p) => p.id === item?.personne_id || !p.a_un_compte);
+
+  function choisirPersonne(id: string) {
+    const p = personnes.find((x) => String(x.id) === id);
+    setF((prev) => ({
+      ...prev,
+      personne_id: id,
+      // La fiche sert de modèle : les champs restent modifiables ensuite.
+      prenom: p?.prenom || prev.prenom,
+      nom: p?.nom || prev.nom,
+      email: p?.email || prev.email,
+    }));
+  }
+
   async function save() {
+    if (!f.email.trim() || !f.nom.trim()) {
+      onError("L'email et le nom sont requis");
+      return;
+    }
+    if (!item && f.password.length < 6) {
+      onError("Le mot de passe initial doit contenir au moins 6 caractères");
+      return;
+    }
     try {
-      await api.post("/auth/users", { nom, email, password, role });
+      const payload = {
+        email: f.email, nom: f.nom, prenom: f.prenom, role: f.role,
+        personne_id: f.personne_id === "" ? null : Number(f.personne_id),
+        password: f.password || null, // vide = mot de passe conservé (édition)
+      };
+      if (item) await api.put(`/auth/users/${item.id}`, payload);
+      else await api.post("/auth/users", payload);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
+
   return (
-    <Modal open title="Nouvel utilisateur" onClose={onClose}>
+    <Modal open title={item ? "Modifier l'utilisateur" : "Nouvel utilisateur"} onClose={onClose}>
       <div className="space-y-3">
-        <Input label="Nom" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Jean Dupont" />
-        <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Input label="Mot de passe initial" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} />
-        <Select label="Rôle" value={role} onChange={(e) => setRole(e.target.value)}>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Prénom" value={f.prenom} onChange={(e) => set("prenom", e.target.value)} placeholder="Jean" />
+          <Input label="Nom" value={f.nom} onChange={(e) => set("nom", e.target.value)} placeholder="Dupont" />
+        </div>
+        <Input label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
+        <Select
+          label="Rôle"
+          value={f.role}
+          onChange={(e) => set("role", e.target.value)}
+          disabled={isSelf}
+        >
           <option value="membre">Copropriétaire (consultation)</option>
           <option value="syndic">Syndic</option>
         </Select>
+        {isSelf && (
+          <p className="text-xs text-slate-500">Vous ne pouvez pas modifier votre propre rôle.</p>
+        )}
+        <Select label="Fiche liée (Lots & occupants)" value={f.personne_id} onChange={(e) => choisirPersonne(e.target.value)}>
+          <option value="">— Aucune —</option>
+          {disponibles.map((p) => {
+            const qualites = [p.est_proprietaire ? "propriétaire" : "", p.est_occupant ? "occupant" : ""].filter(Boolean).join(" · ");
+            return (
+              <option key={p.id} value={p.id}>
+                {[p.prenom, p.nom].filter(Boolean).join(" ")}{qualites ? ` — ${qualites}` : ""}
+              </option>
+            );
+          })}
+        </Select>
+        <p className="text-xs text-slate-500">
+          Relie le compte à une personne de « Lots & occupants » : prénom, nom et email se préremplissent à la sélection.
+        </p>
+        <Input
+          label={item ? "Nouveau mot de passe (laisser vide pour conserver)" : "Mot de passe initial"}
+          type="password"
+          value={f.password}
+          onChange={(e) => set("password", e.target.value)}
+          minLength={6}
+          autoComplete="new-password"
+        />
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Créer</Button>
+          <Button onClick={save}>{item ? "Enregistrer" : "Créer"}</Button>
         </div>
       </div>
     </Modal>

@@ -17,10 +17,14 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
+    prenom = Column(String, default="")
     nom = Column(String, nullable=False)
     role = Column(String, default="membre")  # syndic | membre
     is_demo = Column(Boolean, default=False)  # compte de démonstration (n'ouvre pas/ne ferme pas l'inscription)
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=True)
+    # Fiche « Lots & occupants » liée à ce compte (optionnel) : un compte par
+    # personne au maximum — le lien préremplit les fiches et relie l'annuaire.
+    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
     # Double authentification (TOTP, RFC 6238) — secret CHIFFRÉ, codes de secours HACHÉS.
     totp_secret = Column(Text, default="")
     totp_enabled = Column(Boolean, default=False)
@@ -39,8 +43,15 @@ class User(Base):
         "UserCopro", backref="user", cascade="all, delete-orphan",
         foreign_keys="UserCopro.user_id",
     )
+    # Fiche « Lots & occupants » liée (optionnelle) — lecture seule côté compte.
+    personne = relationship("Personne", foreign_keys=[personne_id])
 
     @property
     def two_factor_enabled(self) -> bool:
         """Vue Pydantic (UserOut) : la 2FA est-elle activée pour ce compte ?"""
         return bool(self.totp_enabled)
+
+    @property
+    def nom_complet(self) -> str:
+        """Prénom + nom (pour les affichages « humains »)."""
+        return f"{self.prenom or ''} {self.nom or ''}".strip()

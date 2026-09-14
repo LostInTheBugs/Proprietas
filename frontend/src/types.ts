@@ -4,7 +4,9 @@ export interface User {
   id: number;
   email: string;
   nom: string;
+  prenom: string;
   role: string;
+  personne_id: number | null;
   two_factor_enabled?: boolean;
   theme?: string;
 }
@@ -90,6 +92,8 @@ export interface Personne {
   est_proprietaire: boolean;
   est_occupant: boolean;
   notes: string;
+  // GET /api/personnes : un compte utilisateur est-il lié à cette fiche ?
+  a_un_compte?: boolean;
 }
 
 export interface Lot {
