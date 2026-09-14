@@ -262,8 +262,8 @@ function PersonneModal({ item, onClose, onSaved, onError }: {
     <Modal open title={item ? "Modifier la personne" : "Nouvelle personne"} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Nom" value={f.nom} onChange={(e) => set("nom", e.target.value)} required />
           <Input label="Prénom" value={f.prenom} onChange={(e) => set("prenom", e.target.value)} />
+          <Input label="Nom" value={f.nom} onChange={(e) => set("nom", e.target.value)} required />
         </div>
         <Input label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
         <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
