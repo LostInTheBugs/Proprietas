@@ -217,7 +217,7 @@ def main():
     depense(exercices[2025], date(2025, 4, 12), "Électricité parties communes (S1)", 780.0)
     depense(exercices[2025], date(2025, 6, 18), "Dépannage plomberie", 420.0)
     depense(exercices[2025], date(2025, 7, 8), "Entretien espaces verts", 460.0)
-    depense(exercices[2025], date(2025, 9, 22), "Remplacement porte d'entrée (fonds travaux)", 2300.0, "fonds_travaux")
+    depense(exercices[2025], date(2025, 9, 22), "Remplacement de la porte d'entrée", 2300.0, "charges")
 
     # --- 2026 : T1 et T2 émis ; lots 1, 2, 4 à jour — lots 3 et 5 en retard sur T2
     c1 = creer_appel(exercices[2026], "Appel de fonds T1 2026", date(2026, 1, 5), date(2026, 1, 31), 2950.0)
@@ -229,7 +229,7 @@ def main():
     payer(c1, lot_objs[2], c1.date_echeance)  # Bernard a payé T1
     # lots 3 (Bernard) et 5 (SCI) : T2 non payé → relances
     depense(exercices[2026], date(2026, 1, 15), "Prime d'assurance immeuble 2026", 1160.0)
-    depense(exercices[2026], date(2026, 2, 10), "Remplacement interphone (fonds travaux)", 620.0, "fonds_travaux")
+    depense(exercices[2026], date(2026, 2, 10), "Remplacement de l'interphone", 620.0, "charges")
     depense(exercices[2026], date(2026, 3, 14), "Nettoyage parties communes (S1)", 260.0)
     depense(exercices[2026], date(2026, 4, 11), "Électricité parties communes (S1)", 410.0)
     depense(exercices[2026], date(2026, 5, 6), "Entretien espaces verts", 230.0)

@@ -232,6 +232,21 @@ class CoproUpdate(BaseModel):
         return v
 
 
+class TresorerieOut(BaseModel):
+    """Comptes de la copropriété — lecture seule (Réglages → Trésorerie).
+
+    Le copropriétaire VOIT le compte bancaire séparé du syndicat et le compte
+    dédié du fonds de travaux, avec les montants portés au crédit selon la
+    comptabilité (encaissements − dépenses). La modification reste au syndic
+    (PUT /api/copro)."""
+    compte_bancaire_separe: str = ""
+    solde_compte: float = 0.0  # encaissements − dépenses (hors fonds de travaux)
+    fonds_travaux_actif: bool = True
+    fonds_travaux_compte: str = ""
+    fonds_travaux_taux_pct: float = 5.0
+    fonds_travaux_solde: float = 0.0  # encaissements − dépenses du fonds de travaux
+
+
 # ---------- Profil (auto-édition du copropriétaire) ----------
 class ProfilIn(BaseModel):
     """Réglages → « Mes informations » : chacun modifie ses propres

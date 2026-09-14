@@ -4,7 +4,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
-from app.schemas import CoproOut, CoproUpdate
+from app.models.mouvement import Mouvement
+from app.schemas import CoproOut, CoproUpdate, TresorerieOut
 from app.services.two_factor import politique_defaut
 
 router = APIRouter(prefix="/api/copro", tags=["copro"])
@@ -51,6 +52,28 @@ def get_or_create_copro(db: Session, user: User) -> Copropriete:
 @router.get("", response_model=CoproOut)
 def get_copro(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return get_or_create_copro(db, user)
+
+
+@router.get("/tresorerie", response_model=TresorerieOut)
+def get_tresorerie(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Comptes de la copropriété en LECTURE SEULE (tous rôles) : le compte bancaire
+    séparé du syndicat et le compte dédié du fonds de travaux, avec les montants
+    portés au crédit selon la comptabilité (encaissements − dépenses des exercices).
+    Réservé au syndic : la modification (PUT /api/copro)."""
+    copro = get_or_create_copro(db, user)
+    mouvements = db.query(Mouvement).filter(Mouvement.copropriete_id == copro.id).all()
+    enc = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie != "fonds_travaux")
+    dep = sum(m.montant for m in mouvements if m.type == "depense" and m.categorie != "fonds_travaux")
+    ft_enc = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
+    ft_dep = sum(m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux")
+    return TresorerieOut(
+        compte_bancaire_separe=copro.compte_bancaire_separe or "",
+        solde_compte=round(enc - dep, 2),
+        fonds_travaux_actif=bool(copro.fonds_travaux_actif),
+        fonds_travaux_compte=copro.fonds_travaux_compte or "",
+        fonds_travaux_taux_pct=copro.fonds_travaux_taux_pct or 0.0,
+        fonds_travaux_solde=round(ft_enc - ft_dep, 2),
+    )
 
 
 @router.put("", response_model=CoproOut)

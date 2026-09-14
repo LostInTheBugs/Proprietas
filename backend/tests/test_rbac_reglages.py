@@ -66,3 +66,42 @@ def test_membre_peut_consulter(client, db, copro_a, token_a):
     assert client.get("/api/recap", headers=auth(token)).status_code == 200
     assert client.get("/api/copro", headers=auth(token)).status_code == 200
     assert client.get("/api/consolide", headers=auth(token)).status_code == 200
+    assert client.get("/api/copro/tresorerie", headers=auth(token)).status_code == 200
+
+
+def test_membre_voit_la_tresorerie_mais_ne_la_modifie_pas(client, db, copro_a, token_a):
+    """Les comptes bancaires (syndicat + fonds de travaux) et leurs montants sont
+    visibles en LECTURE SEULE pour le copropriétaire ; l'édition reste au syndic."""
+    from app.models.exercice import Exercice
+    from app.models.mouvement import Mouvement
+    from datetime import date
+
+    # Le syndic renseigne les comptes et la comptabilité
+    r = client.put("/api/copro", headers=auth(token_a), json={
+        "compte_bancaire_separe": "FR76 3000 1007 9412 3456 7890 185",
+        "fonds_travaux_compte": "FR76 3000 1007 9412 3456 7890 186",
+        "fonds_travaux_actif": True, "fonds_travaux_taux_pct": 5.0,
+    })
+    assert r.status_code == 200, r.text
+    ex = Exercice(copropriete_id=copro_a.id, annee=2026, cloture=False)
+    db.add(ex)
+    db.flush()
+    for typ, cat, mnt in [("encaissement", "charges", 1000.0), ("depense", "charges", 200.0),
+                          ("encaissement", "fonds_travaux", 500.0), ("depense", "fonds_travaux", 100.0)]:
+        db.add(Mouvement(copropriete_id=copro_a.id, exercice_id=ex.id, date=date(2026, 3, 1),
+                         libelle="Test", type=typ, categorie=cat, montant=mnt))
+    db.commit()
+
+    token, _ = _token_membre(db, copro_a)
+    r = client.get("/api/copro/tresorerie", headers=auth(token))
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["compte_bancaire_separe"].startswith("FR76 3000")
+    assert d["solde_compte"] == 800.0        # 1000 − 200 (hors fonds de travaux)
+    assert d["fonds_travaux_compte"].endswith("186")
+    assert d["fonds_travaux_solde"] == 400.0  # 500 − 100
+    assert d["fonds_travaux_taux_pct"] == 5.0
+    # Même vue pour le syndic, et aucune écriture possible pour le membre.
+    assert client.get("/api/copro/tresorerie", headers=auth(token_a)).status_code == 200
+    assert client.put("/api/copro", headers=auth(token),
+                      json={"compte_bancaire_separe": "FR00 PIRATE"}).status_code == 403

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Copro, Lot, User } from "../types";
+import type { Copro, Lot, Tresorerie, User } from "../types";
+import { fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 
@@ -15,6 +16,8 @@ export default function Settings() {
   const [moiSaved, setMoiSaved] = useState(false);
   // Mes lots : lots dont JE suis propriétaire — j'en règle l'occupation.
   const [mesLots, setMesLots] = useState<Lot[]>([]);
+  // Comptes bancaires de la copropriété (Réglages → Trésorerie) — lecture seule.
+  const [tresorerie, setTresorerie] = useState<Tresorerie | null>(null);
   // null = fermé ; { } = création ; { user } = édition de la fiche
   const [modal, setModal] = useState<null | { user?: User }>(null);
   const [saved, setSaved] = useState(false);
@@ -101,6 +104,13 @@ export default function Settings() {
     if (!me) return;
     api.get<Lot[]>("/lots").then((l) => setMesLots(l.filter((x) => x.proprietaire_id === me.id))).catch(() => {});
   }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Comptes bancaires de la copropriété : visibles par le copropriétaire
+  // (le syndic les consulte/modifie dans ses propres cartes).
+  useEffect(() => {
+    if (!me || isSyndic) return;
+    api.get<Tresorerie>("/copro/tresorerie").then(setTresorerie).catch(() => {});
+  }, [me?.id, isSyndic]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function saveCopro() {
     if (!copro) return;
@@ -268,6 +278,41 @@ export default function Settings() {
           <p className="mt-2 text-xs text-slate-500">
             Déclarez l'occupation de chacun de vos lots (vous pouvez en louer une partie seulement).
             Les noms des locataires ne sont jamais enregistrés (RGPD).
+          </p>
+        </Card>
+      )}
+
+      {!isSyndic && tresorerie && (
+        <Card title="Trésorerie de la copropriété">
+          <div className="space-y-2">
+            <div className="rounded-lg border border-slate-100 px-3 py-2">
+              <p className="text-xs text-slate-500">Compte bancaire séparé du syndicat</p>
+              <p className="text-sm font-medium text-slate-800">
+                {tresorerie.compte_bancaire_separe || "Non renseigné par le syndic"}
+              </p>
+              <p className="text-sm text-slate-600">
+                Montant porté au crédit :{" "}
+                <span className="font-semibold text-slate-800">{fmtEUR(tresorerie.solde_compte)}</span>
+              </p>
+            </div>
+            {tresorerie.fonds_travaux_actif && (
+              <div className="rounded-lg border border-slate-100 px-3 py-2">
+                <p className="text-xs text-slate-500">
+                  Fonds de travaux — compte dédié ({tresorerie.fonds_travaux_taux_pct} % du budget)
+                </p>
+                <p className="text-sm font-medium text-slate-800">
+                  {tresorerie.fonds_travaux_compte || "Non renseigné par le syndic"}
+                </p>
+                <p className="text-sm text-slate-600">
+                  Montant cumulé :{" "}
+                  <span className="font-semibold text-slate-800">{fmtEUR(tresorerie.fonds_travaux_solde)}</span>
+                </p>
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Consultation seule — montants selon la comptabilité (encaissements − dépenses), tenus à jour
+            par le syndic. Toute modification des comptes ou des montants reste au syndic.
           </p>
         </Card>
       )}

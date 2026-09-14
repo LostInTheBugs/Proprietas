@@ -83,6 +83,15 @@ export interface InstanceOut {
   version: string;
 }
 
+export interface Tresorerie {
+  compte_bancaire_separe: string;
+  solde_compte: number; // encaissements − dépenses (hors fonds de travaux)
+  fonds_travaux_actif: boolean;
+  fonds_travaux_compte: string;
+  fonds_travaux_taux_pct: number;
+  fonds_travaux_solde: number; // encaissements − dépenses du fonds de travaux
+}
+
 export interface Lot {
   id: number;
   numero: string;

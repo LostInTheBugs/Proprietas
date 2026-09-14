@@ -4,7 +4,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.09.015**.
+> Version courante : **2026.09.016**.
 
 Gestion de copropriété pour syndic bénévole, conçue pour le régime « petite copropriété »
 français (art. 41-8 de la loi du 10 juillet 1965, issu de l'ordonnance n° 2019-1101 :
@@ -72,6 +72,10 @@ se créer normalement depuis la page de connexion.
   travaux, emails, relances, comptes utilisateurs, recouvrement, sécurité) sont refusés
   par l'API ; les écrans correspondants sont masqués — le copropriétaire consulte la
   situation, les assemblées et les documents, et gère ses propres informations
+- **Trésorerie visible par tous** : le compte bancaire séparé du syndicat et le compte
+  dédié du fonds de travaux s'affichent en lecture seule aux copropriétaires (Réglages →
+  Trésorerie de la copropriété), avec les montants portés au crédit selon la comptabilité
+  (encaissements − dépenses) — seule la modification reste au syndic
 - **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
   Authenticator…), codes de secours, réinitialisation assistée par le syndic,
   journal d'audit, alertes email de connexion
@@ -187,7 +191,7 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 138 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 139 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
