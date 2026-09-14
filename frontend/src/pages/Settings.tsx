@@ -56,8 +56,14 @@ export default function Settings() {
         api.get<{ prochaine: string | null }>("/relances/prochaine").then((r) => setProchaineDate(r.prochaine ? new Date(r.prochaine).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : null)).catch(() => {});
       }
     }).catch(() => {});
-    loadComptes().catch(() => {});
   }, []);
+
+  // Comptes utilisateurs : chargés seulement pour le syndic (l'API refuse les
+  // copropriétaires — et l'effet attend que le rôle soit connu).
+  useEffect(() => {
+    if (!isSyndic) return;
+    loadComptes().catch(() => {});
+  }, [isSyndic]);
 
   async function saveCopro() {
     if (!copro) return;
@@ -148,7 +154,7 @@ export default function Settings() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-800">Réglages</h1>
-        <p className="text-sm text-slate-500">Copropriété, fonds de travaux et comptes utilisateurs</p>
+        <p className="text-sm text-slate-500">{isSyndic ? "Copropriété, fonds de travaux et comptes utilisateurs" : "Affichage et préférences de votre compte"}</p>
       </div>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -175,7 +181,7 @@ export default function Settings() {
         </p>
       </Card>
 
-      <Card title="Copropriété">
+      {isSyndic && (<Card title="Copropriété">
         <div className="space-y-3">
           <Input label="Nom" value={copro.nom} onChange={(e) => setCopro({ ...copro, nom: e.target.value })} />
           <Input label="Adresse" value={copro.adresse} onChange={(e) => setCopro({ ...copro, adresse: e.target.value })} />
@@ -192,9 +198,9 @@ export default function Settings() {
           <Input label="Compte bancaire séparé (syndicat)" value={copro.compte_bancaire_separe} onChange={(e) => setCopro({ ...copro, compte_bancaire_separe: e.target.value })} placeholder="IBAN / référence" />
           {isSyndic && <Button onClick={saveCopro}>Enregistrer</Button>}
         </div>
-      </Card>
+      </Card>)}
 
-      <Card title="Fonds de travaux">
+      {isSyndic && (<Card title="Fonds de travaux">
         <div className="space-y-3">
           <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-800">
             <b>Obligation légale (France)</b> : fonds de travaux obligatoire dès 10 ans après réception des travaux,
@@ -222,9 +228,9 @@ export default function Settings() {
           </div>
           {isSyndic && <Button onClick={saveCopro}>Enregistrer</Button>}
         </div>
-      </Card>
+      </Card>)}
 
-      <Card title="Envoi des emails (convocations AG)">
+      {isSyndic && (<Card title="Envoi des emails (convocations AG)">
         <div className="space-y-3">
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
             Utilisé pour envoyer les convocations aux assemblées générales. Exemples : Gmail
@@ -257,9 +263,9 @@ export default function Settings() {
             </p>
           )}
         </div>
-      </Card>
+      </Card>)}
 
-      <Card title="Relances automatiques (cron)">
+      {isSyndic && (<Card title="Relances automatiques (cron)">
         <div className="space-y-3">
           <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-800">
             Le serveur envoie tout seul les relances aux lots en retard, à la fréquence choisie.
@@ -330,7 +336,14 @@ export default function Settings() {
           )}
           {isSyndic && <Button onClick={saveRelanceAuto}>Enregistrer</Button>}
         </div>
-      </Card>
+      </Card>)}
+
+      {!isSyndic && (
+        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          Les réglages de la copropriété (fonds de travaux, envoi des emails, relances automatiques,
+          comptes utilisateurs) sont réservés au syndic.
+        </p>
+      )}
 
       {me?.role === "syndic" && (
         <Card

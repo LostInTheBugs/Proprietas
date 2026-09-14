@@ -27,6 +27,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SyndicRoute({ children }: { children: React.ReactNode }) {
+  // Pages entièrement réservées au syndic (recouvrement, sécurité) : un
+  // copropriétaire qui force l'URL revient au tableau de bord — l'API les
+  // refuse de toute façon (défense en profondeur).
+  const { user, pret } = useUser();
+  if (!pret) return null;
+  if (user && user.role !== "syndic") return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <UserProvider>
@@ -48,11 +58,11 @@ export default function App() {
           <Route path="contacts" element={<Contacts />} />
           <Route path="contrats" element={<Contrats />} />
           <Route path="carnet" element={<Carnet />} />
-          <Route path="recouvrement" element={<Recouvrement />} />
+          <Route path="recouvrement" element={<SyndicRoute><Recouvrement /></SyndicRoute>} />
           <Route path="relances" element={<Navigate to="/recouvrement" replace />} />
           <Route path="travaux" element={<TravauxPage />} />
           <Route path="consolide" element={<Consolide />} />
-          <Route path="securite" element={<Securite />} />
+          <Route path="securite" element={<SyndicRoute><Securite /></SyndicRoute>} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

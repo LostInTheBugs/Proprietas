@@ -4,7 +4,7 @@ import { api, clearToken } from "../api";
 import { useUser } from "../auth";
 import type { Copro } from "../types";
 
-const NAV = [
+const NAV: { to: string; label: string; icon: string; syndic?: boolean }[] = [
   { to: "/", label: "Tableau de bord", icon: "▦" },
   { to: "/lots", label: "Lots & occupants", icon: "⌂" },
   { to: "/comptes", label: "Comptes", icon: "€" },
@@ -13,10 +13,10 @@ const NAV = [
   { to: "/contacts", label: "Contacts", icon: "👥" },
   { to: "/contrats", label: "Contrats", icon: "📄" },
   { to: "/carnet", label: "Carnet d'entretien", icon: "🔧" },
-  { to: "/recouvrement", label: "Recouvrement", icon: "💶" },
+  { to: "/recouvrement", label: "Recouvrement", icon: "💶", syndic: true },
   { to: "/travaux", label: "Travaux", icon: "🔨" },
   { to: "/consolide", label: "Consolidé", icon: "🗂" },
-  { to: "/securite", label: "Sécurité", icon: "🔐" },
+  { to: "/securite", label: "Sécurité", icon: "🔐", syndic: true },
   { to: "/settings", label: "Réglages", icon: "⚙" },
 ];
 
@@ -162,7 +162,7 @@ export default function Layout() {
           )}
         </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2">
-          {NAV.map((item) => (
+          {NAV.filter((item) => !item.syndic || user?.role === "syndic").map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

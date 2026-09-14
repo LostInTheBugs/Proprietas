@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="Proprietas", version="2026.09.013", lifespan=lifespan)
+app = FastAPI(title="Proprietas", version="2026.09.014", lifespan=lifespan)
 
 # CORS : en dev (SQLite) on autorise le serveur Vite ; en prod le frontend est
 # servi par le même backend, donc liste vide par défaut (configurable via
