@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
@@ -71,18 +71,18 @@ def update_personne(personne_id: int, data: PersonneIn, db: Session = Depends(ge
 def delete_personne(personne_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     p = get_owned(db, Personne, personne_id, copro, label="Personne")
-    # Historique non supprimable : relances et convocations gardent la personne
-    # (FK NOT NULL) — refuser proprement plutôt qu'une erreur d'intégrité.
-    if (db.query(Relance).filter(Relance.personne_id == p.id).count()
-            or db.query(Invitation).filter(Invitation.personne_id == p.id).count()):
-        raise HTTPException(400, "Cette personne a des relances ou des convocations "
-                                 "enregistrées (historique conservé) — suppression impossible")
-    # Liens (nullable) : le compte utilisateur lié et les actes de recouvrement
-    # SURVIVENT à la fiche — le lien est délié. Les lots sont détachés par la
-    # relation SQLAlchemy (proprietaire_id / occupant_id → NULL).
+    # L'historique SURVIT à la fiche (RGPD : suppression = retrait du nom) :
+    # - compte utilisateur lié, actes de recouvrement, relances et convocations
+    #   gardent leurs lignes, le lien vers la personne est simplement délié ;
+    # - les lots sont détachés par la relation SQLAlchemy (proprietaire_id /
+    #   occupant_id → NULL).
     db.query(User).filter(User.personne_id == p.id).update(
         {"personne_id": None}, synchronize_session=False)
     db.query(ActeRecouvrement).filter(ActeRecouvrement.personne_id == p.id).update(
+        {"personne_id": None}, synchronize_session=False)
+    db.query(Relance).filter(Relance.personne_id == p.id).update(
+        {"personne_id": None}, synchronize_session=False)
+    db.query(Invitation).filter(Invitation.personne_id == p.id).update(
         {"personne_id": None}, synchronize_session=False)
     db.delete(p)
     db.commit()

@@ -30,6 +30,19 @@ export default function Lots() {
     return <span className="text-slate-400">—</span>;
   }
 
+  async function supprimerPersonne(p: Personne) {
+    const nom = [p.prenom, p.nom].filter(Boolean).join(" ");
+    const histoire = "Les relances et convocations déjà envoyées sont conservées (sans le nom).";
+    if (!confirm(`Supprimer la fiche de ${nom} ?\n${p.a_un_compte ? "Le compte utilisateur lié sera détaché. " : ""}${histoire}`)) return;
+    try {
+      await api.del(`/personnes/${p.id}`);
+      setError("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -114,9 +127,20 @@ export default function Lots() {
                     <p className="text-xs text-slate-500">{p.email || "—"}</p>
                   </div>
                   {isSyndic && (
-                    <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ type: "personne", item: p })}>
-                      Modifier
-                    </Button>
+                    <div className="flex shrink-0 items-start gap-1">
+                      <button
+                        onClick={() => setModal({ type: "personne", item: p })}
+                        className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => supprimerPersonne(p)}
+                        className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="mt-2 flex gap-1.5">

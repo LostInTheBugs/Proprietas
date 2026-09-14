@@ -8,7 +8,9 @@ class Invitation(Base):
     __tablename__ = "invitations"
     id = Column(Integer, primary_key=True)
     ag_id = Column(Integer, ForeignKey("ags.id"), nullable=False)
-    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=False)
+    # NULL possible : la fiche personne a pu être supprimée (RGPD) — l'envoi
+    # reste consigné pour l'AG (historique conservé, nom retiré).
+    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
     date_envoi = Column(DateTime, nullable=False)
     statut = Column(String, default="envoye")  # envoye | erreur
     message = Column(Text, default="")

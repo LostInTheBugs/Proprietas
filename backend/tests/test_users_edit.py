@@ -267,13 +267,34 @@ def test_delete_personne_delie_compte_et_actes(client, db, copro_a, syndic_a, to
     assert a is not None and a.personne_id is None
 
 
-def test_delete_personne_avec_relances_refuse(client, db, copro_a, syndic_a, token_a):
-    """Relances/convocations = historique NOT NULL : refus explicite (pas un 500)."""
+def test_delete_personne_conserve_relances_et_convocations(client, db, copro_a, syndic_a, token_a):
+    """Suppression possible même avec un historique : les lignes survivent, déliées.
+
+    RGPD : le nom part, la preuve (relance pour le lot, convocation pour l'AG) reste.
+    """
+    from app.models.invitation import Invitation
+    from app.models.ag import AG
     p = _personne(db, copro_a)
     lot = _lot(db, copro_a)
-    db.add(Relance(lot_id=lot.id, personne_id=p.id, date_envoi=datetime(2026, 1, 5),
-                   statut="envoye", montant_du=120.0))
+    ag = AG(copropriete_id=copro_a.id, date=datetime(2026, 10, 1), statut="projet")
+    db.add(ag)
     db.commit()
+    db.refresh(ag)
+    relance = Relance(lot_id=lot.id, personne_id=p.id, date_envoi=datetime(2026, 1, 5),
+                      statut="envoye", montant_du=120.0)
+    invitation = Invitation(ag_id=ag.id, personne_id=p.id,
+                            date_envoi=datetime(2026, 1, 6), statut="envoye")
+    db.add(relance)
+    db.add(invitation)
+    db.commit()
+    db.refresh(relance)
+    db.refresh(invitation)
+
     r = client.delete(f"/api/personnes/{p.id}", headers=auth(token_a))
-    assert r.status_code == 400
-    assert "historique conservé" in r.text
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    reste_relance = db.query(Relance).filter(Relance.id == relance.id).first()
+    reste_invitation = db.query(Invitation).filter(Invitation.id == invitation.id).first()
+    assert reste_relance is not None and reste_relance.personne_id is None
+    assert reste_invitation is not None and reste_invitation.personne_id is None
+    assert reste_relance.lot_id == lot.id  # la preuve reste attachée au lot
