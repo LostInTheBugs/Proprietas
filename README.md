@@ -4,7 +4,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.09.007**.
+> Version courante : **2026.09.008**.
 
 Gestion de copropriété pour syndic bénévole, conçue pour le régime « petite copropriété »
 français (art. 41-8 de la loi du 10 juillet 1965, issu de l'ordonnance n° 2019-1101 :
@@ -49,6 +49,8 @@ se créer normalement depuis la page de connexion.
 - **Carnet d'entretien** : interventions, prestataires, coûts
 - **Exports** : registre des copropriétés, compte de gestion annuel
 - **Multi-copropriétés** : un compte, plusieurs immeubles isolés, vue consolidée
+- **Comptes utilisateurs** : fiches éditables (prénom, nom, email, rôle, mot de passe),
+  lien optionnel vers une personne de « Lots & occupants » (la fiche préremplit le compte)
 - **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
   Authenticator…), codes de secours, réinitialisation assistée par le syndic,
   journal d'audit, alertes email de connexion
@@ -116,10 +118,10 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   portée limitée et courts (10 / 30 min) ; les tentatives 2FA partagent le
   rate-limit du login.
 - **Journal d'audit** : connexions (succès et échecs), activation / désactivation /
-  réinitialisation 2FA, usage des codes de secours, création et suppression de
-  comptes, exports (compte de gestion, quittances, rapport annuel, CSV, registre) et
-  envois de relances — consultable par le syndic (page « 🔐 Sécurité ») pour la
-  copropriété active.
+  réinitialisation 2FA, usage des codes de secours, création, modification et
+  suppression de comptes, exports (compte de gestion, quittances, rapport annuel,
+  CSV, registre) et envois de relances — consultable par le syndic (page
+  « 🔐 Sécurité ») pour la copropriété active.
 - **Alertes email de sécurité** (best effort, via le SMTP de la copropriété) :
   connexion depuis une nouvelle IP, 2FA désactivée ou réinitialisée, code de
   secours utilisé.
@@ -164,7 +166,7 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 114 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # 126 tests, ~70 % de couverture (pytest --cov)
 ```
 
 La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
