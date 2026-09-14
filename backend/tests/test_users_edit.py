@@ -4,12 +4,18 @@ Réglages → Comptes utilisateurs : le syndic modifie l'email, le prénom, le n
 le rôle et le mot de passe d'un compte de SA copropriété, et peut lier un compte
 à une fiche personne (un compte par personne au maximum).
 """
+from datetime import datetime
+
 from sqlalchemy import text
 
 from tests.conftest import auth, _make_membre
 from app.core import rate_limit
 from app.core.security import create_access_token
+from app.models.lot import Lot
 from app.models.personne import Personne
+from app.models.recouvrement import ActeRecouvrement
+from app.models.relance import Relance
+from app.models.user import User
 
 
 def _personne(db, copro, nom="Durand", prenom="Paul", email="paul@test.fr"):
@@ -196,3 +202,78 @@ def test_register_avec_prenom(client):
     me = client.get("/api/auth/me", headers=auth(r.json()["access_token"]))
     assert me.status_code == 200
     assert me.json()["prenom"] == "Marie" and me.json()["nom"] == "Dupont"
+
+
+# ---------- Suppression ----------
+def _lot(db, copro, numero="1", tantiemes=1000):
+    lot = Lot(copropriete_id=copro.id, numero=numero, tantiemes=tantiemes)
+    db.add(lot)
+    db.commit()
+    db.refresh(lot)
+    return lot
+
+
+def test_delete_user_conserve_actes_recouvrement(client, db, copro_a, syndic_a, token_a):
+    """Supprimer un compte ne supprime pas ses actes de recouvrement (lien délié).
+
+    Sans le déliage, la suppression échoue en base (FK actes_recouvrement.created_by_id).
+    """
+    membre = _make_membre(db, "membre.a@test.fr", copro_a)
+    lot = _lot(db, copro_a)
+    acte = ActeRecouvrement(copropriete_id=copro_a.id, lot_id=lot.id, type="note",
+                            libelle="Frais test", created_by_id=membre.id)
+    db.add(acte)
+    db.commit()
+    db.refresh(acte)
+
+    assert client.delete(f"/api/auth/users/{membre.id}", headers=auth(token_a)).status_code == 200
+    db.expire_all()
+    reste = db.query(ActeRecouvrement).filter(ActeRecouvrement.id == acte.id).first()
+    assert reste is not None, "l'acte doit survivre à la suppression du compte"
+    assert reste.created_by_id is None
+
+
+def test_delete_compte_lie_ok(client, db, copro_a, syndic_a, token_a):
+    """Un compte lié à une fiche se supprime ; le badge « compte » redevient faux."""
+    p = _personne(db, copro_a)
+    r = client.post("/api/auth/users", headers=auth(token_a), json={
+        "email": "paul@test.fr", "password": "test1234", "nom": "Durand",
+        "prenom": "Paul", "role": "membre", "personne_id": p.id})
+    assert r.status_code == 200, r.text
+    assert client.delete(f"/api/auth/users/{r.json()['id']}",
+                         headers=auth(token_a)).status_code == 200
+    rp = client.get("/api/personnes", headers=auth(token_a))
+    assert next(x for x in rp.json() if x["id"] == p.id)["a_un_compte"] is False
+
+
+def test_delete_personne_delie_compte_et_actes(client, db, copro_a, syndic_a, token_a):
+    """Supprimer une fiche détache le compte lié et les actes — ils survivent."""
+    p = _personne(db, copro_a)
+    membre = _make_membre(db, "membre.a@test.fr", copro_a)
+    assert client.put(f"/api/auth/users/{membre.id}", headers=auth(token_a),
+                      json=_payload(email="membre.a@test.fr", personne_id=p.id)).status_code == 200
+    lot = _lot(db, copro_a)
+    acte = ActeRecouvrement(copropriete_id=copro_a.id, lot_id=lot.id, type="note",
+                            libelle="Note", personne_id=p.id)
+    db.add(acte)
+    db.commit()
+    db.refresh(acte)
+
+    assert client.delete(f"/api/personnes/{p.id}", headers=auth(token_a)).status_code == 200
+    db.expire_all()
+    u = db.query(User).filter(User.id == membre.id).first()
+    assert u is not None and u.personne_id is None
+    a = db.query(ActeRecouvrement).filter(ActeRecouvrement.id == acte.id).first()
+    assert a is not None and a.personne_id is None
+
+
+def test_delete_personne_avec_relances_refuse(client, db, copro_a, syndic_a, token_a):
+    """Relances/convocations = historique NOT NULL : refus explicite (pas un 500)."""
+    p = _personne(db, copro_a)
+    lot = _lot(db, copro_a)
+    db.add(Relance(lot_id=lot.id, personne_id=p.id, date_envoi=datetime(2026, 1, 5),
+                   statut="envoye", montant_du=120.0))
+    db.commit()
+    r = client.delete(f"/api/personnes/{p.id}", headers=auth(token_a))
+    assert r.status_code == 400
+    assert "historique conservé" in r.text

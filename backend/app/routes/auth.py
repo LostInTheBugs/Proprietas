@@ -12,6 +12,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
 from app.models.personne import Personne
+from app.models.recouvrement import ActeRecouvrement
 from app.routes.copro import get_or_create_copro
 from app.core.scoping import get_owned
 from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResponse,
@@ -299,6 +300,11 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), c
             .first())
     if not user:
         raise HTTPException(404, "Utilisateur introuvable")
+    # Les actes de recouvrement saisis par ce compte SURVIVENT à sa suppression
+    # (journal additif) : le lien créateur est délié — sans quoi la suppression
+    # échouerait en base (FK vers users). Les liaisons copro partent en cascade.
+    db.query(ActeRecouvrement).filter(ActeRecouvrement.created_by_id == user.id).update(
+        {"created_by_id": None}, synchronize_session=False)
     audit.enregistrer(db, "user_deleted", user=current, copro_id=copro.id,
                       detail=f"{user.email} ({user.role})", request=request)
     db.delete(user)

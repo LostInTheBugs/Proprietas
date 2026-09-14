@@ -33,6 +33,16 @@ export default function Settings() {
     setPersonnes(p);
   }
 
+  async function supprimerCompte(u: User) {
+    if (!confirm(`Supprimer le compte de ${u.email} ? (tracé dans le journal d'audit)`)) return;
+    try {
+      await api.del(`/auth/users/${u.id}`);
+      await loadComptes();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    }
+  }
+
   function changerTheme(t: Theme) {
     setChoixTheme(t);
     applyTheme(t);
@@ -346,19 +356,18 @@ export default function Settings() {
                     <Badge color={u.role === "syndic" ? "indigo" : "slate"}>
                       {u.role === "syndic" ? "Syndic" : "Copropriétaire"}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      className="px-2 py-1 text-xs"
+                    <button
                       onClick={() => setModal({ user: u })}
+                      className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
                     >
                       Modifier
-                    </Button>
+                    </button>
                     {u.id !== me?.id && (
                       <button
-                        onClick={async () => { await api.del(`/auth/users/${u.id}`); await loadComptes(); }}
-                        className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                        onClick={() => supprimerCompte(u)}
+                        className="ml-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
                       >
-                        ✕
+                        Supprimer
                       </button>
                     )}
                   </div>
