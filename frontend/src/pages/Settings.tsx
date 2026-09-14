@@ -405,6 +405,7 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
     email: item?.email ?? "",
     role: item?.role ?? "membre",
     personne_id: item?.personne_id != null ? String(item.personne_id) : "",
+    est_occupant: item?.est_occupant ?? false,
     password: "",
   });
   const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
@@ -437,6 +438,7 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
       const payload = {
         email: f.email, nom: f.nom, prenom: f.prenom, role: f.role,
         personne_id: f.personne_id === "" ? null : Number(f.personne_id),
+        est_occupant: f.est_occupant,
         password: f.password || null, // vide = mot de passe conservé (édition)
       };
       if (item) await api.put(`/auth/users/${item.id}`, payload);
@@ -468,7 +470,7 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
         <Select label="Fiche liée (Lots & occupants)" value={f.personne_id} onChange={(e) => choisirPersonne(e.target.value)}>
           <option value="">— Aucune —</option>
           {disponibles.map((p) => {
-            const qualites = [p.est_proprietaire ? "propriétaire" : "", p.est_occupant ? "occupant" : ""].filter(Boolean).join(" · ");
+            const qualites = p.est_proprietaire ? "propriétaire" : "";
             return (
               <option key={p.id} value={p.id}>
                 {[p.prenom, p.nom].filter(Boolean).join(" ")}{qualites ? ` — ${qualites}` : ""}
@@ -478,6 +480,19 @@ function UserModal({ item, personnes, isSelf, onClose, onSaved, onError }: {
         </Select>
         <p className="text-xs text-slate-500">
           Relie le compte à une personne de « Lots & occupants » : prénom, nom et email se préremplissent à la sélection.
+        </p>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={f.est_occupant}
+            onChange={(e) => setF((prev) => ({ ...prev, est_occupant: e.target.checked }))}
+          />
+          Propriétaire occupant (occupe son logement)
+        </label>
+        <p className="text-xs text-slate-500">
+          Coché : les lots de la fiche liée sont affichés « propriétaire occupant » dans « Lots & occupants ».
+          Les noms des locataires ne sont jamais enregistrés (RGPD) — un logement non occupé par son
+          propriétaire est indiqué « loué » ou « vacant » sur le lot.
         </p>
         <Input
           label={item ? "Nouveau mot de passe (laisser vide pour conserver)" : "Mot de passe initial"}

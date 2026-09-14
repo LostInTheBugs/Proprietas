@@ -98,29 +98,29 @@ def main():
         ("Jean", "Martin", "jean.martin@example.com", "06 23 45 67 89"),
         ("Sophie", "Bernard", "sophie.bernard@example.com", "06 34 56 78 90"),
         ("Paul", "Petit", "paul.petit@example.com", "06 45 67 89 01"),
-        ("Lucas", "Moreau", "lucas.moreau@example.com", "06 56 78 90 12"),
         ("SCI", "Les Lilas", "contact.sci-lilas@example.com", "01 42 00 11 22"),
     ]:
         p_obj = Personne(copropriete_id=t.id, prenom=p[0], nom=p[1], email=p[2],
-                         telephone=p[3], est_proprietaire=True, est_occupant=True)
+                         telephone=p[3])
         db.add(p_obj)
         db.flush()
         pers[p[1]] = p_obj
-    pers["Moreau"].est_proprietaire = False  # locataire (occupe le T1 de M. Petit)
 
+    # Occupation : "" = non renseigné | "loue" | "vacant". Aucun nom de
+    # locataire (RGPD) — lot 1 = propriétaire occupant (compte de Marie Dubois).
     lots = [
-        ("1", "Appartement T2", "appartement", 210, 48.0, "Dubois", "Dubois"),
-        ("2", "Appartement T3", "appartement", 230, 62.0, "Martin", "Martin"),
-        ("3", "Appartement T3", "appartement", 230, 65.0, "Bernard", "Bernard"),
-        ("4", "Appartement T1", "appartement", 140, 32.0, "Petit", "Moreau"),
-        ("5", "Local commercial", "commerce", 190, 55.0, "Les Lilas", None),
+        ("1", "Appartement T2", "appartement", 210, 48.0, "Dubois", ""),
+        ("2", "Appartement T3", "appartement", 230, 62.0, "Martin", ""),
+        ("3", "Appartement T3", "appartement", 230, 65.0, "Bernard", "loue"),
+        ("4", "Appartement T1", "appartement", 140, 32.0, "Petit", "loue"),
+        ("5", "Local commercial", "commerce", 190, 55.0, "Les Lilas", "vacant"),
     ]
     lot_objs = []
-    for num, desig, typ, tant, surf, prop, occ in lots:
+    for num, desig, typ, tant, surf, prop, statut_occ in lots:
         l = Lot(copropriete_id=t.id, numero=num, designation=desig, type=typ,
                 tantiemes=tant, surface_m2=surf,
                 proprietaire_id=pers[prop].id,
-                occupant_id=pers[occ].id if occ else None)
+                statut_occupation=statut_occ)
         db.add(l)
         db.flush()
         lot_objs.append(l)
@@ -337,6 +337,17 @@ def main():
                        date_envoi=datetime(2026, 6, 15, 9, 0), statut="envoye",
                        montant_du=montant, message=""))
 
+    # --- Compte copropriétaire : Marie Dubois (propriétaire occupante)
+    # Démontre la vue consultation et la case « Occupe son logement » : le lot 1
+    # s'affiche « propriétaire occupant ». Les locataires ne sont jamais nommés
+    # (RGPD) — les lots non occupés par leur propriétaire sont « loué »/« vacant ».
+    marie = User(email="marie.dubois@example.com", password_hash=hash_password(MDP_DEMO),
+                 prenom="Marie", nom="Dubois", role="membre", is_demo=True,
+                 personne_id=pers["Dubois"].id, est_occupant=True)
+    db.add(marie)
+    db.flush()
+    db.add(UserCopro(user_id=marie.id, copropriete_id=t.id, principale=True))
+
     # ======================================================================
     # 2) RÉSIDENCE LES ACACIAS — 2e immeuble (sélecteur + vue consolidée)
     # ======================================================================
@@ -350,20 +361,20 @@ def main():
         ("Enzo", "Rossi", "enzo.rossi@example.com"),
     ]:
         p = Personne(copropriete_id=ac.id, prenom=prenom, nom=nom, email=email,
-                     telephone="", est_proprietaire=True, est_occupant=True)
+                     telephone="")
         db.add(p)
         db.flush()
         pers_a[nom] = p
 
     lots_a = []
-    for num, desig, tant, prop in [
-        ("1", "Appartement T3", 340, "Benali"),
-        ("2", "Appartement T2", 330, "Fontaine"),
-        ("3", "Appartement T2", 330, "Rossi"),
+    for num, desig, tant, prop, statut_occ in [
+        ("1", "Appartement T3", 340, "Benali", ""),
+        ("2", "Appartement T2", 330, "Fontaine", "loue"),
+        ("3", "Appartement T2", 330, "Rossi", "vacant"),
     ]:
         l = Lot(copropriete_id=ac.id, numero=num, designation=desig, type="appartement",
                 tantiemes=tant, surface_m2=None, proprietaire_id=pers_a[prop].id,
-                occupant_id=pers_a[prop].id)
+                statut_occupation=statut_occ)
         db.add(l)
         db.flush()
         lots_a.append(l)

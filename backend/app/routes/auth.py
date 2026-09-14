@@ -209,6 +209,7 @@ def create_user(req: UserCreate, request: Request, db: Session = Depends(get_db)
         nom=req.nom.strip(),
         role=req.role,
         personne_id=personne.id if personne else None,
+        est_occupant=req.est_occupant,
         copropriete_id=copro.id,
     )
     db.add(new_user)
@@ -228,7 +229,8 @@ def create_user(req: UserCreate, request: Request, db: Session = Depends(get_db)
 def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = Depends(get_db),
                 current: User = Depends(require_syndic)):
     """Édition d'une fiche de compte : email, prénom, nom, rôle, fiche « Lots &
-    occupants » liée, et mot de passe (facultatif — vide = conservé)."""
+    occupants » liée, « propriétaire occupant », et mot de passe (facultatif —
+    vide = conservé)."""
     copro = get_or_create_copro(db, current)
     target = (db.query(User)
               .join(UserCopro, UserCopro.user_id == User.id)
@@ -261,6 +263,8 @@ def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = D
             changements.append(f"fiche liée : {(personne.prenom + ' ' + personne.nom).strip()}")
         else:
             changements.append("fiche liée retirée")
+    if bool(target.est_occupant) != bool(req.est_occupant):
+        changements.append("propriétaire occupant : " + ("oui" if req.est_occupant else "non"))
     if req.password:
         changements.append("mot de passe")
 
@@ -269,6 +273,7 @@ def update_user(user_id: int, req: UserUpdate, request: Request, db: Session = D
     target.nom = req.nom.strip()
     target.role = req.role
     target.personne_id = nouveau_lien
+    target.est_occupant = req.est_occupant
     if req.password:
         target.password_hash = hash_password(req.password)
     if changements:

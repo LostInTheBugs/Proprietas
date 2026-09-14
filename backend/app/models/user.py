@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -25,6 +25,11 @@ class User(Base):
     # Fiche « Lots & occupants » liée à ce compte (optionnel) : un compte par
     # personne au maximum — le lien préremplit les fiches et relie l'annuaire.
     personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
+    # « Propriétaire occupant » : ce compte occupe son logement (affiché dans
+    # « Lots & occupants » pour les lots dont la personne liée est propriétaire).
+    # L'occupation vit ICI, plus sur les fiches personnes (RGPD : jamais de nom
+    # de locataire — un lot non occupé par son propriétaire est « loué »/« vacant »).
+    est_occupant = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     # Double authentification (TOTP, RFC 6238) — secret CHIFFRÉ, codes de secours HACHÉS.
     totp_secret = Column(Text, default="")
     totp_enabled = Column(Boolean, default=False)

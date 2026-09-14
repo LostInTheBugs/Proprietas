@@ -23,6 +23,13 @@ export default function Lots() {
   const ecart = Math.abs(totalTantiemes - 1000);
   const prop = (id: number | null) => personnes.find((p) => p.id === id);
 
+  function occupationBadge(lot: Lot) {
+    if (lot.proprietaire_occupant) return <Badge color="green">propriétaire occupant</Badge>;
+    if (lot.statut_occupation === "loue") return <Badge color="amber">loué</Badge>;
+    if (lot.statut_occupation === "vacant") return <Badge color="slate">vacant</Badge>;
+    return <span className="text-slate-400">—</span>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -58,7 +65,7 @@ export default function Lots() {
                   <th className="pb-2 font-medium">Désignation</th>
                   <th className="pb-2 text-right font-medium">Millièmes</th>
                   <th className="pb-2 font-medium">Propriétaire</th>
-                  <th className="pb-2 font-medium">Occupant</th>
+                  <th className="pb-2 font-medium">Occupation</th>
                   <th className="pb-2 font-medium">Type</th>
                   <th className="pb-2" />
                 </tr>
@@ -70,7 +77,7 @@ export default function Lots() {
                     <td className="py-2.5 text-slate-600">{lot.designation || "—"}</td>
                     <td className="py-2.5 text-right tabular-nums text-slate-700">{lot.tantiemes}</td>
                     <td className="py-2.5 text-slate-600">{prop(lot.proprietaire_id)?.nom ?? "—"}</td>
-                    <td className="py-2.5 text-slate-600">{prop(lot.occupant_id)?.nom ?? "—"}</td>
+                    <td className="py-2.5">{occupationBadge(lot)}</td>
                     <td className="py-2.5">
                       <Badge>{lot.type}</Badge>
                     </td>
@@ -90,7 +97,7 @@ export default function Lots() {
       </Card>
 
       <Card
-        title="Personnes (propriétaires & locataires)"
+        title="Personnes (propriétaires & occupants)"
         action={isSyndic ? <Button onClick={() => setModal({ type: "personne" })}>+ Ajouter une personne</Button> : undefined}
       >
         {personnes.length === 0 ? (
@@ -114,7 +121,11 @@ export default function Lots() {
                 </div>
                 <div className="mt-2 flex gap-1.5">
                   {p.est_proprietaire && <Badge color="indigo">propriétaire</Badge>}
-                  {p.est_occupant && <Badge color="green">occupant</Badge>}
+                  {p.compte_occupant && (
+                    <span title="Compte lié : occupe son logement (Réglages → Comptes utilisateurs)">
+                      <Badge color="green">occupant</Badge>
+                    </span>
+                  )}
                   {p.a_un_compte && (
                     <span title="Un compte utilisateur est lié à cette personne (Réglages → Comptes utilisateurs)">
                       <Badge color="slate">compte</Badge>
@@ -159,10 +170,14 @@ function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
     type: item?.type ?? "appartement",
     tantiemes: item?.tantiemes ?? 0,
     proprietaire_id: item?.proprietaire_id ?? "",
-    occupant_id: item?.occupant_id ?? "",
+    statut_occupation: item?.statut_occupation ?? "",
   });
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
   const totalProjete = autresTotal + Number(f.tantiemes || 0);
+  // « Propriétaire occupant » est dérivé du compte lié au propriétaire choisi :
+  // le statut loué/vacant n'a alors plus de sens pour ce lot.
+  const proprietaireSel = personnes.find((p) => String(p.id) === String(f.proprietaire_id));
+  const occupeParProprietaire = !!proprietaireSel?.compte_occupant;
 
   async function save() {
     try {
@@ -170,7 +185,7 @@ function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
         numero: f.numero, designation: f.designation, type: f.type,
         tantiemes: Number(f.tantiemes),
         proprietaire_id: f.proprietaire_id === "" ? null : Number(f.proprietaire_id),
-        occupant_id: f.occupant_id === "" ? null : Number(f.occupant_id),
+        statut_occupation: f.statut_occupation,
         notes: "",
       };
       if (item) await api.put(`/lots/${item.id}`, body);
@@ -218,12 +233,28 @@ function LotModal({ item, personnes, autresTotal, onClose, onSaved, onError }: {
             <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
           ))}
         </Select>
-        <Select label="Occupant (locataire éventuel)" value={f.occupant_id} onChange={(e) => set("occupant_id", e.target.value)}>
-          <option value="">— aucun —</option>
-          {personnes.filter((p) => p.est_occupant).map((p) => (
-            <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>
-          ))}
+        <Select
+          label="Occupation du lot"
+          value={f.statut_occupation}
+          onChange={(e) => set("statut_occupation", e.target.value)}
+          disabled={occupeParProprietaire}
+        >
+          <option value="">Non renseigné</option>
+          <option value="loue">Loué</option>
+          <option value="vacant">Vacant</option>
         </Select>
+        {occupeParProprietaire ? (
+          <p className="text-xs text-emerald-700">
+            Ce lot est affiché « propriétaire occupant » : {(proprietaireSel?.prenom + " " + proprietaireSel?.nom).trim()} occupe son
+            logement (case du compte utilisateur, Réglages → Comptes utilisateurs).
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">
+            « Propriétaire occupant » se règle sur le compte utilisateur du propriétaire (case « Occupe son
+            logement »). Les noms des locataires ne sont pas enregistrés (RGPD) — indiquez seulement
+            « loué » ou « vacant ».
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Enregistrer</Button>
@@ -242,8 +273,6 @@ function PersonneModal({ item, onClose, onSaved, onError }: {
     email: item?.email ?? "",
     telephone: item?.telephone ?? "",
     adresse: item?.adresse ?? "",
-    est_proprietaire: item?.est_proprietaire ?? true,
-    est_occupant: item?.est_occupant ?? true,
     notes: "",
   });
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
@@ -268,16 +297,10 @@ function PersonneModal({ item, onClose, onSaved, onError }: {
         <Input label="Email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} />
         <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
         <Input label="Adresse postale (mises en demeure)" value={f.adresse} onChange={(e) => set("adresse", e.target.value)} />
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={f.est_proprietaire} onChange={(e) => set("est_proprietaire", e.target.checked)} />
-            Propriétaire
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={f.est_occupant} onChange={(e) => set("est_occupant", e.target.checked)} />
-            Occupant
-          </label>
-        </div>
+        <p className="text-xs text-slate-500">
+          « Propriétaire » et l'occupation ne se saisissent plus ici : ils se déduisent des lots
+          (propriétaire) et du compte utilisateur lié (case « Occupe son logement »).
+        </p>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Enregistrer</Button>
