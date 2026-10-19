@@ -202,3 +202,32 @@ def test_art22_pas_de_reduction_sans_majoritaire():
     res = calculer_statut_resolution(_res("art25"), _quatre_lots(), [_vote(1, "pour")])
     assert res["reduction_art22"] is None
     assert res["total"] == 1000
+
+
+# ---------- Art. 26 : double majorité (membres + 2/3 des voix) ----------
+def _cinq_coproprietaires():
+    return [_lot(1, 340, 101), _lot(2, 340, 102), _lot(3, 110, 103), _lot(4, 105, 104), _lot(5, 105, 105)]
+
+
+def test_art26_deux_tiers_des_voix_mais_minorite_des_membres_rejete():
+    # 680/1000 ≥ 2/3 des voix, mais 2 membres « pour » sur 5 : pas la majorité des membres.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre"), _vote(4, "contre"), _vote(5, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee"
+    assert res["membres_pour"] == 2 and res["nb_membres"] == 5
+
+
+def test_art26_double_majorite_atteinte_adopte():
+    # 790/1000 et 3 membres sur 5.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour"), _vote(4, "contre"), _vote(5, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "adoptee"
+
+
+def test_art26_membre_a_plusieurs_lots_compte_une_fois():
+    # _quatre_lots : le propriétaire 102 a 2 lots. 3 membres au total.
+    # Lots 2 et 3 pour (500) + lot 1 pour (280) = 780 ≥ 667, et 2 membres sur 3 → adoptée.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour"), _vote(4, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _quatre_lots(), votes)
+    assert res["nb_membres"] == 3 and res["membres_pour"] == 2
+    assert res["statut"] == "adoptee"
