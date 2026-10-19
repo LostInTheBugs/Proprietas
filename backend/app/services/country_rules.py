@@ -17,6 +17,9 @@ Majorités (art. 24, 25, 26) :
   prendre seul les décisions de l'art. 24, et celui détenant au moins 2/3 des
   voix celles de l'art. 25 (budget et approbation des comptes exclus).
 """
+from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR
+
+from app.core.money import D, arrondi, to_money, somme
 
 MAJORITES = {
     "art24": {
@@ -120,25 +123,44 @@ def regles_fonds_travaux(copro) -> dict:
     }
 
 
-def repartir_par_tantiemes(montant: float, lots, fonds_travaux_taux: float = 0.0) -> list:
-    """Répartit un montant entre les lots au prorata des millièmes.
+def _plus_fort_reste(montant: Decimal, lots) -> list[int]:
+    """Répartir *montant* (en centimes) entre lots au prorata.
 
-    Retourne une liste de dicts {lot, montant_charges, montant_fonds_travaux}.
-    Arrondi : le reste est imputé au premier lot pour que la somme tombe juste.
+    Retourne une liste d'entiers (centimes) dont la somme est exactement
+    montant, avec la méthode du plus fort reste.
     """
     total = tantiemes_totaux(lots)
-    if total <= 0:
+    if total <= 0 or not lots:
         return []
-    parts = []
+    parts: list[int] = []
+    fractions: list[Decimal] = []
     for lot in lots:
-        brut = montant * lot.tantiemes / total
-        parts.append({"lot": lot, "montant_charges": round(brut, 2)})
-    # Le premier lot absorbe le reste de l'arrondi pour que la somme tombe juste
-    somme_arrondie = sum(p["montant_charges"] for p in parts)
-    reste = round(montant - somme_arrondie, 2)
-    if reste != 0 and parts:
-        parts[0]["montant_charges"] = round(parts[0]["montant_charges"] + reste, 2)
-    if fonds_travaux_taux > 0:
-        for p in parts:
-            p["montant_fonds_travaux"] = round(p["montant_charges"] * fonds_travaux_taux / 100.0, 2)
+        brut = D(montant) * D(lot.tantiemes) / D(total)
+        entier = int(brut.to_integral_value(rounding=ROUND_FLOOR))
+        parts.append(entier)
+        fractions.append(brut - D(entier))
+    n_restes = int(montant) - sum(parts)
+    indices_tries = sorted(range(len(fractions)), key=lambda i: fractions[i], reverse=True)
+    for idx in indices_tries[:n_restes]:
+        parts[idx] += 1
+    return parts
+
+
+def repartir_par_tantiemes(montant, lots, fonds_travaux_taux: Decimal = D(0)) -> list:
+    """Répartit un montant entre les lots au prorata des millièmes.
+
+    Retourne une liste de dicts {lot, montant_charges, montant_fonds_travaux?}.
+    Méthode du plus fort reste — tout reste en Decimal.
+    Le fonds de travaux est arrondi une seule fois, puis réparti.
+    """
+    montant = to_money(montant)
+    charges = _plus_fort_reste(montant * D(100), lots)
+    parts: list[dict] = []
+    for i, lot in enumerate(lots):
+        euros = D(charges[i]) / D(100)
+        parts.append({"lot": lot, "montant_charges": euros})
+    if fonds_travaux_taux > D(0):
+        fonds_total = _plus_fort_reste(arrondi(montant * fonds_travaux_taux / D(100)) * D(100), lots)
+        for i, p in enumerate(parts):
+            p["montant_fonds_travaux"] = D(fonds_total[i]) / D(100)
     return parts
