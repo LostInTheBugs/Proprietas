@@ -50,7 +50,7 @@ def tantiemes_totaux(lots) -> int:
     return sum(l.tantiemes for l in lots) or 1000
 
 
-def nb_coproprietaires(lots) -> int:
+def nb_owners(lots) -> int:
     """Nombre de copropriétaires distincts (par lot avec propriétaire)."""
     owners = {l.proprietaire_id for l in lots if l.proprietaire_id}
     return len(owners)
@@ -62,7 +62,7 @@ def _membres(lots) -> dict:
     Retourne un dict {owner_id_or_key: {lots: [...], voix: int}}.
     Un lot sans propriétaire reçoit la clé ``f"lot-{l.id}"``.
     """
-    groups: dict[str, list[Lot]] = {}
+    groups: dict[str, list] = {}
     for l in lots:
         key = l.proprietaire_id if l.proprietaire_id else f"lot-{l.id}"
         groups.setdefault(key, []).append(l)
@@ -127,8 +127,8 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
     total_ref = total
     reduced_poids = dict(poids)
 
-    nb_owners = nb_coproprietaires(lots)
-    regime_deux = nb_owners <= 2
+    nb_owners = nb_membres
+    regime_deux = nb_membres <= 2
 
     if not regime_deux:
         for owner_key, info in membres.items():
@@ -168,29 +168,30 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
             adoptee = exprimes > 0 and pour > exprimes / 2
             detail = "Majorité des voix exprimées (art. 24) : pour / (pour + contre) > 50 %."
     elif resolution.majorite == "art25":
-        quorum = total
+        quorum = total_ref
         if regime_deux:
             adoptee = pour >= 2 * total / 3
             detail = "Régime 2 copropriétaires (art. 41-16) : décision prise par le copropriétaire détenant au moins 2/3 des voix."
         else:
             adoptee = pour > Fraction(total_ref, 2)
             detail = "Majorité des voix de tous les copropriétaires (art. 25) : pour > 50 % des millièmes."
-            if reduction_art22 is not None:
-                detail += " Voix du copropriétaire majoritaire réduites à la somme des voix des autres (art. 22 al. 2)."
             if not adoptee and pour * 3 >= total_ref:
                 second_vote_possible = "art24"
                 detail += " Passerelle art. 25-1 : second vote immédiat possible à la majorité de l'art. 24."
     elif resolution.majorite == "art26":
-        quorum = total
+        quorum = total_ref
         adoptee = membres_pour * 2 > nb_membres and pour * 3 >= 2 * total_ref
         detail = "Double majorité (art. 26) : majorité des membres du syndicat représentant au moins les 2/3 des voix."
-        if not adoptee and presents > 0 and membres_pour * 2 >= presents and pour * 3 >= total_ref:
+        if not regime_deux and not adoptee and presents > 0 and membres_pour * 2 >= presents and pour * 3 >= total_ref:
             second_vote_possible = "art25"
             detail += " Passerelle art. 26-1 : second vote immédiat possible à la majorité de l'art. 25."
     else:  # unanimite
-        quorum = total
+        quorum = total_ref
         adoptee = pour == total_ref and contre == 0
         detail = "Unanimité requise : tous les copropriétaires doivent voter pour."
+
+    if reduction_art22 is not None:
+        detail += " Voix du copropriétaire majoritaire réduites à la somme des voix des autres (art. 22 al. 2)."
 
     statut = "adoptee" if adoptee else "rejetee"
     return {
