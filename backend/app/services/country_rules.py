@@ -36,8 +36,8 @@ MAJORITES = {
         "description": "Majorité des voix de tous les copropriétaires (> 50 % des millièmes).",
     },
     "art26": {
-        "label": "Majorité des 2/3 (art. 26)",
-        "description": "Majorité des 2/3 des voix de tous les copropriétaires.",
+        "label": "Double majorité (art. 26)",
+        "description": "Majorité des membres du syndicat représentant au moins les 2/3 des voix.",
     },
     "unanimite": {
         "label": "Unanimité",
@@ -173,8 +173,8 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
                 detail += " Voix du copropriétaire majoritaire réduites à la somme des voix des autres (art. 22 al. 2)."
     elif resolution.majorite == "art26":
         quorum = total
-        adoptee = pour * 3 >= 2 * total_ref
-        detail = "Majorité des 2/3 des voix de tous les copropriétaires (art. 26)."
+        adoptee = membres_pour * 2 > nb_membres and pour * 3 >= 2 * total_ref
+        detail = "Double majorité (art. 26) : majorité des membres du syndicat représentant au moins les 2/3 des voix."
     else:  # unanimite
         quorum = total
         adoptee = pour == total_ref and contre == 0
