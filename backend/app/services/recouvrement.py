@@ -13,6 +13,9 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from decimal import Decimal
+
+from app.core.money import D, arrondi, somme
 from app.models.appel import AppelFonds, AppelLot
 from app.models.copropriete import Copropriete
 from app.models.exercice import Exercice
@@ -45,15 +48,15 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
         .all()
     )
     paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id))
-    encaisse = round(sum((m.montant or 0.0) for m in db.query(Mouvement).filter(
-        Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()), 2)
+    encaisse = arrondi(somme(D(m.montant or D(0)) for m in db.query(Mouvement).filter(
+        Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()))
 
     reste = encaisse
     lignes = []
     for part, appel, ex in paires:
-        montant = round((part.montant_charges or 0.0) + (part.montant_fonds_travaux or 0.0), 2)
+        montant = arrondi((part.montant_charges or D(0)) + (part.montant_fonds_travaux or D(0)))
         impute = min(reste, montant)
-        reste = round(reste - impute, 2)
+        reste = arrondi(reste - impute)
         echeance = appel.date_echeance or appel.date_emission
         lignes.append({
             "appel_id": appel.id,
@@ -61,28 +64,28 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
             "exercice": ex.annee,
             "libelle": appel.libelle or "",
             "echeance": echeance,
-            "charges": round(part.montant_charges or 0.0, 2),
-            "fonds": round(part.montant_fonds_travaux or 0.0, 2),
+            "charges": arrondi(part.montant_charges or D(0)),
+            "fonds": arrondi(part.montant_fonds_travaux or D(0)),
             "montant": montant,
-            "restant_du": round(montant - impute, 2),
+            "restant_du": arrondi(montant - impute),
             "echu": bool(echeance and echeance <= date.today()),
         })
     return lignes
 
 
-def solde_lot(lignes: list[dict]) -> float:
+def solde_lot(lignes: list[dict]) -> Decimal:
     """Solde impayé du lot (jamais négatif : un crédit n'est pas une dette)."""
-    return round(max(sum(l["restant_du"] for l in lignes), 0.0), 2)
+    return arrondi(max(somme(l["restant_du"] for l in lignes), D(0)))
 
 
-def arriere_echu(lignes: list[dict]) -> float:
+def arriere_echu(lignes: list[dict]) -> Decimal:
     """Provisions échues (exigibles) restant dues."""
-    return round(sum(l["restant_du"] for l in lignes if l["echu"]), 2)
+    return arrondi(somme(l["restant_du"] for l in lignes if l["echu"]))
 
 
 def retard_depuis(lignes: list[dict]) -> date | None:
     """Date de la plus ancienne échéance échue restant due (ancienneté du retard)."""
-    dates = [l["echeance"] for l in lignes if l["restant_du"] > 0.005 and l["echu"] and l["echeance"]]
+    dates = [l["echeance"] for l in lignes if l["restant_du"] > D("0.005") and l["echu"] and l["echeance"]]
     return min(dates) if dates else None
 
 
@@ -115,7 +118,7 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
     actes = actes if actes is not None else actes_lot(db, copro, lot)
     solde = solde_lot(lignes)
     echu = arriere_echu(lignes)
-    frais = round(sum((a.montant or 0.0) for a in actes if a.type == "frais"), 2)
+    frais = arrondi(somme(a.montant or D(0) for a in actes if a.type == "frais"))
 
     md = None
     for a in actes:
@@ -126,7 +129,7 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
     a_justice = any(a.type in ("commissaire_justice", "tribunal") for a in actes)
 
     statut, md_jours, jours_restants = "a_jour", None, None
-    if solde > 0.005:
+    if solde > D("0.005"):
         if a_justice:
             statut = "contentieux"
         elif a_conciliation:
@@ -143,12 +146,12 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
         else:
             statut = "en_retard"
 
-    taux = float(copro.taux_legal_retard or 0.0)
-    interets = 0.0
-    if md is not None and md.date_envoi and solde > 0.005 and taux > 0:
+    taux = copro.taux_legal_retard or D(0)
+    interets = D(0)
+    if md is not None and md.date_envoi and solde > D("0.005") and taux > 0:
         base = md.montant or echu or solde
         jours = max((date.today() - md.date_envoi).days, 0)
-        interets = round(base * (taux / 100.0) * jours / 365.0, 2)
+        interets = arrondi(base * taux / D(100) * D(jours) / D(365))
 
     return {
         "solde": solde,
@@ -162,7 +165,7 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
         "frais_total": frais,
         "interets": interets,
         "taux": taux,
-        "total_reclame": round(solde + frais, 2),
+        "total_reclame": arrondi(solde + frais),
         "actes": actes,
     }
 
@@ -175,9 +178,9 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
     """
     lignes = lignes if lignes is not None else appels_lot(db, copro, lot)
     ex = exercice_courant(db, copro)
-    retenues, total = [], 0.0
+    retenues, total = [], D(0)
     for l in lignes:
-        if l["restant_du"] <= 0.005:
+        if l["restant_du"] <= D("0.005"):
             continue
         if ex is None:
             continue
@@ -190,7 +193,7 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
             total += l["restant_du"]
     return {
         "lignes": retenues,
-        "total": round(total, 2),
+        "total": arrondi(total),
         "arriere_echu": arriere_echu(lignes),
         "exercice": ex.annee if ex else None,
     }

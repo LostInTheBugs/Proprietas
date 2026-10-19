@@ -8,6 +8,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, HRFlowable, PageBreak,
 )
 
+from app.core.money import D, somme
 from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 
@@ -60,17 +61,18 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         rows = [[Paragraph("<b>Échéance</b>", style("th")), Paragraph("<b>Libellé</b>", style("th")),
                  Paragraph("<b>Charges</b>", style("th")), Paragraph("<b>Fonds travaux</b>", style("th")),
                  Paragraph("<b>Total</b>", style("th"))]]
-        total_charges = total_ft = 0.0
+        total_charges = D(0)
+        total_ft = D(0)
         for a in appels_lot:
             p = parts_par_appel[a.id]
-            total_charges += p.montant_charges
-            total_ft += p.montant_fonds_travaux
+            total_charges += D(p.montant_charges)
+            total_ft += D(p.montant_fonds_travaux)
             rows.append([
                 Paragraph((a.date_echeance or a.date_emission).strftime("%d/%m/%Y"), style("cell")),
                 Paragraph(a.libelle, style("cell")),
                 Paragraph(fmt_eur(p.montant_charges), style("cell")),
                 Paragraph(fmt_eur(p.montant_fonds_travaux), style("cell")),
-                Paragraph(fmt_eur(p.montant_charges + p.montant_fonds_travaux), style("cell")),
+                Paragraph(fmt_eur(D(p.montant_charges) + D(p.montant_fonds_travaux)), style("cell")),
             ])
         rows.append([
             Paragraph("", style("cell")), Paragraph("<b>Total appelé</b>", style("th")),
@@ -92,9 +94,9 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         else:
             rows = [[Paragraph("<b>Date</b>", style("th")), Paragraph("<b>Libellé</b>", style("th")),
                      Paragraph("<b>Catégorie</b>", style("th")), Paragraph("<b>Montant</b>", style("th"))]]
-            total_paye = 0.0
+            total_paye = D(0)
             for m in encaissements:
-                total_paye += m.montant
+                total_paye += D(m.montant)
                 rows.append([
                     Paragraph(m.date.strftime("%d/%m/%Y"), style("cell")),
                     Paragraph(m.libelle, style("cell")),
@@ -110,10 +112,10 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
 
         # Synthèse
         total_appele = total_charges + total_ft
-        total_paye = sum(m.montant for m in encaissements)
+        total_paye = somme(D(m.montant) for m in encaissements)
         solde = total_appele - total_paye
         el.append(Paragraph("3. SYNTHÈSE", style("section")))
-        statut_txt = ("QUITTANCÉ — aucun solde restant dû", "#059669") if solde <= 0.005 else \
+        statut_txt = ("QUITTANCÉ — aucun solde restant dû", "#059669") if solde <= D("0.005") else \
                      (f"RESTE DÛ : {fmt_eur(solde)}", "#dc2626")
         rows = [
             [Paragraph("Total appelé (charges + fonds travaux)", style("cell")), Paragraph(fmt_eur(total_appele), style("cell"))],

@@ -8,6 +8,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, HRFlowable,
 )
 
+from app.core.money import D, somme
 from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 
@@ -22,10 +23,10 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
     depenses = [m for m in mouvements if m.type == "depense"]
     encaissements = [m for m in mouvements if m.type == "encaissement"]
-    enc_charges = sum(m.montant for m in encaissements if m.categorie != "fonds_travaux")
-    enc_ft = sum(m.montant for m in encaissements if m.categorie == "fonds_travaux")
-    dep_ft = sum(m.montant for m in depenses if m.categorie == "fonds_travaux")
-    budget = sum(b.montant for b in exercice.budget_lines)
+    enc_charges = somme(m.montant for m in encaissements if m.categorie != "fonds_travaux")
+    enc_ft = somme(m.montant for m in encaissements if m.categorie == "fonds_travaux")
+    dep_ft = somme(m.montant for m in depenses if m.categorie == "fonds_travaux")
+    budget = somme(b.montant for b in exercice.budget_lines)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
 
     el.append(Paragraph("COMPTE DE GESTION DE L'EXERCICE", style("titre", fontSize=15)))
@@ -35,12 +36,12 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
 
     # 1. Synthèse
     el.append(Paragraph("1. SYNTHÈSE DE L'EXERCICE", style("section")))
-    solde = enc_charges + enc_ft - sum(m.montant for m in depenses)
+    solde = enc_charges + enc_ft - somme(m.montant for m in depenses)
     synthese = [
         ("Budget prévisionnel voté", fmt_eur(budget)),
         ("Appels de fonds encaissés (charges)", fmt_eur(enc_charges)),
         ("Cotisations fonds de travaux encaissées", fmt_eur(enc_ft)),
-        ("Dépenses engagées", fmt_eur(sum(m.montant for m in depenses))),
+        ("Dépenses engagées", fmt_eur(somme(m.montant for m in depenses))),
         ("Solde de l'exercice", fmt_eur(solde)),
         ("Fonds de travaux (encours)", fmt_eur(enc_ft - dep_ft)),
     ]
@@ -67,7 +68,7 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
         rows.append([
             Paragraph("", style("cell")), Paragraph("", style("cell")),
             Paragraph("<b>Total dépenses</b>", style("th")),
-            Paragraph(f"<b>{fmt_eur(sum(m.montant for m in depenses))}</b>", style("cell")),
+            Paragraph(f"<b>{fmt_eur(somme(m.montant for m in depenses))}</b>", style("cell")),
         ])
         dt = Table(rows, colWidths=[42 * 2.835, 72 * 2.835, 36 * 2.835, 30 * 2.835])
         dt.setStyle(table_style())
@@ -80,13 +81,13 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
              Paragraph("<b>Appels charges</b>", style("th")), Paragraph("<b>Appels fonds travaux</b>", style("th")),
              Paragraph("<b>Encaissé</b>", style("th")), Paragraph("<b>Solde</b>", style("th"))]]
     for lot in lots:
-        appels_c = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = sum(m.montant for m in db.query(Mouvement).filter(
+        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        enc = somme(m.montant for m in db.query(Mouvement).filter(
             Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
         p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         solde = appels_c + appels_f - enc
-        couleur = "#dc2626" if solde > 0.005 else "#059669"
+        couleur = "#dc2626" if solde > D("0.005") else "#059669"
         rows.append([
             Paragraph(f"Lot {lot.numero}", style("cell")),
             Paragraph(f"{p.prenom} {p.nom}".strip() if p else "—", style("cell")),
@@ -103,12 +104,12 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     # 4. Impayés
     impayes = []
     for lot in lots:
-        appels_c = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = sum(m.montant for m in db.query(Mouvement).filter(
+        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        enc = somme(m.montant for m in db.query(Mouvement).filter(
             Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
         solde = appels_c + appels_f - enc
-        if solde > 0.005:
+        if solde > D("0.005"):
             impayes.append((lot, solde))
     el.append(Paragraph(f"4. IMPAYÉS AU {_date_fr(date.today()).upper()}", style("section")))
     if not impayes:

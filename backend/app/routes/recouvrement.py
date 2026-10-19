@@ -5,6 +5,7 @@ Le statut du dossier est calculé à la lecture (services/recouvrement.py).
 """
 import json
 from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -30,6 +31,7 @@ from app.schemas import (
 )
 from app.services import recouvrement as svc
 from app.services.md_pdf import generer_mise_en_demeure_pdf
+from app.core.money import D
 
 router = APIRouter(prefix="/api/recouvrement", tags=["recouvrement"])
 
@@ -69,7 +71,7 @@ def _acte_out(db: Session, a: ActeRecouvrement) -> RecouvrementActeOut:
     return RecouvrementActeOut(
         id=a.id, type=a.type, date_acte=a.date_acte, date_envoi=a.date_envoi,
         mode_envoi=a.mode_envoi or "", reference=a.reference or "",
-        montant=a.montant or 0.0, libelle=a.libelle or LIBELLES_TYPE.get(a.type, a.type),
+        montant=a.montant or D(0), libelle=a.libelle or LIBELLES_TYPE.get(a.type, a.type),
         auteur=auteur,
     )
 
@@ -77,15 +79,15 @@ def _acte_out(db: Session, a: ActeRecouvrement) -> RecouvrementActeOut:
 def _ligne_out(l: dict) -> DecompteLigne:
     return DecompteLigne(
         exercice=l.get("exercice"), libelle=l.get("libelle") or "", echeance=l.get("echeance"),
-        charges=l.get("charges") or 0.0, fonds=l.get("fonds") or 0.0,
-        montant=l.get("montant") or 0.0, restant_du=l.get("restant_du") or 0.0,
+        charges=l.get("charges") or D(0), fonds=l.get("fonds") or D(0),
+        montant=l.get("montant") or D(0), restant_du=l.get("restant_du") or D(0),
         echu=bool(l.get("echu")),
     )
 
 
 def _snapshot(lignes: list[dict]) -> str:
     def conv(v):
-        return v.isoformat() if hasattr(v, "isoformat") else v
+        return v.isoformat() if hasattr(v, "isoformat") else float(v) if isinstance(v, Decimal) else v
     return json.dumps([{k: conv(v) for k, v in l.items()} for l in lignes])
 
 
@@ -141,7 +143,7 @@ def dossier(lot_id: int, db: Session = Depends(get_db), user: User = Depends(req
         relances=[RelanceOut(
             id=r.id, lot_id=r.lot_id, lot_numero=lot.numero, personne_nom=_nom(p),
             personne_email=p.email if p else "", date_envoi=r.date_envoi,
-            statut=r.statut, montant_du=r.montant_du or 0.0, message=r.message or "",
+            statut=r.statut, montant_du=r.montant_du or D(0), message=r.message or "",
         ) for r in relances],
     )
 
@@ -151,7 +153,7 @@ def mise_en_demeure_pdf(lot_id: int, db: Session = Depends(get_db), user: User =
     """PDF de mise en demeure (délai 30 jours, article 19-2) — provisions échues impayées."""
     copro = get_or_create_copro(db, user)
     lot = _lot_ou_404(db, copro, lot_id)
-    lignes = [l for l in svc.appels_lot(db, copro, lot) if l["restant_du"] > 0.005 and l["echu"]]
+    lignes = [l for l in svc.appels_lot(db, copro, lot) if l["restant_du"] > svc.D("0.005") and l["echu"]]
     if not lignes:
         raise HTTPException(400, "Aucune provision échue impayée : la mise en demeure n'est pas justifiée.")
     buf = generer_mise_en_demeure_pdf(copro, lot, _proprio(db, lot), lignes, user.nom or "")
@@ -178,13 +180,13 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
             raise HTTPException(422, "Mode d'envoi requis (lre | lrar | email | remise)")
 
     lignes = svc.appels_lot(db, copro, lot)
-    montant = round(data.montant or 0.0, 2)
+    montant = svc.arrondi(svc.D(data.montant or svc.D(0)))
     details = ""
     if data.type == "mise_en_demeure":
-        echu = [l for l in lignes if l["restant_du"] > 0.005 and l["echu"]]
+        echu = [l for l in lignes if l["restant_du"] > svc.D("0.005") and l["echu"]]
         if not echu:
             raise HTTPException(400, "Aucune provision échue impayée : mise en demeure sans objet.")
-        montant = round(sum(l["restant_du"] for l in echu), 2)
+        montant = svc.arrondi(svc.somme(l["restant_du"] for l in echu))
         details = _snapshot(echu)
 
     acte = ActeRecouvrement(
@@ -250,7 +252,7 @@ def activer_19_2(lot_id: int, request: Request,
     d = svc.statut_dossier(db, copro, lot, lignes=lignes)
     _conditions_19_2(d)
     b = svc.breakdown_19_2(db, copro, lot, lignes=lignes)
-    if b["total"] <= 0.005:
+    if b["total"] <= svc.D("0.005"):
         raise HTTPException(400, "Aucune provision future à rendre exigible.")
     acte = ActeRecouvrement(
         copropriete_id=copro.id, lot_id=lot.id, personne_id=lot.proprietaire_id,
