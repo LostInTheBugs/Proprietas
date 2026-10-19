@@ -154,13 +154,14 @@ def repartir_par_tantiemes(montant, lots, fonds_travaux_taux: Decimal = D(0)) ->
     Le fonds de travaux est arrondi une seule fois, puis réparti.
     """
     montant = to_money(montant)
+    fonds_travaux_taux = D(fonds_travaux_taux or 0)
     charges = _plus_fort_reste(montant * D(100), lots)
     parts: list[dict] = []
     for i, lot in enumerate(lots):
-        euros = D(charges[i]) / D(100)
+        euros = arrondi(D(charges[i]) / D(100))
         parts.append({"lot": lot, "montant_charges": euros})
     if fonds_travaux_taux > D(0):
         fonds_total = _plus_fort_reste(arrondi(montant * fonds_travaux_taux / D(100)) * D(100), lots)
         for i, p in enumerate(parts):
-            p["montant_fonds_travaux"] = D(fonds_total[i]) / D(100)
+            p["montant_fonds_travaux"] = arrondi(D(fonds_total[i]) / D(100))
     return parts
