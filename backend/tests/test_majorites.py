@@ -288,3 +288,19 @@ def test_art24_et_unanimite_jamais_de_second_vote():
     for maj in ("art24", "unanimite"):
         res = calculer_statut_resolution(_res(maj), _quatre_lots_egaux(), [_vote(1, "contre")])
         assert res["second_vote_possible"] is None
+
+
+# ---------- Corrections issues de la vérification aléatoire ----------
+def test_26_1_jamais_de_passerelle_en_regime_deux():
+    lots = [_lot(1, 700, 102), _lot(2, 500, 101)]          # 2 copropriétaires
+    res = calculer_statut_resolution(_res("art26"), lots, [_vote(1, "pour"), _vote(2, "contre")])
+    assert res["regime_deux"] is True
+    assert res["second_vote_possible"] is None
+
+
+def test_regime_deux_pas_declenche_par_des_lots_sans_proprietaire():
+    # 1 seul propriétaire saisi, mais 3 membres (2 lots sans propriétaire comptent chacun pour un membre).
+    lots = [_lot(1, 400, 101), _lot(2, 300), _lot(3, 300)]
+    res = calculer_statut_resolution(_res("art24"), lots, [_vote(1, "pour"), _vote(2, "abstention")])
+    assert res["regime_deux"] is False
+    assert res["statut"] == "adoptee"                      # art. 24 normal : 400 pour / 0 contre exprimés
