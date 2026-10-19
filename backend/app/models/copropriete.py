@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float
+from sqlalchemy import Column, Integer, Numeric, String, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -16,7 +16,7 @@ class Copropriete(Base):
     # Fonds de travaux (obligatoire en France depuis la loi ALUR,
     # plus d'exemption < 10 lots : taux minimum 5 % du budget prévisionnel)
     fonds_travaux_actif = Column(Boolean, default=True)
-    fonds_travaux_taux_pct = Column(Float, default=5.0)
+    fonds_travaux_taux_pct = Column(Numeric(7, 4), default=5.0)
     fonds_travaux_compte = Column(String, default="")
     compte_bancaire_separe = Column(String, default="")
     # Envoi des convocations par email
@@ -31,14 +31,14 @@ class Copropriete(Base):
     relance_frequence = Column(String, default="hebdo")  # hebdo | mensuel
     relance_jour = Column(Integer, default=1)  # 1-7 (hebdo, lundi=1) ou 1-28 (mensuel)
     relance_heure = Column(String, default="09:00")  # "HH:00" ou "HH:30"
-    relance_minimum = Column(Float, default=0.0)  # seuil : ne relancer que les soldes > ce montant
+    relance_minimum = Column(Numeric(12, 2), default=0.0)  # seuil : ne relancer que les soldes > ce montant
     # Double authentification exigée des comptes : off | syndic | all.
     # Défini à la création de la copropriété (COPRO_TOTP_DEFAULT_POLICY) ;
     # les bases existantes restent en « off » après migration.
     totp_policy = Column(String, default="off")
     # Taux de l'intérêt légal (%) pour les intérêts de retard de recouvrement —
     # arrêté semestriel, saisi par le syndic (jamais deviné par l'app).
-    taux_legal_retard = Column(Float, default=0.0)
+    taux_legal_retard = Column(Numeric(7, 4), default=0.0)
     notes = Column(String, default="")
 
     users = relationship("User", back_populates="copropriete")

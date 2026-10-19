@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date, Text
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Date, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,7 +10,7 @@ class Entretien(Base):
     date = Column(Date, nullable=False)
     type_intervention = Column(String, default="")
     prestataire = Column(String, default="")
-    cout = Column(Float, default=0.0)
+    cout = Column(Numeric(12, 2), default=0.0)
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=True)  # null = parties communes
     description = Column(Text, default="")
 

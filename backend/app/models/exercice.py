@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -21,7 +21,7 @@ class BudgetLine(Base):
     id = Column(Integer, primary_key=True)
     exercice_id = Column(Integer, ForeignKey("exercices.id"), nullable=False)
     libelle = Column(String, nullable=False)
-    montant = Column(Float, default=0.0)
+    montant = Column(Numeric(12, 2), default=0.0)
     # "generale" = répartie entre tous les lots par tantièmes
     # "speciale" = frais spécifiques (répartie entre lots concernés, gérée manuellement)
     type_repartition = Column(String, default="generale")

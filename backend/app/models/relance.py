@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Text
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -15,7 +15,7 @@ class Relance(Base):
     personne_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date_envoi = Column(DateTime, nullable=False)
     statut = Column(String, default="envoye")
-    montant_du = Column(Float, default=0.0)
+    montant_du = Column(Numeric(12, 2), default=0.0)
     message = Column(Text, default="")
 
     lot = relationship("Lot")
