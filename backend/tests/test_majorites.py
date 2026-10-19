@@ -166,3 +166,39 @@ def test_passerelle_25_1_rejet_art25_puis_adoption_art24():
     r24 = _res("art24")
     res24 = calculer_statut_resolution(r24, lots, votes)
     assert res24["statut"] == "adoptee"
+
+
+# ---------- Art. 22 al. 2 : réduction des voix du copropriétaire majoritaire ----------
+def _lots_majoritaire():
+    """A = 600/1000 (> moitié) ; B et C = 200 chacun. 3 copropriétaires distincts."""
+    return [_lot(1, 600, 101), _lot(2, 200, 102), _lot(3, 200, 103)]
+
+
+def test_art22_reduction_art25_majoritaire_seul_rejete():
+    # A réduit à 400 (= 200 + 200), total de référence 800 : 400 n'est pas > 400.
+    r = _res("art25")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["statut"] == "rejetee"
+    assert res["pour"] == 400 and res["total"] == 800
+    assert res["reduction_art22"] == 101
+
+
+def test_art22_reduction_art24_majoritaire_seul_rejete():
+    # Exprimés : 400 pour / 400 contre → égalité → rejetée.
+    r = _res("art24")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["statut"] == "rejetee"
+
+
+def test_art22_reduction_art25_majoritaire_plus_un_adopte():
+    # 400 + 200 = 600 > 400 → adoptée.
+    r = _res("art25")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre")])
+    assert res["statut"] == "adoptee"
+    assert res["pour"] == 600
+
+
+def test_art22_pas_de_reduction_sans_majoritaire():
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots(), [_vote(1, "pour")])
+    assert res["reduction_art22"] is None
+    assert res["total"] == 1000

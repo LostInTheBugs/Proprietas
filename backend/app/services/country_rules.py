@@ -12,12 +12,17 @@ Majorités (art. 24, 25, 26) :
 - art25 : majorité des voix de tous les copropriétaires (> 50 % des millièmes).
 - art26 : majorité des 2/3 des voix de tous les copropriétaires.
 - unanimite : 100 % des voix de tous les copropriétaires.
+- art22 al. 2 : un copropriétaire à > 50 % voit ses voix réduites à la somme
+  des voix des autres copropriétaires.
 - Régime « 2 copropriétaires » (art. 41-16) : si le nombre de copropriétaires
   distincts est <= 2, le copropriétaire détenant plus de la moitié des voix peut
   prendre seul les décisions de l'art. 24, et celui détenant au moins 2/3 des
   voix celles de l'art. 25 (budget et approbation des comptes exclus).
 """
+from __future__ import annotations
+
 from decimal import Decimal, ROUND_HALF_UP, ROUND_FLOOR
+from fractions import Fraction
 
 from app.core.money import D, arrondi, to_money, somme
 
@@ -51,26 +56,106 @@ def nb_coproprietaires(lots) -> int:
     return len(owners)
 
 
+def _membres(lots) -> dict:
+    """Groupe les lots par propriétaire.
+
+    Retourne un dict {owner_id_or_key: {lots: [...], voix: int}}.
+    Un lot sans propriétaire reçoit la clé ``f"lot-{l.id}"``.
+    """
+    groups: dict[str, list[Lot]] = {}
+    for l in lots:
+        key = l.proprietaire_id if l.proprietaire_id else f"lot-{l.id}"
+        groups.setdefault(key, []).append(l)
+    return {
+        key: {"lots": ls, "voix": sum(l.tantiemes for l in ls)}
+        for key, ls in groups.items()
+    }
+
+
+def _num(f: Fraction | int):
+    """Convertit un Fraction en int ou float arrondi à 2 décimales."""
+    if f.denominator == 1:
+        return int(f)
+    return float(round(f, 2))
+
+
+def _vote_membre(owner_key, lots_by_member, votes) -> str:
+    """Retourne le vote consolidé d'un membre.
+
+    Règle : "pour" si au moins un lot "pour" et aucun "contre".
+    "contre" dès qu'un lot est "contre". "abstention" si uniquement abstentions.
+    "absent" si aucun vote.
+    """
+    poids = {l.id: l.tantiemes for l in lots_by_member.get(owner_key, {}).get("lots", [])}
+    has_pour = False
+    has_contre = False
+    has_abstention = False
+    for v in votes:
+        if v.lot_id in poids:
+            if v.voix == "pour":
+                has_pour = True
+            elif v.voix == "contre":
+                has_contre = True
+            elif v.voix == "abstention":
+                has_abstention = True
+    if has_contre:
+        return "contre"
+    if has_pour:
+        return "pour"
+    if has_abstention:
+        return "abstention"
+    return "absent"
+
+
 def calculer_statut_resolution(resolution, lots, votes) -> dict:
     """Calcule le statut d'une résolution selon les règles françaises.
 
-    Retourne un dict : {statut, pour_t, contre_t, abst_t, total_t, quorum_t, detail}
+    Retourne un dict : {statut, pour, contre, abstention, total, quorum,
+        reduction_art22, nb_membres, membres_pour, regime_deux, detail}
     """
     total = tantiemes_totaux(lots)
-    # Les votes sont rattachés à des lots ; chaque lot porte ses millièmes.
-    poids = {l.id: l.tantiemes for l in lots}
-    pour = sum(poids.get(v.lot_id, 0) for v in votes if v.voix == "pour")
-    contre = sum(poids.get(v.lot_id, 0) for v in votes if v.voix == "contre")
-    abst = sum(poids.get(v.lot_id, 0) for v in votes if v.voix == "abstention")
+
+    # Regroupement par membre
+    membres = _membres(lots)
+    nb_membres = len(membres)
+
+    # Poids en Fraction pour précision exacte
+    poids = {l.id: Fraction(l.tantiemes) for l in lots}
+
+    # Recherche d'un membre majoritaire (art. 22 al. 2)
+    reduction_art22 = None
+    total_ref = total
+    reduced_poids = dict(poids)
 
     nb_owners = nb_coproprietaires(lots)
     regime_deux = nb_owners <= 2
+
+    if not regime_deux:
+        for owner_key, info in membres.items():
+            voix = info["voix"]
+            if voix * 2 > total:
+                # Réduction : poids de chaque lot de ce membre * (total - voix) / voix
+                ratio = Fraction(total - voix, voix)
+                for l in info["lots"]:
+                    reduced_poids[l.id] = poids[l.id] * ratio
+                total_ref = 2 * (total - voix)
+                reduction_art22 = owner_key
+                break
+
+    pour = sum(reduced_poids.get(v.lot_id, 0) for v in votes if v.voix == "pour")
+    contre = sum(reduced_poids.get(v.lot_id, 0) for v in votes if v.voix == "contre")
+    abst = sum(reduced_poids.get(v.lot_id, 0) for v in votes if v.voix == "abstention")
+
+    # Comptage des membres pour
+    membres_pour = 0
+    for owner_key in membres:
+        if _vote_membre(owner_key, membres, votes) == "pour":
+            membres_pour += 1
 
     if resolution.majorite == "art24":
         exprimes = pour + contre
         quorum = exprimes
         if regime_deux:
-            # art. 41-16 : le copropriétaire avec > 50 % des voix décide seul
             adoptee = pour > total / 2
             detail = "Régime 2 copropriétaires (art. 41-16) : décision prise par le copropriétaire détenant plus de la moitié des voix."
         else:
@@ -82,25 +167,30 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
             adoptee = pour >= 2 * total / 3
             detail = "Régime 2 copropriétaires (art. 41-16) : décision prise par le copropriétaire détenant au moins 2/3 des voix."
         else:
-            adoptee = pour > total / 2
+            adoptee = pour > Fraction(total_ref, 2)
             detail = "Majorité des voix de tous les copropriétaires (art. 25) : pour > 50 % des millièmes."
+            if reduction_art22 is not None:
+                detail += " Voix du copropriétaire majoritaire réduites à la somme des voix des autres (art. 22 al. 2)."
     elif resolution.majorite == "art26":
         quorum = total
-        adoptee = pour >= 2 * total / 3
+        adoptee = pour * 3 >= 2 * total_ref
         detail = "Majorité des 2/3 des voix de tous les copropriétaires (art. 26)."
     else:  # unanimite
         quorum = total
-        adoptee = pour == total and contre == 0
+        adoptee = pour == total_ref and contre == 0
         detail = "Unanimité requise : tous les copropriétaires doivent voter pour."
 
     statut = "adoptee" if adoptee else "rejetee"
     return {
         "statut": statut,
-        "pour": pour,
-        "contre": contre,
-        "abstention": abst,
-        "total": total,
+        "pour": _num(pour),
+        "contre": _num(contre),
+        "abstention": _num(abst),
+        "total": total_ref,
         "quorum": quorum,
+        "reduction_art22": reduction_art22,
+        "nb_membres": nb_membres,
+        "membres_pour": membres_pour,
         "regime_deux": regime_deux,
         "detail": detail,
     }
