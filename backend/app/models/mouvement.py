@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Date
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Date
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -13,7 +13,7 @@ class Mouvement(Base):
     type = Column(String, nullable=False)  # encaissement | depense
     categorie = Column(String, default="autre")
     # categorie: charges | fonds_travaux | travaux | assurance | energie | entretien | autre
-    montant = Column(Float, default=0.0)
+    montant = Column(Numeric(12, 2), default=0.0)
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=True)  # null = copro entière
     appel_id = Column(Integer, ForeignKey("appels_fonds.id"), nullable=True)
     piece_path = Column(String, default="")
