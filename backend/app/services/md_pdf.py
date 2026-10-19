@@ -13,6 +13,7 @@ from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer,
 
 from app.services.emailer import _date_fr
 from app.services.pdf_base import fmt_eur, page_margins, register_fonts, style, table_style
+from app.core.money import D, arrondi, somme
 
 ART_19_2_TEXTE = (
     "À défaut du versement à sa date d'exigibilité d'une provision due au titre de "
@@ -39,7 +40,7 @@ def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: st
     adresse_copro = f"{copro.adresse or ''} {copro.code_postal or ''} {copro.ville or ''}".strip()
     nom_dest = f"{proprietaire.prenom or ''} {proprietaire.nom or ''}".strip() if proprietaire else "—"
     adresse_dest = ((getattr(proprietaire, "adresse", "") or "").strip() if proprietaire else "") or "—"
-    total = round(sum(l["restant_du"] for l in lignes), 2)
+    total = arrondi(somme(l["restant_du"] for l in lignes))
 
     el = []
     el.append(Paragraph("MISE EN DEMEURE DE PAYER", style("titre", fontSize=16)))

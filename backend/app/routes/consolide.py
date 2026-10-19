@@ -2,6 +2,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends
+from app.core.money import D, arrondi, somme
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -22,7 +23,7 @@ def consolide(db: Session = Depends(get_db), user: User = Depends(get_current_us
              .order_by(UserCopro.principale.desc(), UserCopro.id).all())
     aujourdhui = date.today()
     immeubles = []
-    tot_budget = tot_encaisse = tot_depense = tot_impayes = tot_ft_encours = 0.0
+    tot_budget = tot_encaisse = tot_depense = tot_impayes = tot_ft_encours = D(0)
     tot_lots = 0
 
     for lien in liens:
@@ -33,15 +34,15 @@ def consolide(db: Session = Depends(get_db), user: User = Depends(get_current_us
               .order_by(Exercice.annee.desc()).first())
         lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
         mouvements = (db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).all()) if ex else []
-        encaisse = sum(m.montant for m in mouvements if m.type == "encaissement")
-        depense = sum(m.montant for m in mouvements if m.type == "depense")
-        budget = sum(b.montant for b in ex.budget_lines) if ex else 0.0
-        ft_encaisse = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
-        ft_depense = sum(m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux")
+        encaisse = somme([m.montant for m in mouvements if m.type == "encaissement"])
+        depense = somme([m.montant for m in mouvements if m.type == "depense"])
+        budget = somme([b.montant for b in ex.budget_lines]) if ex else D(0)
+        ft_encaisse = somme([m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux"])
+        ft_depense = somme([m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux"])
 
         etats = _etat_lots(db, copro)
-        impayes = [e for e in etats if (e.get("solde") or 0) > 0.005]
-        total_impayes = sum(e["solde"] for e in impayes)
+        impayes = [e for e in etats if (e.get("solde") or D(0)) > D("0.005")]
+        total_impayes = somme([e["solde"] for e in impayes])
 
         prochaine_ag = (db.query(AG)
                         .filter(AG.copropriete_id == copro.id, AG.date >= aujourdhui)
@@ -60,13 +61,13 @@ def consolide(db: Session = Depends(get_db), user: User = Depends(get_current_us
             "ville": copro.ville or "",
             "principale": bool(lien.principale),
             "lots": len(lots),
-            "budget": round(budget, 2),
-            "encaisse": round(encaisse, 2),
-            "depense": round(depense, 2),
-            "solde": round(encaisse - depense, 2),
-            "impayes": round(total_impayes, 2),
+            "budget": arrondi(budget),
+            "encaisse": arrondi(encaisse),
+            "depense": arrondi(depense),
+            "solde": arrondi(encaisse - depense),
+            "impayes": arrondi(total_impayes),
             "nb_lots_retard": len(impayes),
-            "ft_encours": round(ft_encaisse - ft_depense, 2),
+            "ft_encours": arrondi(ft_encaisse - ft_depense),
             "relance_auto": bool(copro.relance_auto),
             "prochaine_ag": prochaine_ag.date.isoformat() if prochaine_ag else None,
             "prochaine_ag_heure": prochaine_ag.heure or "" if prochaine_ag else "",
@@ -96,12 +97,12 @@ def consolide(db: Session = Depends(get_db), user: User = Depends(get_current_us
         "totaux": {
             "immeubles": len(immeubles),
             "lots": tot_lots,
-            "budget": round(tot_budget, 2),
-            "encaisse": round(tot_encaisse, 2),
-            "depense": round(tot_depense, 2),
-            "solde": round(tot_encaisse - tot_depense, 2),
-            "impayes": round(tot_impayes, 2),
-            "ft_encours": round(tot_ft_encours, 2),
+            "budget": arrondi(tot_budget),
+            "encaisse": arrondi(tot_encaisse),
+            "depense": arrondi(tot_depense),
+            "solde": arrondi(tot_encaisse - tot_depense),
+            "impayes": arrondi(tot_impayes),
+            "ft_encours": arrondi(tot_ft_encours),
         },
         "ags_prochaines": ags_prochaines,
     }

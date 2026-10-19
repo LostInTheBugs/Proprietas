@@ -12,6 +12,7 @@ from reportlab.graphics.charts.piecharts import Pie
 from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 from app.services.compte_gestion import story_compte_gestion
+from app.core.money import D, arrondi, somme
 
 INDIGO = colors.HexColor("#4f46e5")
 ROSE = colors.HexColor("#f43f5e")
@@ -21,8 +22,8 @@ GRIS = colors.HexColor("#64748b")
 
 def _graphique_mensuel(mouvements, annee: int) -> Drawing:
     """Barres mensuelles encaissements (indigo) vs dépenses (rose)."""
-    enc = [0.0] * 12
-    dep = [0.0] * 12
+    enc = [D(0)] * 12
+    dep = [D(0)] * 12
     for m in mouvements:
         if m.date.year != annee:
             continue
@@ -31,6 +32,9 @@ def _graphique_mensuel(mouvements, annee: int) -> Drawing:
             enc[i] += m.montant
         else:
             dep[i] += m.montant
+    # Frontière d'affichage : reportlab exige des float
+    enc = [float(x) for x in enc]
+    dep = [float(x) for x in dep]
     d = Drawing(440, 190)
     chart = VerticalBarChart()
     chart.x = 40
@@ -113,20 +117,20 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
     depenses = [m for m in mouvements if m.type == "depense"]
     encaissements = [m for m in mouvements if m.type == "encaissement"]
-    enc_charges = sum(m.montant for m in encaissements if m.categorie != "fonds_travaux")
-    enc_ft = sum(m.montant for m in encaissements if m.categorie == "fonds_travaux")
-    dep_charges = sum(m.montant for m in depenses if m.categorie != "fonds_travaux")
-    dep_ft = sum(m.montant for m in depenses if m.categorie == "fonds_travaux")
-    budget = sum(b.montant for b in exercice.budget_lines)
+    enc_charges = somme(m.montant for m in encaissements if m.categorie != "fonds_travaux")
+    enc_ft = somme(m.montant for m in encaissements if m.categorie == "fonds_travaux")
+    dep_charges = somme(m.montant for m in depenses if m.categorie != "fonds_travaux")
+    dep_ft = somme(m.montant for m in depenses if m.categorie == "fonds_travaux")
+    budget = somme(b.montant for b in exercice.budget_lines)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
 
-    total_impayes = 0.0
+    total_impayes = D(0)
     from app.models.appel import AppelLot
     for lot in lots:
-        appels_c = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc_lot = sum(m.montant for m in db.query(Mouvement).filter(Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
-        if appels_c + appels_f - enc_lot > 0.005:
+        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        enc_lot = somme(m.montant for m in db.query(Mouvement).filter(Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
+        if appels_c + appels_f - enc_lot > D("0.005"):
             total_impayes += appels_c + appels_f - enc_lot
 
     # ===== Page de garde =====
@@ -191,7 +195,7 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
     ))
     el.append(Spacer(1, 16))
     el.append(Paragraph("2.2 Répartition des encaissements", style("section")))
-    el.append(_graphique_repartition(enc_charges, enc_ft, dep_charges, dep_ft))
+    el.append(_graphique_repartition(float(enc_charges), float(enc_ft), float(dep_charges), float(dep_ft)))
     el.append(PageBreak())
 
     # ===== 3. Plan pluriannuel de travaux =====
@@ -204,7 +208,7 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
         rows = [[Paragraph("<b>Année</b>", style("th")), Paragraph("<b>Travaux</b>", style("th")),
                  Paragraph("<b>Catégorie</b>", style("th")), Paragraph("<b>Statut</b>", style("th")),
                  Paragraph("<b>Montant estimé</b>", style("th"))]]
-        total_ppt = 0.0
+        total_ppt = D(0)
         for t in travaux:
             total_ppt += t.montant
             statut_label = {"planifie": "Planifié", "en_cours": "En cours", "realise": "Réalisé"}.get(t.statut, t.statut)
@@ -221,8 +225,8 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
         pt.setStyle(table_style())
         el.append(pt)
         el.append(Spacer(1, 10))
-        objectif_ppt = round(total_ppt * 0.025, 2)
-        objectif_budget = round(budget * 0.05, 2)
+        objectif_ppt = arrondi(total_ppt * D("0.025"))
+        objectif_budget = arrondi(budget * D("0.05"))
         el.append(Paragraph(
             f"Si le PPT est voté, la cotisation annuelle minimale au fonds de travaux sera de "
             f"<b>{fmt_eur(objectif_ppt)}</b> (2,5 % du plan) <b>ou</b> <b>{fmt_eur(objectif_budget)}</b> (5 % du budget), "

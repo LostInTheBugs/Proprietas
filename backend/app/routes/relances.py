@@ -1,5 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
+from app.core.money import D, arrondi, somme
 from sqlalchemy.orm import Session
 from app.core import audit
 from app.core.database import get_db
@@ -25,18 +26,18 @@ def _etat_lots(db: Session, copro: Copropriete) -> list[dict]:
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     result = []
     for lot in lots:
-        appels_c = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = sum(m.montant for m in db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
+        appels_c = somme([a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
+        appels_f = somme([a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
+        enc = somme([m.montant for m in db.query(Mouvement).filter(
+            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()])
         personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         result.append({
             "lot": lot,
             "personne": personne,
-            "appels_charges": round(appels_c, 2),
-            "appels_fonds": round(appels_f, 2),
-            "encaisse": round(enc, 2),
-            "solde": round(appels_c + appels_f - enc, 2),
+            "appels_charges": arrondi(appels_c),
+            "appels_fonds": arrondi(appels_f),
+            "encaisse": arrondi(enc),
+            "solde": arrondi(appels_c + appels_f - enc),
         })
     return result
 
@@ -109,7 +110,7 @@ def envoyer_relances(data: RelanceEnvoiIn, request: Request, db: Session = Depen
     erreurs = []
     for lot_id in data.lot_ids:
         e = lots_par_id.get(lot_id)
-        if not e or e["solde"] <= 0.005:
+        if not e or e["solde"] <= D("0.005"):
             continue  # lot inconnu ou sans impayé
         statut = envoyer_relance_lot(db, copro, e, user.nom or "Le syndic",
                                      acteur=user, request=request)

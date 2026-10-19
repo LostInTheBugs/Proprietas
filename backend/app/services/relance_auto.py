@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.money import D
 from app.models.copropriete import Copropriete
 from app.models.relance import Relance
 from app.models.user import User
@@ -73,9 +74,9 @@ def run_relances_auto(db: Session, maintenant: datetime | None = None) -> dict:
         if syndic and syndic.nom:
             syndic_nom = syndic.nom
         delai = timedelta(days=7 if copro.relance_frequence == "hebdo" else 30)
-        minimum = copro.relance_minimum or 0.0
+        minimum = copro.relance_minimum or D(0)
         for e in _etat_lots(db, copro):
-            if e["solde"] <= max(0.005, minimum):
+            if e["solde"] <= max(D("0.005"), minimum):
                 continue  # lot à jour ou sous le seuil
             derniere = _derniere_relance(db, e["lot"].id)
             if derniere and (maintenant - derniere.date_envoi) < delai:

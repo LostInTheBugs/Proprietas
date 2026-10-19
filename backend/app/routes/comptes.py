@@ -10,6 +10,7 @@ from app.models.mouvement import Mouvement
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
 from app.services.country_rules import repartir_par_tantiemes
+from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
@@ -29,8 +30,8 @@ def list_exercices(db: Session = Depends(get_db), user: User = Depends(get_curre
     exercices = db.query(Exercice).filter(Exercice.copropriete_id == copro.id).order_by(Exercice.annee.desc()).all()
     out = []
     for ex in exercices:
-        budget = sum(b.montant for b in ex.budget_lines)
-        out.append(ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=round(budget, 2)))
+        budget = somme(b.montant for b in ex.budget_lines)
+        out.append(ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=arrondi(budget)))
     return out
 
 
@@ -43,7 +44,7 @@ def create_exercice(data: ExerciceIn, db: Session = Depends(get_db), user: User 
     db.add(ex)
     db.commit()
     db.refresh(ex)
-    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=0.0)
+    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=D(0))
 
 
 @router.put("/exercices/{exercice_id}", response_model=ExerciceOut)
@@ -54,8 +55,8 @@ def update_exercice(exercice_id: int, data: ExerciceIn, db: Session = Depends(ge
     ex.cloture = data.cloture
     db.commit()
     db.refresh(ex)
-    budget = sum(b.montant for b in ex.budget_lines)
-    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=round(budget, 2))
+    budget = somme(b.montant for b in ex.budget_lines)
+    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=arrondi(budget))
 
 
 @router.delete("/exercices/{exercice_id}")
@@ -136,23 +137,21 @@ def create_appel(exercice_id: int, data: AppelIn, db: Session = Depends(get_db),
         date_echeance=data.date_echeance,
         montant_total=data.montant_total,
         inclut_fonds_travaux=data.inclut_fonds_travaux and copro.fonds_travaux_actif,
-        fonds_travaux_montant=0.0,
+        fonds_travaux_montant=D(0),
     )
     db.add(appel)
     db.flush()
 
-    taux = copro.fonds_travaux_taux_pct if appel.inclut_fonds_travaux else 0.0
+    taux = copro.fonds_travaux_taux_pct if appel.inclut_fonds_travaux else D(0)
     parts = repartir_par_tantiemes(data.montant_total, lots, taux)
     for p in parts:
         db.add(AppelLot(
             appel_id=appel.id,
             lot_id=p["lot"].id,
             montant_charges=p["montant_charges"],
-            montant_fonds_travaux=p.get("montant_fonds_travaux", 0.0),
+            montant_fonds_travaux=p.get("montant_fonds_travaux", D(0)),
         ))
-    appel.fonds_travaux_montant = round(
-        sum(p.get("montant_fonds_travaux", 0.0) for p in parts), 2
-    )
+    appel.fonds_travaux_montant = somme(p.get("montant_fonds_travaux", D(0)) for p in parts)
     db.commit()
     db.refresh(appel)
     return _appel_out(db, appel)
@@ -224,8 +223,8 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     exercices = (db.query(Exercice).filter(Exercice.copropriete_id == copro.id)
                  .order_by(Exercice.annee.desc()).limit(3).all())
-    budgets = [sum(b.montant for b in e.budget_lines) for e in exercices]
-    budget_moyen = (sum(budgets) / len(budgets)) if budgets else 0.0
+    budgets = [somme(b.montant for b in e.budget_lines) for e in exercices]
+    budget_moyen = (somme(budgets) / len(budgets)) if budgets else D(0)
     regime_petite = len(lots) <= 5 or budget_moyen < 15000
 
     ex = db.query(Exercice).filter(Exercice.copropriete_id == copro.id, Exercice.cloture == False).order_by(Exercice.annee.desc()).first()  # noqa: E712
@@ -234,11 +233,11 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     if not ex:
         return RecapOut(exercice_id=0, annee=0, nb_lots=len(lots), regime_petite_copro=regime_petite)
 
-    budget = sum(b.montant for b in ex.budget_lines)
+    budget = somme(b.montant for b in ex.budget_lines)
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).all()
-    encaisse = sum(m.montant for m in mouvements if m.type == "encaissement")
-    depense = sum(m.montant for m in mouvements if m.type == "depense")
-    ft_encaisse = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
+    encaisse = somme(m.montant for m in mouvements if m.type == "encaissement")
+    depense = somme(m.montant for m in mouvements if m.type == "depense")
+    ft_encaisse = somme(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
     appels_en_cours = db.query(AppelFonds).filter(
         AppelFonds.exercice_id == ex.id,
         AppelFonds.date_echeance.isnot(None),
@@ -246,21 +245,21 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
 
     lots_out = []
     for lot in lots:
-        appels_c = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = sum(m.montant for m in db.query(Mouvement).filter(
+        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
+        enc = somme(m.montant for m in db.query(Mouvement).filter(
             Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
         lots_out.append(EtatDateLot(
-            lot=lot, appels_charges=round(appels_c, 2), appels_fonds=round(appels_f, 2),
-            encaisse=round(enc, 2), solde=round(appels_c + appels_f - enc, 2),
+            lot=lot, appels_charges=arrondi(appels_c), appels_fonds=arrondi(appels_f),
+            encaisse=arrondi(enc), solde=arrondi(appels_c + appels_f - enc),
         ))
 
     return RecapOut(
         exercice_id=ex.id, annee=ex.annee,
-        budget_previsionnel=round(budget, 2),
-        encaisse=round(encaisse, 2), depense=round(depense, 2),
-        solde_caisse=round(encaisse - depense, 2),
-        fonds_travaux_encaisse=round(ft_encaisse, 2),
+        budget_previsionnel=arrondi(budget),
+        encaisse=arrondi(encaisse), depense=arrondi(depense),
+        solde_caisse=arrondi(encaisse - depense),
+        fonds_travaux_encaisse=arrondi(ft_encaisse),
         appels_en_cours=appels_en_cours,
         lots=lots_out,
         nb_lots=len(lots),
