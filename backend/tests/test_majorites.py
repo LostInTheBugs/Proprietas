@@ -231,3 +231,60 @@ def test_art26_membre_a_plusieurs_lots_compte_une_fois():
     res = calculer_statut_resolution(_res("art26"), _quatre_lots(), votes)
     assert res["nb_membres"] == 3 and res["membres_pour"] == 2
     assert res["statut"] == "adoptee"
+
+
+# ---------- Passerelles : art. 25-1 (→ art. 24) et art. 26-1 (→ art. 25) ----------
+def test_25_1_tiers_atteint_second_vote_art24():
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre")]   # 500/1000 : rejeté, ≥ 1/3
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] == "art24"
+
+
+def test_25_1_tiers_non_atteint_pas_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")]  # 250 < 333,33
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["second_vote_possible"] is None
+
+
+def test_25_1_exactement_un_tiers_suffit():
+    lots = [_lot(1, 300, 101), _lot(2, 300, 102), _lot(3, 300, 103)]    # 300/900 = 1/3 pile
+    res = calculer_statut_resolution(_res("art25"), lots, [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["second_vote_possible"] == "art24"
+
+
+def test_25_1_avec_reduction_art22():
+    # A réduit à 400/800 : rejeté (400 pas > 400), mais 400 ≥ 800/3 → passerelle.
+    res = calculer_statut_resolution(_res("art25"), _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["second_vote_possible"] == "art24"
+
+
+def test_adoptee_jamais_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour")]
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["statut"] == "adoptee" and res["second_vote_possible"] is None
+
+
+def test_26_1_moitie_des_presents_et_tiers_des_voix_second_vote_art25():
+    # Présents : 101, 102, 103, 104 (105 absent). 2 « pour » sur 4 présents = la moitié ; 680 ≥ 333,33.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre"), _vote(4, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] == "art25"
+
+
+def test_26_1_moins_de_la_moitie_des_presents_pas_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre"), _vote(4, "contre")]  # 1 sur 4
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["second_vote_possible"] is None
+
+
+def test_26_1_moitie_des_presents_mais_moins_du_tiers_des_voix():
+    # 3 « pour » sur 4 présents, mais 320 < 333,33.
+    votes = [_vote(1, "contre"), _vote(3, "pour"), _vote(4, "pour"), _vote(5, "pour")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] is None
+
+
+def test_art24_et_unanimite_jamais_de_second_vote():
+    for maj in ("art24", "unanimite"):
+        res = calculer_statut_resolution(_res(maj), _quatre_lots_egaux(), [_vote(1, "contre")])
+        assert res["second_vote_possible"] is None

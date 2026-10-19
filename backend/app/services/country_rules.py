@@ -148,9 +148,15 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
 
     # Comptage des membres pour
     membres_pour = 0
+    presents = 0
     for owner_key in membres:
-        if _vote_membre(owner_key, membres, votes) == "pour":
+        v = _vote_membre(owner_key, membres, votes)
+        if v == "pour":
             membres_pour += 1
+        if v != "absent":
+            presents += 1
+
+    second_vote_possible = None
 
     if resolution.majorite == "art24":
         exprimes = pour + contre
@@ -171,10 +177,16 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
             detail = "Majorité des voix de tous les copropriétaires (art. 25) : pour > 50 % des millièmes."
             if reduction_art22 is not None:
                 detail += " Voix du copropriétaire majoritaire réduites à la somme des voix des autres (art. 22 al. 2)."
+            if not adoptee and pour * 3 >= total_ref:
+                second_vote_possible = "art24"
+                detail += " Passerelle art. 25-1 : second vote immédiat possible à la majorité de l'art. 24."
     elif resolution.majorite == "art26":
         quorum = total
         adoptee = membres_pour * 2 > nb_membres and pour * 3 >= 2 * total_ref
         detail = "Double majorité (art. 26) : majorité des membres du syndicat représentant au moins les 2/3 des voix."
+        if not adoptee and presents > 0 and membres_pour * 2 >= presents and pour * 3 >= total_ref:
+            second_vote_possible = "art25"
+            detail += " Passerelle art. 26-1 : second vote immédiat possible à la majorité de l'art. 25."
     else:  # unanimite
         quorum = total
         adoptee = pour == total_ref and contre == 0
@@ -192,6 +204,7 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
         "nb_membres": nb_membres,
         "membres_pour": membres_pour,
         "regime_deux": regime_deux,
+        "second_vote_possible": second_vote_possible,
         "detail": detail,
     }
 
