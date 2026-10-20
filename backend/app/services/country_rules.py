@@ -10,12 +10,16 @@ Majorités (art. 24, 25, 26) :
 - art24 : majorité des voix exprimées des copropriétaires présents, représentés
   ou ayant voté par correspondance (les abstentions ne comptent pas).
 - art25 : majorité des voix de tous les copropriétaires (> 50 % des millièmes).
-- art26 : majorité des 2/3 des voix de tous les copropriétaires.
+- art26 : double majorité — majorité des membres du syndicat représentant au moins
+  les 2/3 des voix (les lots sont regroupés par copropriétaire).
+- art25-1 : non adopté en art. 25 mais >= 1/3 des voix de tous → second vote art. 24.
+- art26-1 : non adopté en art. 26 mais approuvé par la moitié des membres présents,
+  représentés ou votant par correspondance, avec >= 1/3 des voix → second vote art. 25.
 - unanimite : 100 % des voix de tous les copropriétaires.
 - art22 al. 2 : un copropriétaire à > 50 % voit ses voix réduites à la somme
   des voix des autres copropriétaires.
-- Régime « 2 copropriétaires » (art. 41-16) : si le nombre de copropriétaires
-  distincts est <= 2, le copropriétaire détenant plus de la moitié des voix peut
+- Régime « 2 copropriétaires » (art. 41-16) : si le nombre de membres
+  (copropriétaires distincts) est <= 2, le copropriétaire détenant plus de la moitié des voix peut
   prendre seul les décisions de l'art. 24, et celui détenant au moins 2/3 des
   voix celles de l'art. 25 (budget et approbation des comptes exclus).
 """
