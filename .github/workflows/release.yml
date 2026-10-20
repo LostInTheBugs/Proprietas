@@ -1,0 +1,27 @@
+name: Release
+on:
+  push:
+    tags:
+      - "20[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9]"
+      - "20[0-9][0-9].[0-9][0-9].[0-9][0-9][0-9]-c*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extraire les notes du CHANGELOG
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ -f CHANGELOG.md ]; then
+            awk -v t="$TAG" 'index($0, t) && /^#/ {f=1; print; next} /^#+ *\[?20[0-9][0-9]\./ {if (f) exit} f {print}' CHANGELOG.md > /tmp/notes.md
+          fi
+          [ -s /tmp/notes.md ] || echo "Release $TAG" > /tmp/notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: /tmp/notes.md
+          generate_release_notes: true
