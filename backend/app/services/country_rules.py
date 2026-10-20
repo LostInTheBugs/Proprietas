@@ -50,12 +50,6 @@ def tantiemes_totaux(lots) -> int:
     return sum(l.tantiemes for l in lots) or 1000
 
 
-def nb_owners(lots) -> int:
-    """Nombre de copropriétaires distincts (par lot avec propriétaire)."""
-    owners = {l.proprietaire_id for l in lots if l.proprietaire_id}
-    return len(owners)
-
-
 def _membres(lots) -> dict:
     """Groupe les lots par propriétaire.
 
@@ -127,7 +121,6 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
     total_ref = total
     reduced_poids = dict(poids)
 
-    nb_owners = nb_membres
     regime_deux = nb_membres <= 2
 
     if not regime_deux:
