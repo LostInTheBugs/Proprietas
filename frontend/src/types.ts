@@ -198,6 +198,10 @@ export interface ResolutionResult {
   quorum: number;
   regime_deux: boolean;
   detail: string;
+  nb_membres: number;
+  membres_pour: number;
+  reduction_art22: number | string | null;
+  second_vote_possible: string | null;
 }
 
 export interface Resolution {
@@ -208,6 +212,7 @@ export interface Resolution {
   texte: string;
   majorite: string;
   statut: string;
+  second_vote_de_id: number | null;
   votes: Vote[];
   resultat: ResolutionResult | null;
 }
