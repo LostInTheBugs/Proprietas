@@ -59,6 +59,9 @@ class Resolution(Base):
     # unanimite = tous les copropriétaires
     majorite = Column(String, default="art24")
     statut = Column(String, default="a_voter")  # a_voter | adoptee | rejetee
+    # Second vote immédiat (passerelles art. 25-1 / 26-1) : id de la résolution
+    # dont celle-ci est le second vote. NULL pour une résolution « normale ».
+    second_vote_de_id = Column(Integer, ForeignKey("resolutions.id", ondelete="CASCADE"), nullable=True)
 
     ag = relationship("AG", back_populates="resolutions")
     votes = relationship("Vote", back_populates="resolution", cascade="all, delete-orphan")

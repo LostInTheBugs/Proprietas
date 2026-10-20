@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
@@ -463,6 +463,10 @@ class ResolutionResult(BaseModel):
     quorum: float = 0.0
     regime_deux: bool = False
     detail: str = ""
+    nb_membres: int = 0
+    membres_pour: int = 0
+    reduction_art22: Optional[Union[int, str]] = None
+    second_vote_possible: Optional[str] = None
 
 
 class VoteOut(BaseModel):
@@ -481,6 +485,7 @@ class ResolutionOut(BaseModel):
     texte: str = ""
     majorite: str = "art24"
     statut: str = "a_voter"
+    second_vote_de_id: Optional[int] = None
     votes: List[VoteOut] = []
     resultat: Optional[ResolutionResult] = None
 
