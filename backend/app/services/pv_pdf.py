@@ -61,10 +61,19 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
     el.append(Spacer(1, 8))
 
     # Ordre du jour
-    resolutions = sorted(ag.resolutions, key=lambda x: x.numero)
-    if resolutions:
+    # Chaque second vote (passerelle 25-1 / 26-1) est placé juste après la résolution
+    # dont il découle ; il ne figure pas à l'ordre du jour (il n'y était pas inscrit).
+    principales = sorted((r for r in ag.resolutions if r.second_vote_de_id is None),
+                         key=lambda x: (x.numero, x.id))
+    seconds = {r.second_vote_de_id: r for r in ag.resolutions if r.second_vote_de_id is not None}
+    resolutions = []
+    for r in principales:
+        resolutions.append(r)
+        if r.id in seconds:
+            resolutions.append(seconds[r.id])
+    if principales:
         el.append(Paragraph("ORDRE DU JOUR", style("section")))
-        for r in resolutions:
+        for r in principales:
             el.append(Paragraph(f"{r.numero}. {r.libelle}", style("normal", fontSize=9.8, spaceAfter=2)))
         el.append(Spacer(1, 6))
 
@@ -77,6 +86,13 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
             f"Résolution {r.numero} — {r.libelle}",
             style("normal_bold", fontSize=10.5, spaceBefore=6, spaceAfter=2),
         ))
+        if r.second_vote_de_id is not None:
+            article = "25-1" if r.majorite == "art24" else "26-1"
+            el.append(Paragraph(
+                f"Second vote immédiat de la résolution n° {r.numero}, en application de l'article {article} "
+                "de la loi du 10 juillet 1965.",
+                style("small", textColor=colors.HexColor("#444444"), spaceAfter=2),
+            ))
         if r.texte:
             el.append(Paragraph(r.texte, style("small", textColor=colors.HexColor("#444444"), spaceAfter=2)))
         resultat = calculer_statut_resolution(r, lots, r.votes)
@@ -112,11 +128,26 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
             "rejetee": ("REJETÉE", "#dc2626"),
             "a_voter": ("À VOTER", "#d97706"),
         }.get(resultat["statut"], (resultat["statut"], "#444444"))
+        # Avec la réduction art. 22, les chiffres sont des voix réduites, plus des millièmes.
+        u = " voix" if resultat.get("reduction_art22") is not None else "‰"
         el.append(Paragraph(
-            f"Pour : <b>{resultat['pour']}‰</b>  ·  Contre : <b>{resultat['contre']}‰</b>  ·  "
-            f"Abstention : <b>{resultat['abstention']}‰</b>",
+            f"Pour : <b>{resultat['pour']}{u}</b>  ·  Contre : <b>{resultat['contre']}{u}</b>  ·  "
+            f"Abstention : <b>{resultat['abstention']}{u}</b>",
             style("normal", fontSize=9.5, spaceBefore=2),
         ))
+        if resultat.get("reduction_art22") is not None:
+            somme = sum(l.tantiemes for l in lots)
+            el.append(Paragraph(
+                f"Réduction art. 22 al. 2 : les voix du copropriétaire majoritaire sont réduites à la somme "
+                f"des voix des autres — total de référence {resultat['total']} voix (au lieu de {somme}).",
+                style("small", spaceAfter=2),
+            ))
+        if r.majorite == "art26":
+            el.append(Paragraph(
+                f"Membres pour : {resultat['membres_pour']} / {resultat['nb_membres']} "
+                "(majorité des membres du syndicat requise)",
+                style("small", spaceAfter=2),
+            ))
         el.append(Paragraph(
             f"<b><font color='{statut_txt[1]}'>{statut_txt[0]}</font></b> — {resultat['detail']}",
             style("small", textColor=colors.HexColor("#333333"), spaceAfter=8),
