@@ -1,14 +1,19 @@
-"""Génération du procès-verbal d'AG en PDF (reportlab)."""
-from datetime import date
+"""Génération du procès-verbal d'AG en PDF (reportlab).
+
+Contenu exigé par l'art. 17 du décret n° 67-223 du 17 mars 1967 : pour chaque résolution,
+le résultat du vote et les noms et nombre de voix des copropriétaires opposants, abstenus
+et défaillants ; signature par le président de séance, le secrétaire et le(s) scrutateur(s).
+"""
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, HRFlowable,
+    SimpleDocTemplate, Paragraph, Spacer, Table, HRFlowable, KeepTogether,
 )
 
-from app.services.country_rules import calculer_statut_resolution, MAJORITES
+from app.services.country_rules import calculer_statut_resolution, MAJORITES, poids_de_vote, _num
 from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins
 
@@ -21,6 +26,67 @@ _TYPE_LABEL = {
 _VOIX_LABEL = {"pour": "Pour", "contre": "Contre", "abstention": "Abstention"}
 
 _STATUT_LABEL = {"projet": "Projet", "convoquee": "Convoquée", "terminee": "Terminée"}
+
+# Libellés des listes nominatives (art. 17 du décret de 1967)
+_LISTES = (("contre", "Opposants"), ("abstention", "Abstentionnistes"), ("defaillant", "Défaillants"))
+
+# Art. 42 al. 2 de la loi du 10 juillet 1965 (rédaction issue de la loi ELAN du 23 novembre 2018).
+_MENTION_ART42 = (
+    "Article 42, alinéa 2, de la loi n° 65-557 du 10 juillet 1965 : les actions en contestation des "
+    "décisions des assemblées générales doivent, à peine de déchéance, être introduites par les "
+    "copropriétaires opposants ou défaillants dans un délai de deux mois à compter de la notification "
+    "du procès-verbal d'assemblée, sans ses annexes. Cette notification est réalisée par le syndic "
+    "dans le délai d'un mois à compter de la tenue de l'assemblée générale."
+)
+
+
+def votants_nommes(resolution, lots, db) -> dict:
+    """Copropriétaires opposants, abstenus et défaillants d'une résolution, avec leurs voix.
+
+    Retourne {"contre": [...], "abstention": [...], "defaillant": [...]}, chaque élément
+    étant (nom, [numéros de lots], voix), trié par nom.
+    - Les voix sont les poids de vote du décompte (réduction art. 22 al. 2 comprise) :
+      leur somme est égale au « contre » / à l'« abstention » de calculer_statut_resolution.
+    - Un copropriétaire qui vote différemment selon ses lots apparaît, pour chaque liste,
+      avec les seuls lots concernés.
+    - Défaillant : aucun de ses lots n'a voté (pas de vote, ou vote « null »).
+    """
+    from app.models.user import User
+
+    poids = poids_de_vote(lots)
+    voix_lot = {v.lot_id: v.voix for v in resolution.votes}
+    ids = {l.proprietaire_id for l in lots if l.proprietaire_id}
+    noms = {u.id: f"{u.nom} {u.prenom}".strip()
+            for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
+
+    # Regroupement par copropriétaire (même règle que country_rules._membres)
+    membres: dict = {}
+    for l in lots:
+        key = l.proprietaire_id if l.proprietaire_id else f"lot-{l.id}"
+        membres.setdefault(key, []).append(l)
+
+    out = {"contre": [], "abstention": [], "defaillant": []}
+    for key, ls in membres.items():
+        nom = noms.get(key, "Propriétaire non renseigné")
+        a_vote = any(voix_lot.get(l.id) in ("pour", "contre", "abstention") for l in ls)
+        for cle, choisis in (("contre", [l for l in ls if voix_lot.get(l.id) == "contre"]),
+                             ("abstention", [l for l in ls if voix_lot.get(l.id) == "abstention"]),
+                             ("defaillant", [] if a_vote else ls)):
+            if choisis:
+                out[cle].append((nom, [l.numero for l in choisis], _num(sum(poids[l.id] for l in choisis))))
+    for cle in out:
+        out[cle].sort(key=lambda x: (x[0].lower(), x[1]))
+    return out
+
+
+def _liste_nominative(entrees, unite: str) -> str:
+    if not entrees:
+        return "aucun"
+    return " ; ".join(
+        # escape : un nom contenant « & » ou « < » casserait le balisage des Paragraph reportlab.
+        f"{escape(nom)} ({'lots' if len(nums) > 1 else 'lot'} {escape(', '.join(nums))}) — {voix}{unite}"
+        for nom, nums, voix in entrees
+    )
 
 
 def generer_pv_pdf(copro, ag, db) -> BytesIO:
@@ -142,6 +208,12 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
                 f"des voix des autres — total de référence {resultat['total']} voix (au lieu de {somme}).",
                 style("small", spaceAfter=2),
             ))
+        noms = votants_nommes(r, lots, db)
+        for cle, libelle in _LISTES:
+            el.append(Paragraph(
+                f"<b>{libelle} :</b> {_liste_nominative(noms[cle], u)}",
+                style("small", spaceAfter=1),
+            ))
         if r.majorite == "art26":
             el.append(Paragraph(
                 f"Membres pour : {resultat['membres_pour']} / {resultat['nb_membres']} "
@@ -155,16 +227,22 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
 
     el.append(Spacer(1, 14))
     el.append(HRFlowable(width="100%", thickness=0.8, color=colors.HexColor("#94a3b8"), spaceAfter=8))
-    ville = copro.ville or ""
-    el.append(Paragraph(f"Fait à {ville}, le {_date_fr(date.today())}", style("normal", spaceAfter=24)))
-    el.append(Paragraph("Le syndic bénévole", style("normal", spaceAfter=2)))
-    el.append(Paragraph("<b>________________________</b>", style("normal", fontSize=10)))
+    # Le PV est signé à la fin de la séance (art. 17) : il est daté du jour de l'AG,
+    # pas du jour où le PDF est généré.
+    jour = _date_fr(ag.date).split(" ", 1)[1]          # « vendredi 20 novembre 2026 » → « 20 novembre 2026 »
+    ville = (copro.ville or "").strip()
+    fait = f"Fait à {ville}, le {jour}" if ville else f"Fait le {jour}"
+    signataires = ("Le président de séance", "Le secrétaire", "Le ou les scrutateurs")
+    sig = Table(
+        [[Paragraph(f"<b>{s}</b>", style("cell")) for s in signataires],
+         [Paragraph("Nom et signature", style("small")) for _ in signataires]],
+        colWidths=[56 * MM] * 3, rowHeights=[None, 22 * MM],
+    )
+    sig.setStyle(table_style())
+    # « Fait à … » et les signatures restent sur la même page.
+    el.append(KeepTogether([Paragraph(fait, style("normal", spaceAfter=10)), sig]))
     el.append(Spacer(1, 10))
-    el.append(Paragraph(
-        "Conformément à l'article 17 du décret n°67-223 du 17 mars 1967, le présent procès-verbal "
-        "est notifié à chaque copropriétaire dans un délai de deux mois à compter de la tenue de l'assemblée.",
-        style("legal"),
-    ))
+    el.append(Paragraph(_MENTION_ART42, style("legal")))
 
     doc.build(el)
     buf.seek(0)
