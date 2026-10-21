@@ -1,0 +1,15 @@
+# Applicateur des mises à jour demandées depuis l'interface (Réglages → Mises à jour).
+# Installation (une fois, sur le serveur, depuis le dossier de l'application) :
+#   sudo cp deploy/proprietas-update.service deploy/proprietas-update.timer /etc/systemd/system/
+#   sudo sed -i "s#/opt/copro-app#$(pwd)#" /etc/systemd/system/proprietas-update.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now proprietas-update.timer
+[Unit]
+Description=Proprietas — application des mises à jour demandées
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/copro-app
+ExecStart=/usr/bin/python3 deploy/apply-update.py
+TimeoutStartSec=900

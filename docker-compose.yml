@@ -24,8 +24,12 @@ services:
       COPRO_SECRET_KEY: ${COPRO_SECRET_KEY}
       COPRO_UPLOAD_DIR: /data/uploads
       COPRO_FRONTEND_DIST: /app/frontend_dist
+      COPRO_UPDATE_DIR: /data/updates
+      COPRO_INSTANCE_ADMINS: ${COPRO_INSTANCE_ADMINS:-}
     volumes:
       - uploads:/data/uploads
+      # Dossier partagé avec l'applicateur de mises à jour de l'hôte (deploy/apply-update.py)
+      - ./data/updates:/data/updates
     # (le bundle frontend est dans l'image multi-stage — plus de volume frontend_dist)
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')\""]
