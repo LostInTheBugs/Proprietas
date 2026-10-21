@@ -23,7 +23,6 @@ def _isoler(tmp_path, monkeypatch):
     """Dossier partagé jetable, version installée fixée, admin d'instance = syndic A."""
     s = get_settings()
     monkeypatch.setattr(s, "update_dir", str(tmp_path / "updates"))
-    monkeypatch.setattr(s, "instance_admins", "syndic.a@test.fr")
     monkeypatch.setattr(s, "update_mode", "server")
     monkeypatch.setattr(updates, "VERSION", "2026.10.001")
 
@@ -70,6 +69,13 @@ def test_check_erreur_reseau_notee_sans_planter(monkeypatch):
     st = updates.run_check()
     assert "réseau indisponible" in st["check"]["error"]
     assert st["available"] is False
+
+
+@pytest.fixture(autouse=True)
+def _admin_a(db, syndic_a):
+    """Le syndic A est administrateur de l'instance (case cochée dans l'application)."""
+    syndic_a.is_instance_admin = True
+    db.commit()
 
 
 def test_routes_reservees_a_l_admin_d_instance(client, token_a, token_b):
@@ -134,5 +140,4 @@ def test_tick_sans_auto_apply_ne_demande_rien(monkeypatch):
 
 def test_bureau_le_syndic_local_est_admin(client, token_a, token_b, monkeypatch):
     monkeypatch.setattr(get_settings(), "update_mode", "desktop")
-    monkeypatch.setattr(get_settings(), "instance_admins", "")
     assert client.get("/api/updates/me", headers=auth(token_b)).json() == {"instance_admin": True}
