@@ -25,7 +25,6 @@ services:
       COPRO_UPLOAD_DIR: /data/uploads
       COPRO_FRONTEND_DIST: /app/frontend_dist
       COPRO_UPDATE_DIR: /data/updates
-      COPRO_INSTANCE_ADMINS: ${COPRO_INSTANCE_ADMINS:-}
     volumes:
       - uploads:/data/uploads
       # Dossier partagé avec l'applicateur de mises à jour de l'hôte (deploy/apply-update.py)

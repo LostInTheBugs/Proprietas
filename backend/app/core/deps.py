@@ -92,14 +92,15 @@ def require_syndic(user: User = Depends(get_current_user)) -> User:
 
 
 def is_instance_admin(user: User) -> bool:
-    """Administrateur de l'INSTANCE (mises à jour) : e-mail listé dans COPRO_INSTANCE_ADMINS
-    (serveur), ou le syndic local (version de bureau)."""
+    """Administrateur de l'INSTANCE (mises à jour, liste des administrateurs).
+
+    Serveur : case users.is_instance_admin, gérée dans Réglages → Administrateurs de
+    l'instance ; le compte de démonstration ne l'est JAMAIS, même si la case est cochée.
+    Bureau : instance mono-poste, le syndic local en est l'administrateur."""
     from app.core.config import get_settings
-    s = get_settings()
-    if s.update_mode == "desktop":
-        # Version de bureau : instance mono-poste, le syndic local en est l'administrateur.
+    if get_settings().update_mode == "desktop":
         return user.role == "syndic"
-    return (user.email or "").strip().lower() in s.instance_admin_emails
+    return bool(user.is_instance_admin) and not user.is_demo
 
 
 def require_instance_admin(user: User = Depends(get_current_user)) -> User:

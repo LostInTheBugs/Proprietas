@@ -5,7 +5,7 @@ import type { Copro, Lot, Tresorerie, User } from "../types";
 import { fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
-import { UpdatesCard } from "../components/Updates";
+import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
 
 export default function Settings() {
   const { user: me, refresh } = useUser();
@@ -528,6 +528,7 @@ export default function Settings() {
       )}
 
       <UpdatesCard />
+      <InstanceAdminsCard myId={me?.id} />
 
       {modal && (
         <UserModal

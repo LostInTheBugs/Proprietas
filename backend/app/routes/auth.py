@@ -37,6 +37,8 @@ def register(req: RegisterRequest, request: Request, response: Response, db: Ses
         prenom=req.prenom.strip(),
         nom=req.nom.strip(),
         role="syndic",
+        # Le premier compte (celui qui installe) administre aussi l'instance.
+        is_instance_admin=True,
     )
     db.add(user)
     db.commit()

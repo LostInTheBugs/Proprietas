@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { api } from "../api";
-import { Badge, Button, Card, Modal, Select } from "./ui";
+import { Badge, Button, Card, Input, Modal, Select } from "./ui";
 
 export interface ReleaseInfo { version: string; published_at: string; url: string; notes: string }
 export interface UpdateState {
@@ -162,6 +162,66 @@ export function UpdatesCard() {
           ))}
         </div>
       </Modal>
+    </Card>
+  );
+}
+
+interface InstanceAdmin { id: number; email: string; prenom: string; nom: string }
+
+/** Panneau « Administrateurs de l'instance » (Réglages) : qui peut piloter les mises à jour.
+ *  Mode serveur uniquement ; en version de bureau, le syndic local est l'administrateur. */
+export function InstanceAdminsCard({ myId }: { myId?: number }) {
+  const { admin, st } = useUpdates();
+  const [admins, setAdmins] = useState<InstanceAdmin[]>([]);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (admin && st?.mode === "server")
+      api.get<InstanceAdmin[]>("/admin/instance-admins").then(setAdmins).catch(() => {});
+  }, [admin, st?.mode]);
+  if (!admin || st?.mode !== "server") return null;
+
+  async function call(fn: () => Promise<InstanceAdmin[]>) {
+    setBusy(true); setError("");
+    try { setAdmins(await fn()); setEmail(""); } catch (e) { setError(e instanceof Error ? e.message : "Erreur"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Card title="Administrateurs de l'instance">
+      <div className="space-y-3 text-sm">
+        <p className="text-xs text-slate-500">
+          Ils pilotent les mises à jour de l'application, pour toutes les copropriétés de cette instance.
+          C'est distinct du rôle de syndic.
+        </p>
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {admins.map((a) => (
+            <li key={a.id} className="flex items-center justify-between gap-2 px-3 py-2">
+              <span>
+                {[a.prenom, a.nom].filter(Boolean).join(" ") || a.email}{" "}
+                <span className="text-xs text-slate-500">{a.email}</span>
+                {a.id === myId && <span className="ml-1 text-xs text-slate-400">(vous)</span>}
+              </span>
+              {a.id !== myId && (
+                <button className="text-xs font-medium text-red-600 underline disabled:opacity-50" disabled={busy}
+                  onClick={() => call(() => api.del<InstanceAdmin[]>(`/admin/instance-admins/${a.id}`))}>
+                  Retirer
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+        <form className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => { e.preventDefault(); if (email.trim()) call(() => api.post<InstanceAdmin[]>("/admin/instance-admins", { email })); }}>
+          <div className="min-w-[16rem] flex-1">
+            <Input label="Ajouter un administrateur (e-mail d'un compte existant)" type="email" value={email}
+              onChange={(e) => setEmail(e.target.value)} placeholder="prenom.nom@exemple.fr" />
+          </div>
+          <Button type="submit" disabled={busy || !email.trim()}>Ajouter</Button>
+        </form>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
     </Card>
   );
 }
