@@ -283,7 +283,42 @@ lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
 - **Évolutions futures** : `alembic revision --autogenerate -m "..."` (backend/), relire la
   migration, commit, puis le déploiement l'applique au démarrage.
 
-### Mise à jour
+### Mises à jour depuis l'interface
+
+L'application vérifie les releases GitHub (toutes les heures par défaut, réglable ou
+désactivable) et affiche la version installée en bas de la barre latérale. Les
+**administrateurs de l'instance** voient un bandeau quand une version sort, et le panneau
+**Réglages → Mises à jour** : notes de toutes les versions intermédiaires, bouton
+« Mettre à jour », application automatique (désactivée par défaut).
+
+L'application ne redémarre jamais ses propres conteneurs (pas de socket Docker : choix de
+sécurité). Elle **dépose une demande** dans `data/updates/` ; un **applicateur côté hôte**
+(`deploy/apply-update.py`, timer systemd chaque minute) sauvegarde la base (`pg_dump` dans
+`data/backups/`, 10 dernières gardées), passe le dépôt sur le tag demandé, reconstruit les
+conteneurs et vérifie que l'API répond dans la nouvelle version.
+
+Installation, une fois, sur le serveur :
+
+```bash
+cd /opt/copro-app
+# .env : administrateurs de l'instance (e-mails, virgules) et profil du proxy TLS
+echo 'COPRO_INSTANCE_ADMINS=vous@exemple.fr' >> .env
+echo 'COMPOSE_PROFILES=internet' >> .env          # si l'instance est exposée (Caddy) ; COPRO_DOMAIN doit aussi y être
+mkdir -p data/updates data/backups
+sudo cp deploy/proprietas-update.service deploy/proprietas-update.timer /etc/systemd/system/
+sudo sed -i "s#/opt/copro-app#$(pwd)#" /etc/systemd/system/proprietas-update.service
+sudo systemctl daemon-reload && sudo systemctl enable --now proprietas-update.timer
+sudo python3 deploy/apply-update.py --dry-run    # contrôle : aucune demande → battement de cœur
+```
+
+Le compte de démonstration public ne doit **jamais** figurer dans `COPRO_INSTANCE_ADMINS`.
+Version de bureau : notification seulement, avec un lien vers la release à télécharger.
+
+Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, puis
+`scripts/bump-version.sh AAAA.MM.NNN`, commit, `git tag AAAA.MM.NNN && git push origin AAAA.MM.NNN`
+(le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG).
+
+### Mise à jour manuelle
 
 ```bash
 # Sur le serveur de production (utilisateur avec droits docker)
