@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026.10.002
+## 2026.10.002 — 2026-10-21
 
 - Système de mise à jour : version affichée dans l'interface, vérification des releases GitHub, mise à jour depuis Réglages → Mises à jour via l'applicateur de l'hôte (sauvegarde de la base avant chaque mise à jour).
 
