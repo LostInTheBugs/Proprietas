@@ -105,6 +105,35 @@ def _vote_membre(owner_key, lots_by_member, votes) -> str:
     return "absent"
 
 
+def _reduction_art22(lots, membres: dict, total: int) -> tuple[dict, int, object]:
+    """Poids de vote de chaque lot, après la réduction de l'art. 22 al. 2.
+
+    Retourne (poids par lot_id en Fraction, total de référence, clé du membre réduit ou None).
+    Pas de réduction en régime « 2 copropriétaires » (art. 41-16) : nb de membres <= 2.
+    """
+    poids = {l.id: Fraction(l.tantiemes) for l in lots}
+    if len(membres) <= 2:
+        return poids, total, None
+    for owner_key, info in membres.items():
+        voix = info["voix"]
+        if voix * 2 > total:
+            # Réduction : poids de chaque lot de ce membre * (total - voix) / voix
+            ratio = Fraction(total - voix, voix)
+            for l in info["lots"]:
+                poids[l.id] = poids[l.id] * ratio
+            return poids, 2 * (total - voix), owner_key
+    return poids, total, None
+
+
+def poids_de_vote(lots) -> dict:
+    """Poids de vote de chaque lot ({lot_id: Fraction}), réduction art. 22 comprise.
+
+    Mêmes poids que ceux qu'utilise calculer_statut_resolution : le PV s'en sert pour
+    indiquer les voix des opposants, abstentionnistes et défaillants (décret 1967, art. 17).
+    """
+    return _reduction_art22(lots, _membres(lots), tantiemes_totaux(lots))[0]
+
+
 def calculer_statut_resolution(resolution, lots, votes) -> dict:
     """Calcule le statut d'une résolution selon les règles françaises.
 
@@ -117,27 +146,8 @@ def calculer_statut_resolution(resolution, lots, votes) -> dict:
     membres = _membres(lots)
     nb_membres = len(membres)
 
-    # Poids en Fraction pour précision exacte
-    poids = {l.id: Fraction(l.tantiemes) for l in lots}
-
-    # Recherche d'un membre majoritaire (art. 22 al. 2)
-    reduction_art22 = None
-    total_ref = total
-    reduced_poids = dict(poids)
-
     regime_deux = nb_membres <= 2
-
-    if not regime_deux:
-        for owner_key, info in membres.items():
-            voix = info["voix"]
-            if voix * 2 > total:
-                # Réduction : poids de chaque lot de ce membre * (total - voix) / voix
-                ratio = Fraction(total - voix, voix)
-                for l in info["lots"]:
-                    reduced_poids[l.id] = poids[l.id] * ratio
-                total_ref = 2 * (total - voix)
-                reduction_art22 = owner_key
-                break
+    reduced_poids, total_ref, reduction_art22 = _reduction_art22(lots, membres, total)
 
     pour = sum(reduced_poids.get(v.lot_id, 0) for v in votes if v.voix == "pour")
     contre = sum(reduced_poids.get(v.lot_id, 0) for v in votes if v.voix == "contre")
