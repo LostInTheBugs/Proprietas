@@ -6,7 +6,7 @@ jamais stocké : il est recalculé à la lecture depuis ces actes + le solde du 
 """
 from datetime import datetime
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, Numeric, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -27,7 +27,7 @@ class ActeRecouvrement(Base):
     date_envoi = Column(Date, nullable=True)  # date d'envoi / de l'étape (fait générateur)
     mode_envoi = Column(String, default="")  # lre | lrar | email | remise
     reference = Column(String, default="")  # n° de LRE / AR / référence de l'acte
-    montant = Column(Float, default=0.0)  # frais : montant ; MD : principal réclamé
+    montant = Column(Numeric(12, 2), default=0.0)  # frais : montant ; MD : principal réclamé
     libelle = Column(String, default="")
     details_json = Column(Text, default="")  # snapshot décompte (MD) / lignes (19-2)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

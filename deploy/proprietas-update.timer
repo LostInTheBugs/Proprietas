@@ -1,0 +1,10 @@
+[Unit]
+Description=Proprietas — vérifie chaque minute si une mise à jour a été demandée
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Unit=proprietas-update.service
+
+[Install]
+WantedBy=timers.target

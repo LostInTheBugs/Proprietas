@@ -82,7 +82,9 @@ export default function Ag() {
               ) : (
                 <div className="space-y-4">
                   {ag.resolutions.map((r) => (
-                    <ResolutionCard key={r.id} r={r} lots={lots} total={total} majorites={majorites} isSyndic={isSyndic} onChanged={load} onError={setError} />
+                    <ResolutionCard key={r.id} r={r} lots={lots} total={total} majorites={majorites} isSyndic={isSyndic}
+                      aUnSecondVote={ag.resolutions.some((x) => x.second_vote_de_id === r.id)}
+                      onChanged={load} onError={setError} />
                   ))}
                 </div>
               )}
@@ -348,13 +350,22 @@ function CreneauModal({ agId, onClose, onSaved, onError }: {
   );
 }
 
-function ResolutionCard({ r, lots, total, majorites, isSyndic, onChanged, onError }: {
+function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, onChanged, onError }: {
   r: Resolution; lots: Lot[]; total: number; majorites: Record<string, Majorite>;
-  isSyndic: boolean; onChanged: () => void; onError: (e: string) => void;
+  isSyndic: boolean; aUnSecondVote: boolean; onChanged: () => void; onError: (e: string) => void;
 }) {
   const res = r.resultat;
-  const pct = total > 0 ? (res ? (res.pour / total) * 100 : 0) : 0;
+  // Base de calcul : le total de référence du moteur (réduit par l'art. 22 le cas échéant).
+  const base = res && res.total > 0 ? res.total : total;
+  const pct = base > 0 ? (res ? (res.pour / base) * 100 : 0) : 0;
   const majorite = majorites[r.majorite];
+
+  async function secondVote() {
+    try {
+      await api.post(`/resolutions/${r.id}/second-vote`);
+      onChanged();
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
 
   async function vote(lotId: number, voix: string) {
     try {
@@ -376,6 +387,7 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, onChanged, onErro
           {r.texte && <p className="mt-1 text-xs text-slate-500">{r.texte}</p>}
         </div>
         <div className="flex items-center gap-2">
+          {r.second_vote_de_id !== null && <Badge color="indigo">Second vote</Badge>}
           {r.statut === "a_voter" && <Badge color="amber">À voter</Badge>}
           {r.statut === "adoptee" && <Badge color="green">Adoptée</Badge>}
           {r.statut === "rejetee" && <Badge color="red">Rejetée</Badge>}
@@ -397,12 +409,22 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, onChanged, onErro
             <span className="ml-auto font-medium">{pct.toFixed(0)} % des millièmes pour</span>
           </div>
           <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-slate-100">
-            <div className="bg-emerald-500" style={{ width: `${(res.pour / total) * 100}%` }} />
-            <div className="bg-red-400" style={{ width: `${(res.contre / total) * 100}%` }} />
-            <div className="bg-slate-300" style={{ width: `${(res.abstention / total) * 100}%` }} />
+            <div className="bg-emerald-500" style={{ width: `${(res.pour / base) * 100}%` }} />
+            <div className="bg-red-400" style={{ width: `${(res.contre / base) * 100}%` }} />
+            <div className="bg-slate-300" style={{ width: `${(res.abstention / base) * 100}%` }} />
           </div>
-          {res.regime_deux && (
-            <p className="mt-1.5 text-xs font-medium text-indigo-600">ℹ {res.detail}</p>
+          {r.majorite === "art26" && (
+            <p className="mt-1.5 text-xs text-slate-600">
+              Membres pour : <b className="tabular-nums">{res.membres_pour} / {res.nb_membres}</b> (majorité des membres requise)
+            </p>
+          )}
+          <p className={`mt-1.5 text-xs ${res.regime_deux || res.reduction_art22 !== null ? "font-medium text-indigo-600" : "text-slate-500"}`}>
+            ℹ {res.detail}
+          </p>
+          {isSyndic && res.second_vote_possible && !aUnSecondVote && (
+            <Button variant="secondary" className="mt-2 px-2.5 py-1.5 text-xs" onClick={secondVote}>
+              Procéder au second vote ({res.second_vote_possible === "art24" ? "art. 24" : "art. 25"})
+            </Button>
           )}
         </div>
       )}

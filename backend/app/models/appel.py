@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Date
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Date
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -10,10 +10,10 @@ class AppelFonds(Base):
     libelle = Column(String, nullable=False)
     date_emission = Column(Date, nullable=False)
     date_echeance = Column(Date, nullable=True)
-    montant_total = Column(Float, default=0.0)
+    montant_total = Column(Numeric(12, 2), default=0.0)
     inclut_fonds_travaux = Column(Boolean, default=False)
     # Montant du fonds de travaux inclus (taux appliqué au montant total)
-    fonds_travaux_montant = Column(Float, default=0.0)
+    fonds_travaux_montant = Column(Numeric(12, 2), default=0.0)
 
     exercice = relationship("Exercice", back_populates="appels")
     parts = relationship("AppelLot", back_populates="appel", cascade="all, delete-orphan")
@@ -24,8 +24,8 @@ class AppelLot(Base):
     id = Column(Integer, primary_key=True)
     appel_id = Column(Integer, ForeignKey("appels_fonds.id"), nullable=False)
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=False)
-    montant_charges = Column(Float, default=0.0)
-    montant_fonds_travaux = Column(Float, default=0.0)
+    montant_charges = Column(Numeric(12, 2), default=0.0)
+    montant_fonds_travaux = Column(Numeric(12, 2), default=0.0)
 
     appel = relationship("AppelFonds", back_populates="parts")
     lot = relationship("Lot")
