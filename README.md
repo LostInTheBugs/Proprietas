@@ -301,8 +301,7 @@ Installation, une fois, sur le serveur :
 
 ```bash
 cd /opt/copro-app
-# .env : administrateurs de l'instance (e-mails, virgules) et profil du proxy TLS
-echo 'COPRO_INSTANCE_ADMINS=vous@exemple.fr' >> .env
+# .env : profil du proxy TLS
 echo 'COMPOSE_PROFILES=internet' >> .env          # si l'instance est exposée (Caddy) ; COPRO_DOMAIN doit aussi y être
 mkdir -p data/updates data/backups
 sudo cp deploy/proprietas-update.service deploy/proprietas-update.timer /etc/systemd/system/
@@ -311,7 +310,19 @@ sudo systemctl daemon-reload && sudo systemctl enable --now proprietas-update.ti
 sudo python3 deploy/apply-update.py --dry-run    # contrôle : aucune demande → battement de cœur
 ```
 
-Le compte de démonstration public ne doit **jamais** figurer dans `COPRO_INSTANCE_ADMINS`.
+**Administrateurs de l'instance** (qui voit et pilote les mises à jour) : ils se gèrent dans
+**Réglages → Administrateurs de l'instance**. Le premier compte créé à l'installation l'est
+d'office ; il peut en ajouter d'autres par l'e-mail d'un compte existant, ou en retirer (jamais
+lui-même, donc il en reste toujours un). Le compte de démonstration ne peut jamais l'être.
+Ce n'est pas le rôle de syndic : un syndic d'une autre copropriété hébergée n'y a pas accès.
+
+En cas de perte d'accès (seul administrateur supprimé, e-mail changé…), sur le serveur :
+
+```bash
+docker compose exec db psql -U copro copro -c \
+  "UPDATE users SET is_instance_admin = true WHERE lower(email) = 'vous@exemple.fr';"
+```
+
 Version de bureau : notification seulement, avec un lien vers la release à télécharger.
 
 Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, puis
