@@ -89,3 +89,20 @@ def require_syndic(user: User = Depends(get_current_user)) -> User:
     if user.role != "syndic":
         raise HTTPException(403, "Réservé au syndic")
     return user
+
+
+def is_instance_admin(user: User) -> bool:
+    """Administrateur de l'INSTANCE (mises à jour) : e-mail listé dans COPRO_INSTANCE_ADMINS
+    (serveur), ou le syndic local (version de bureau)."""
+    from app.core.config import get_settings
+    s = get_settings()
+    if s.update_mode == "desktop":
+        # Version de bureau : instance mono-poste, le syndic local en est l'administrateur.
+        return user.role == "syndic"
+    return (user.email or "").strip().lower() in s.instance_admin_emails
+
+
+def require_instance_admin(user: User = Depends(get_current_user)) -> User:
+    if not is_instance_admin(user):
+        raise HTTPException(403, "Réservé à l'administrateur de l'instance")
+    return user

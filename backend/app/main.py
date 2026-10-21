@@ -6,10 +6,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from app.core.config import get_settings
+from app.core.version import VERSION
 from app.core.database import SessionLocal
 from app.core.httpinfo import est_externe, requete_https
 from app.models.instance import InstanceState
-from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement
+from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates
 
 settings = get_settings()
 
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(title="Proprietas", version="2026.10.001", lifespan=lifespan)
+app = FastAPI(title="Proprietas", version=VERSION, lifespan=lifespan)
 
 # CORS : en dev (SQLite) on autorise le serveur Vite ; en prod le frontend est
 # servi par le même backend, donc liste vide par défaut (configurable via
@@ -45,7 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement):
+for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates):
     app.include_router(r.router)
 app.include_router(securite.router_audit)
 
