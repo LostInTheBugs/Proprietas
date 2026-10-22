@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot } from "../types";
+import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, AppelLot, Travaux } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -191,6 +191,20 @@ export default function Comptes() {
                           {a.inclut_fonds_travaux && (
                             <p className="text-xs text-indigo-600">dont fonds travaux {fmtEUR(a.fonds_travaux_montant)}</p>
                           )}
+                          {isSyndic && (
+                            <Button
+                              variant="ghost"
+                              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 ml-2"
+                              onClick={async () => {
+                                if (confirm(`Supprimer l'appel "${a.libelle}" ?`)) {
+                                  await api.del(`/appels/${a.id}`);
+                                  refresh();
+                                }
+                              }}
+                            >
+                              Suppr.
+                            </Button>
+                          )}
                         </div>
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-1 text-xs sm:grid-cols-4">
@@ -237,6 +251,7 @@ export default function Comptes() {
                   <tbody>
                     {mouvements.map((m) => {
                       const lot = lots.find((l) => l.id === m.lot_id);
+                      const appel = appels.find((a) => a.id === m.appel_id);
                       return (
                         <tr key={m.id} className="border-b border-slate-50 last:border-0">
                           <td className="py-2 whitespace-nowrap text-slate-600">{fmtDate(m.date)}</td>
@@ -336,21 +351,39 @@ function BudgetModal({ exId, onClose, onSaved, onError }: { exId: number; onClos
   );
 }
 
+// ===== MODIFICATION 4 : AppelModal avec sélection lots + lien travaux =====
 function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
   const [libelle, setLibelle] = useState("");
   const [montant, setMontant] = useState("");
   const [dateEmission, setDateEmission] = useState(new Date().toISOString().slice(0, 10));
   const [dateEcheance, setDateEcheance] = useState("");
   const [ft, setFt] = useState(true);
+  // Sélection des lots concernés (checkboxes)
+  const [lotIds, setLotIds] = useState<number[]>([]);
+  // Lien vers un travaux du plan
+  const [travaux, setTravaux] = useState<Travaux[]>([]);
+  const [travauxId, setTravauxId] = useState("");
+
+  useEffect(() => {
+    // Charger les travaux existants
+    api.get<Travaux[]>("/travaux").then(setTravaux).catch(() => {});
+  }, []);
+
   async function save() {
     try {
       await api.post(`/exercices/${exId}/appels`, {
-        libelle, montant_total: Number(montant), date_emission: dateEmission,
-        date_echeance: dateEcheance || null, inclut_fonds_travaux: ft,
+        libelle,
+        montant_total: Number(montant),
+        date_emission: dateEmission,
+        date_echeance: dateEcheance || null,
+        inclut_fonds_travaux: ft,
+        lot_ids: lotIds.length > 0 ? lotIds : undefined, // si vide = tous les lots par défaut
+        travaux_id: travauxId === "" ? undefined : Number(travauxId),
       });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
+
   return (
     <Modal open title="Appel de fonds" onClose={onClose}>
       <div className="space-y-3">
@@ -364,9 +397,47 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
           <input type="checkbox" checked={ft} onChange={(e) => setFt(e.target.checked)} />
           Inclure la cotisation fonds de travaux (5 % du montant)
         </label>
-        <p className="text-xs leading-relaxed text-slate-500">
-          Le montant sera réparti automatiquement entre les {lots.length} lots au prorata des millièmes.
-        </p>
+
+        {/* Lots concernés (checkboxes) */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-700">Lots concernés</label>
+          <div className="grid grid-cols-2 gap-1">
+            {lots.map((l) => {
+              const checked = lotIds.includes(l.id);
+              return (
+                <label key={l.id} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) setLotIds([...lotIds, l.id]);
+                      else setLotIds(lotIds.filter((id) => id !== l.id));
+                    }}
+                    className="accent-indigo-600"
+                  />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-medium">Lot {l.numero}</span>
+                    {l.designation ? <span className="text-slate-500"> — {l.designation}</span> : ""}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-xs leading-relaxed text-slate-500">
+            {lotIds.length > 0
+              ? `Appel soumis à ${lotIds.length} lot(s) sélectionné(s). Les autres lots ne paieront pas cet appel.`
+              : `Le montant sera réparti automatiquement entre tous les ${lots.length} lots au prorata des millièmes.`}
+          </p>
+        </div>
+
+        {/* Lien vers un travaux du plan */}
+        <Select label="Travaux associé (plan pluriannuel)" value={travauxId} onChange={(e) => setTravauxId(e.target.value)}>
+          <option value="">Aucun</option>
+          {travaux.map((t) => (
+            <option key={t.id} value={t.id}>{t.annee} — {t.libelle} ({fmtEUR(t.montant)})</option>
+          ))}
+        </Select>
+
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Créer l'appel</Button>
@@ -376,22 +447,61 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
+// ===== MODIFICATION 2 : MouvementModal avec Select multiple pour les lots =====
 function MouvementModal({ exId, lots, onClose, onSaved, onError }: { exId: number; lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [libelle, setLibelle] = useState("");
   const [type, setType] = useState("encaissement");
   const [categorie, setCategorie] = useState("charges");
-  const [montant, setMontant] = useState("");
-  const [lotId, setLotId] = useState("");
+  const [montantTotal, setMontantTotal] = useState("");
+  // Appel de fonds sélectionné
+  const [appels, setAppels] = useState<Appel[]>([]);
+  const [appelId, setAppelId] = useState("");
+  // Lots sélectionnés (tableau)
+  const [lotIds, setLotIds] = useState<number[]>([]);
+  // Charger les appels de l'exercice
+  useEffect(() => {
+    api.get<Appel[]>(`/exercices/${exId}/appels`).then(setAppels).catch(() => {});
+  }, [exId]);
+
   async function save() {
     try {
-      await api.post(`/exercices/${exId}/mouvements`, {
-        date, libelle, type, categorie, montant: Number(montant),
-        lot_id: lotId === "" ? null : Number(lotId),
+      // Si aucun appel sélectionné, on créé un seul mouvement sans appel (fallback)
+      if (appelId === "") {
+        await api.post(`/exercices/${exId}/mouvements`, {
+          date, libelle, type, categorie,
+          montant: Number(montantTotal),
+          lot_id: lotIds.length > 0 ? lotIds[0] : null,
+        });
+        onSaved();
+        return;
+      }
+
+      // Récupérer l'appel sélectionné avec ses parts
+      const appel = appels.find((a) => a.id === Number(appelId));
+      if (!appel) {
+        onError("Appel de fonds introuvable.");
+        return;
+      }
+
+      // Créer un mouvement par lot sélectionné
+      const movements = lotIds.map((lotId) => {
+        // Trouver la part de l'appel pour ce lot
+        const part = appel.parts.find((p: AppelLot) => p.lot_id === lotId);
+        const montant = part ? part.montant_charges : 0;
+        return api.post(`/exercices/${exId}/mouvements`, {
+          date, libelle, type, categorie,
+          montant,
+          lot_id: lotId,
+          appel_id: Number(appelId),
+        });
       });
+
+      await Promise.all(movements);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
+
   return (
     <Modal open title="Nouveau mouvement" onClose={onClose}>
       <div className="space-y-3">
@@ -412,13 +522,49 @@ function MouvementModal({ exId, lots, onClose, onSaved, onError }: { exId: numbe
             <option value="autre">Autre</option>
           </Select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
-          <Select label="Lot (si paiement individuel)" value={lotId} onChange={(e) => setLotId(e.target.value)}>
-            <option value="">Copro entière</option>
-            {lots.map((l) => <option key={l.id} value={l.id}>Lot {l.numero}</option>)}
-          </Select>
+        <Input label="Montant total (€)" type="number" step="0.01" value={montantTotal} onChange={(e) => setMontantTotal(e.target.value)} />
+        {/* Appel de fonds sélectionné */}
+        <Select label="Appel de fonds (si paiement lié)" value={appelId} onChange={(e) => setAppelId(e.target.value)}>
+          <option value="">Aucun</option>
+          {appels.map((a) => <option key={a.id} value={a.id}>{a.libelle} — {a.date_emission}</option>)}
+        </Select>
+        {/* Lots sélectionnés (checkboxes) */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-slate-700">Lots concernés (si plusieurs)</label>
+          <div className="grid grid-cols-2 gap-1">
+            {lots.map((l) => {
+              const checked = lotIds.includes(l.id);
+              const part = appelId && appels.find((a) => a.id === Number(appelId))?.parts.find((p: AppelLot) => p.lot_id === l.id);
+              return (
+                <label key={l.id} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      if (e.target.checked) setLotIds([...lotIds, l.id]);
+                      else setLotIds(lotIds.filter((id) => id !== l.id));
+                    }}
+                    className="accent-indigo-600"
+                  />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-medium">Lot {l.numero}</span>
+                    {l.designation ? <span className="text-slate-500"> — {l.designation}</span> : ""}
+                  </span>
+                  {part && <span className="ml-auto text-xs tabular-nums text-indigo-600">{fmtEUR(part.montant_charges)}</span>}
+                </label>
+              );
+            })}
+          </div>
         </div>
+        <p className="text-xs leading-relaxed text-slate-500">
+          {appelId && (() => {
+            const appel = appels.find((a) => a.id === Number(appelId));
+            if (!appel) return null;
+            const selectedParts = appel.parts.filter((p: AppelLot) => lotIds.includes(p.lot_id));
+            const total = selectedParts.reduce((s, p) => s + p.montant_charges, 0);
+            return <span>Total des lots sélectionnés : <strong>{fmtEUR(total)}</strong></span>;
+          })()}
+        </p>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Enregistrer</Button>
