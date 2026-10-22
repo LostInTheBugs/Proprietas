@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.004 — 2026-10-22
+
+- Image Docker publiée sur GHCR à chaque release ; stratégie « pull » de l'applicateur pour les petits serveurs (PROPRIETAS_UPDATE_STRATEGY=pull).
+
 ## 2026.10.003 — 2026-10-21
 
 - PV conforme : noms et voix des opposants, abstentionnistes et défaillants (décret 1967, art. 17), date de l'AG, signatures président/secrétaire/scrutateurs, mention art. 42 al. 2 corrigée.
