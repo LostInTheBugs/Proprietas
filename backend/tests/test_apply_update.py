@@ -1,5 +1,7 @@
 """Applicateur de l'hôte (deploy/apply-update.py) en --dry-run, sur une copie isolée :
-battement de cœur, refus des versions invalides, tag inexistant, dry-run complet."""
+battement de cœur, refus des versions invalides, tag inexistant, dry-run complet,
+stratégie « pull » (image construite par GitHub) et réécriture du .env."""
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -54,3 +56,43 @@ def test_dry_run_complet_garde_la_demande(tmp_path):
     journal = (tmp_path / "app" / "data" / "updates" / "update.log").read_text(encoding="utf-8")
     assert "sauvegarde →" in journal
     assert "git checkout --quiet 2026.10.002" in journal and "docker compose up -d --build" in journal
+
+
+def test_dry_run_strategie_pull_n_utilise_pas_build(tmp_path):
+    # Petit serveur : l'image est construite par GitHub (GHCR) et seulement téléchargée.
+    app = _app(tmp_path, tag="2026.10.004")
+    (app / ".env").write_text("POSTGRES_PASSWORD=x\nPROPRIETAS_UPDATE_STRATEGY=pull\n", encoding="utf-8")
+    res, status, demande = _run(app, {"version": "2026.10.004", "by": "x"})
+    assert res.returncode == 0, res.stdout + res.stderr
+    journal = (app / "data" / "updates" / "update.log").read_text(encoding="utf-8")
+    assert "PROPRIETAS_VERSION=2026.10.004" in journal
+    assert "docker compose pull backend" in journal
+    assert "docker compose up -d --no-build" in journal
+    assert "--build" not in journal.replace("--no-build", "")
+    # dry-run : le .env n'est pas modifié
+    assert "PROPRIETAS_VERSION" not in (app / ".env").read_text(encoding="utf-8")
+
+
+def _module():
+    spec = importlib.util.spec_from_file_location("apply_update", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_set_env_remplace_ou_ajoute_sans_toucher_au_reste(tmp_path):
+    mod = _module()
+    env = tmp_path / ".env"
+    env.write_text("# commentaire\nPOSTGRES_PASSWORD=secret\nPROPRIETAS_VERSION=2026.10.003\n", encoding="utf-8")
+    assert mod.set_env(env, "PROPRIETAS_VERSION", "2026.10.004") == "2026.10.003"
+    assert env.read_text(encoding="utf-8") == (
+        "# commentaire\nPOSTGRES_PASSWORD=secret\nPROPRIETAS_VERSION=2026.10.004\n")
+    assert mod.set_env(env, "AUTRE", "1") is None          # absente : ajoutée à la fin
+    assert env.read_text(encoding="utf-8").endswith("PROPRIETAS_VERSION=2026.10.004\nAUTRE=1\n")
+
+
+def test_strategie_par_defaut_build(tmp_path):
+    mod = _module()
+    assert mod.read_env(tmp_path / ".env") == {}            # pas de .env
+    (tmp_path / ".env").write_text("PROPRIETAS_UPDATE_STRATEGY = pull \n", encoding="utf-8")
+    assert mod.read_env(tmp_path / ".env")["PROPRIETAS_UPDATE_STRATEGY"] == "pull"
