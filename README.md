@@ -325,9 +325,27 @@ docker compose exec db psql -U copro copro -c \
 
 Version de bureau : notification seulement, avec un lien vers la release à télécharger.
 
+**Petits serveurs (moins de 2 Go de RAM) : télécharger l'image au lieu de la construire.**
+Construire l'image compile le frontend (`npm run build`), ce qui demande 1 à 2 Go de RAM
+et peut faire tomber un petit VPS. À chaque release, GitHub publie l'image toute prête
+(`ghcr.io/lostinthebugs/proprietas:<version>`). Pour l'utiliser :
+
+```bash
+echo 'PROPRIETAS_UPDATE_STRATEGY=pull' >> .env      # l'applicateur télécharge au lieu de construire
+echo 'PROPRIETAS_VERSION=2026.10.004' >> .env       # version de l'image (mise à jour par l'applicateur)
+docker compose pull backend && docker compose up -d --no-build
+```
+
+En stratégie « pull », ne lancez jamais `docker compose up -d --build` ni `docker compose up`
+sur une image absente : Compose construirait l'image sur place.
+
 Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, puis
 `scripts/bump-version.sh AAAA.MM.NNN`, commit, `git tag AAAA.MM.NNN && git push origin AAAA.MM.NNN`
-(le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG).
+(le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG **et** publie
+l'image `ghcr.io/lostinthebugs/proprietas:<version>` ; pour un tag déjà publié :
+Actions → Release → *Run workflow* avec le tag). Le paquet GHCR doit être **public**
+(GitHub → Packages → proprietas → Package settings → Change visibility) pour que les
+serveurs le téléchargent sans identifiants.
 
 ### Mise à jour manuelle
 

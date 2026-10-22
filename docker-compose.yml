@@ -15,6 +15,11 @@ services:
       retries: 5
 
   backend:
+    # Image publiée par GitHub à chaque release (workflow release.yml, job « image ») ;
+    # `build` reste disponible pour les serveurs qui construisent sur place.
+    # PROPRIETAS_VERSION (dans .env) : tag de l'image — écrit par deploy/apply-update.py
+    # en stratégie « pull ».
+    image: ghcr.io/lostinthebugs/proprietas:${PROPRIETAS_VERSION:-latest}
     build:
       context: .
       dockerfile: backend/Dockerfile

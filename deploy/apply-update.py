@@ -8,8 +8,13 @@ L'application ne fait que DÉPOSER une demande dans `data/updates/update-request
   2. SAUVEGARDE la base PostgreSQL (`pg_dump`) dans `data/backups/` (10 dernières gardées) ;
   3. met le dépôt sur le tag demandé (`git fetch --tags` + `git checkout <tag>`, en tant
      que propriétaire du dépôt) ;
-  4. reconstruit et relance (`docker compose up -d --build` ; les migrations Alembic
-     s'appliquent au démarrage du conteneur) ;
+  4. relance l'application dans la nouvelle version (les migrations Alembic s'appliquent
+     au démarrage du conteneur), selon PROPRIETAS_UPDATE_STRATEGY dans le .env :
+       - « build » (défaut) : `docker compose up -d --build` — construit l'image sur place ;
+       - « pull » : image construite par GitHub (ghcr.io/lostinthebugs/proprietas:<version>),
+         PROPRIETAS_VERSION=<version> écrit dans le .env, `docker compose pull backend`
+         puis `docker compose up -d --no-build`. Pour les petits serveurs : construire
+         le frontend demande 1 à 2 Go de RAM et peut faire tomber un petit VPS ;
   5. attend que l'API réponde avec la NOUVELLE version, sinon signale l'échec
      (la sauvegarde indiquée permet de revenir en arrière à la main).
 
@@ -33,6 +38,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 UPD = APP_DIR / "data" / "updates"
 BACKUPS = APP_DIR / "data" / "backups"
+ENV = APP_DIR / ".env"
 REQ = UPD / "update-request.json"
 STATUS = UPD / "update-applier.json"
 LOG = UPD / "update.log"
@@ -76,6 +82,40 @@ def run(cmd: list[str], as_owner: bool = False, capture: bool = False) -> str:
     if res.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)} — code {res.returncode} : {(res.stderr or res.stdout).strip()[-400:]}")
     return res.stdout
+
+
+def read_env(path: Path) -> dict:
+    """Lecture simple d'un .env (CLE=valeur ; commentaires et lignes vides ignorés)."""
+    out = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, _, v = line.partition("=")
+            out[k.strip()] = v.strip()
+    return out
+
+
+def set_env(path: Path, key: str, value: str):
+    """Remplace (ou ajoute à la fin) KEY=value dans le .env, sans toucher aux autres lignes.
+    Retourne l'ancienne valeur (None si la clé était absente), pour pouvoir la remettre."""
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    old = None
+    for i, line in enumerate(lines):
+        if line.partition("=")[0].strip() == key and not line.lstrip().startswith("#"):
+            old = line.partition("=")[2].strip()
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if path.exists():
+        os.chmod(tmp, path.stat().st_mode)
+    tmp.replace(path)
+    return old
 
 
 def backup() -> str:
@@ -135,15 +175,33 @@ def main() -> int:
     log(f"demande de {by} : mise à jour vers {version}{' (dry-run)' if DRY else ''}")
     status(result="en cours", running=version, running_at=time.time())
     dump = ""
+    strategy = read_env(ENV).get("PROPRIETAS_UPDATE_STRATEGY", "build").lower()
+    env_restore = False
+    old_version = None
     try:
         run(["git", "fetch", "--tags", "--quiet", "origin"], as_owner=True)
         run(["git", "rev-parse", "--verify", f"refs/tags/{version}"], as_owner=True, capture=True)
         dump = backup()
         run(["git", "checkout", "--quiet", version], as_owner=True)
-        run(["docker", "compose", "up", "-d", "--build"])
+        if strategy == "pull":
+            log(f".env : PROPRIETAS_VERSION={version}")
+            if not DRY:
+                old_version = set_env(ENV, "PROPRIETAS_VERSION", version)
+                env_restore = True
+            run(["docker", "compose", "pull", "backend"])
+            run(["docker", "compose", "up", "-d", "--no-build"])
+        else:
+            run(["docker", "compose", "up", "-d", "--build"])
         wait_version(version)
     except Exception as exc:  # noqa: BLE001 — on note l'échec ; la demande est retirée pour ne pas boucler
         log(f"ÉCHEC : {exc}")
+        if env_restore:
+            # L'image précédente reste celle du .env : un `docker compose up -d` manuel la relance.
+            if old_version is None:
+                set_env(ENV, "PROPRIETAS_VERSION", "latest")
+            else:
+                set_env(ENV, "PROPRIETAS_VERSION", old_version)
+            log(f".env : PROPRIETAS_VERSION remis à {old_version or 'latest'}")
         REQ.unlink(missing_ok=True)
         status(result=f"échec : {exc}"[:300], running="", backup=dump, at=time.time())
         return 1
