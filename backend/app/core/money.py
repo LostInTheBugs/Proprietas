@@ -51,3 +51,35 @@ def somme(valeurs: Iterable[Decimal]) -> Decimal:
 
 
 
+
+
+# ---------------------------------------------------------------- saisies (schémas d'entrée)
+LIMITE_MONTANT = Decimal("10000000000")   # Numeric(12,2) : au plus 9 999 999 999,99
+LIMITE_TAUX = Decimal("1000")             # Numeric(7,4)  : au plus 999,9999
+
+
+def decimal_saisi(v, quantum: Decimal, limite: Decimal) -> Decimal | None:
+    """Valide et arrondit une valeur SAISIE (corps de requête), avant toute écriture en base.
+
+    - accepte int, float, str ou Decimal ; None reste None (champ optionnel) ;
+    - refuse les booléens, le texte non numérique, NaN / ±Infinity et les valeurs hors
+      limites de la colonne (ValueError → 422 côté API, au lieu d'un 500 plus loin) ;
+    - arrondit au `quantum` (0.01 ou 0.0001) en ROUND_HALF_UP.
+    Sans cela, SQLite stocke la valeur brute (10.005) alors que PostgreSQL l'arrondit.
+    """
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        raise ValueError("Montant invalide")
+    try:
+        d = D(v)
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError("Montant invalide") from None
+    if not d.is_finite():
+        raise ValueError("Montant invalide (valeur non finie)")
+    if abs(d) >= limite:                  # avant quantize : 1e30 dépasserait la précision Decimal
+        raise ValueError("Montant hors limites")
+    d = d.quantize(quantum, rounding=ROUND_HALF_UP)
+    if abs(d) >= limite:                  # 9999999999.995 s'arrondit à la limite
+        raise ValueError("Montant hors limites")
+    return d
