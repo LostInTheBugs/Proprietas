@@ -1,10 +1,13 @@
+import math
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.core.config import get_settings
 from app.core.version import VERSION
 from app.core.database import SessionLocal
@@ -29,6 +32,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Proprietas", version=VERSION, lifespan=lifespan)
+
+
+def _json_fini(o):
+    """NaN / ±Infinity → texte : ces valeurs ne sont pas du JSON valide."""
+    if isinstance(o, float) and not math.isfinite(o):
+        return str(o)
+    if isinstance(o, dict):
+        return {k: _json_fini(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_fini(v) for v in o]
+    return o
+
+
+@app.exception_handler(RequestValidationError)
+async def _erreur_validation(request: Request, exc: RequestValidationError):
+    """Même réponse 422 que FastAPI, mais sans planter quand la valeur refusée est NaN ou
+    Infinity : le gestionnaire par défaut renvoie la valeur saisie (`input`) et l'encodage
+    JSON échouait → 500 au lieu de 422."""
+    return JSONResponse(status_code=422, content={"detail": _json_fini(jsonable_encoder(exc.errors()))})
 
 # CORS : en dev (SQLite) on autorise le serveur Vite ; en prod le frontend est
 # servi par le même backend, donc liste vide par défaut (configurable via
