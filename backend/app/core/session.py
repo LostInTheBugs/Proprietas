@@ -2,8 +2,8 @@
 
 Le front n'a aucun accès au jeton : il vit dans un cookie `HttpOnly` posé aux
 points de connexion (register, login, verify-login 2FA, enrôlement forcé, bascule
-de copropriété). Le header `Bearer` et le paramètre `?token=` restent acceptés
-(API/CLI, scripts, tests) — le header est PRIORITAIRE sur le cookie.
+de copropriété). Le header `Bearer` reste accepté (API/CLI, scripts, tests) et il
+est PRIORITAIRE sur le cookie. Jamais de jeton dans l'URL (`?token=` supprimé).
 """
 from fastapi import Request, Response
 
@@ -37,8 +37,8 @@ def supprimer_cookie_session(response: Response) -> None:
 
 
 def jeton_entrant(request: Request) -> str:
-    """Jeton porté par la requête, par ordre de priorité : Bearer > ?token= > cookie."""
+    """Jeton porté par la requête, par ordre de priorité : Bearer > cookie (jamais l'URL)."""
     h = request.headers.get("authorization") or ""
     if h.lower().startswith("bearer "):
         return h[7:].strip()
-    return request.query_params.get("token") or request.cookies.get(COOKIE_SESSION) or ""
+    return request.cookies.get(COOKIE_SESSION) or ""

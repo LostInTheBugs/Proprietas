@@ -119,8 +119,8 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   mono-serveur).
 - **Session par cookie `HttpOnly`** : le jeton de session n'est pas accessible au
   JavaScript (rien dans `localStorage`), posé à la connexion — `SameSite=Lax`,
-  `Secure` derrière HTTPS, supprimé au logout. Le header `Bearer` et `?token=`
-  restent acceptés pour l'API/CLI (scripts, tests) ; les jetons hérités des
+  `Secure` derrière HTTPS, supprimé au logout. Le header `Bearer` reste accepté
+  pour l'API/CLI (scripts, tests) ; jamais de jeton dans l'URL (`?token=` refusé) ; les jetons hérités des
   versions précédentes sont migrés automatiquement en cookie au premier
   chargement (aucune reconnexion nécessaire).
 - **Upload de documents** : plafond configurable `COPRO_UPLOAD_MAX_MB` (défaut
