@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.006 — 2026-10-23
+
+- Authentification : python-jose remplacé par PyJWT, passlib par bcrypt (bibliothèques maintenues). Sessions et mots de passe existants inchangés. Un hash illisible donne un refus (401) au lieu d'une erreur 500.
+
 ## 2026.10.005 — 2026-10-23
 
 - Montants saisis : arrondis au centime (taux : 4 décimales) dès la validation, y compris sous SQLite ; 422 pour NaN, Infinity et valeurs hors limites (au lieu de 500).
