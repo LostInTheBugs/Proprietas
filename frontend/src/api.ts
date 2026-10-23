@@ -4,8 +4,8 @@
  * Le navigateur ne stocke plus le jeton : il vit dans un cookie `HttpOnly` posé
  * par le serveur à la connexion. Un éventuel jeton hérité (localStorage des
  * versions précédentes) est migré en cookie au premier chargement
- * (POST /auth/session), puis effacé. Le header Bearer et `?token=` restent
- * acceptés côté serveur pour l'API, la CLI et les scripts.
+ * (POST /auth/session), puis effacé. Le header Bearer reste accepté côté serveur
+ * pour l'API, la CLI et les scripts ; jamais de jeton dans l'URL (`?token=` refusé).
  */
 const TOKEN_KEY = "copro_token";
 

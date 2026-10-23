@@ -30,19 +30,17 @@ def _charger_user(db: Session, raw: str) -> User:
     return user
 
 
-def _raw_token(
-    credentials: HTTPAuthorizationCredentials | None, token: str, request: Request | None
-) -> str:
-    """Jeton entrant par ordre de priorité : Bearer > ?token= > cookie httpOnly.
+def _raw_token(credentials: HTTPAuthorizationCredentials | None, request: Request | None) -> str:
+    """Jeton entrant par ordre de priorité : header Bearer > cookie httpOnly.
 
-    L'explicite (header/query) gagne sur le cookie : les scripts, l'API directe et
-    les tests restent inchangés, et une requête portant deux identités différentes
-    (cas des tests d'isolation) ne peut pas être « détournée » par le cookie.
+    Jamais dans l'URL (`?token=` supprimé en 2026.10) : une URL est écrite en clair dans
+    les journaux des proxys, l'historique du navigateur et l'en-tête Referer.
+    Le header explicite gagne sur le cookie : les scripts, l'API directe et les tests
+    restent inchangés, et une requête portant deux identités différentes (cas des tests
+    d'isolation) ne peut pas être « détournée » par le cookie.
     """
     if credentials and credentials.credentials:
         return credentials.credentials
-    if token:
-        return token
     if request is not None:
         return request.cookies.get(COOKIE_SESSION) or ""
     return ""
@@ -50,16 +48,15 @@ def _raw_token(
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    token: str = "",
     request: Request = None,
     db: Session = Depends(get_db),
 ) -> User:
-    """Auth par header Bearer, `?token=` ou cookie de session httpOnly.
+    """Auth par header Bearer ou cookie de session httpOnly.
 
     Les jetons à portée (« 2fa_challenge », « 2fa_setup ») sont REFUSÉS ici : ils ne
     servent qu'aux étapes intermédiaires de la double authentification.
     """
-    raw = _raw_token(credentials, token, request)
+    raw = _raw_token(credentials, request)
     if not raw:
         raise HTTPException(401, "Authentification requise")
     user = _charger_user(db, raw)
@@ -70,13 +67,12 @@ def get_current_user(
 
 def get_current_user_2fa(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    token: str = "",
     request: Request = None,
     db: Session = Depends(get_db),
 ) -> User:
     """Comme get_current_user, mais accepte AUSSI les jetons d'enrôlement forcé
     (« 2fa_setup ») — utilisé uniquement par les routes setup/verify de la 2FA."""
-    raw = _raw_token(credentials, token, request)
+    raw = _raw_token(credentials, request)
     if not raw:
         raise HTTPException(401, "Authentification requise")
     user = _charger_user(db, raw)
