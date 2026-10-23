@@ -5,7 +5,7 @@ COPRO_SECRET_KEY : si cette clé change, les secrets TOTP existants deviennent
 illisibles — les comptes doivent ré-enrôler leur double authentification
 (`dechiffrer_secret` renvoie "" et le login considère la 2FA comme à refaire).
 
-Aucune dépendance nouvelle : `cryptography` est déjà là (python-jose[cryptography]).
+Dépendance : `cryptography`, épinglée explicitement dans requirements.txt.
 """
 import base64
 import hashlib
