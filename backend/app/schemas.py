@@ -1,6 +1,14 @@
 from datetime import date, datetime
-from typing import Optional, List, Union
-from pydantic import BaseModel, ConfigDict, field_validator
+from decimal import Decimal
+from typing import Annotated, Optional, List, Union
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator
+
+from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
+
+# Types des champs SAISIS (schémas d'entrée uniquement) : Decimal arrondi dès la validation,
+# 422 si non fini / hors limites. Les schémas de SORTIE restent en float (nombres JSON).
+Montant = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.01"), LIMITE_MONTANT))]
+Taux = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.0001"), LIMITE_TAUX))]
 
 
 # ---------- Auth / Users ----------
@@ -206,7 +214,7 @@ class CoproUpdate(BaseModel):
     code_postal: Optional[str] = None
     annee_construction: Optional[int] = None
     fonds_travaux_actif: Optional[bool] = None
-    fonds_travaux_taux_pct: Optional[float] = None
+    fonds_travaux_taux_pct: Optional[Taux] = None
     fonds_travaux_compte: Optional[str] = None
     compte_bancaire_separe: Optional[str] = None
     smtp_host: Optional[str] = None
@@ -219,8 +227,8 @@ class CoproUpdate(BaseModel):
     relance_frequence: Optional[str] = None
     relance_jour: Optional[int] = None
     relance_heure: Optional[str] = None
-    relance_minimum: Optional[float] = None
-    taux_legal_retard: Optional[float] = None
+    relance_minimum: Optional[Montant] = None
+    taux_legal_retard: Optional[Taux] = None
     totp_policy: Optional[str] = None
     notes: Optional[str] = None
 
@@ -343,13 +351,14 @@ class ExerciceIn(BaseModel):
 
 class BudgetLineIn(BaseModel):
     libelle: str
-    montant: float = 0.0
+    montant: Montant = Decimal("0.00")
     type_repartition: str = "generale"
 
 
 class BudgetLineOut(BudgetLineIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    montant: float = 0.0          # sortie : nombre JSON (un Decimal sortirait en texte)
 
 
 class ExerciceOut(BaseModel):
@@ -365,7 +374,7 @@ class AppelIn(BaseModel):
     libelle: str
     date_emission: date
     date_echeance: Optional[date] = None
-    montant_total: float = 0.0
+    montant_total: Montant = Decimal("0.00")
     inclut_fonds_travaux: bool = False
 
 
@@ -397,7 +406,7 @@ class MouvementIn(BaseModel):
     libelle: str
     type: str  # encaissement | depense
     categorie: str = "autre"
-    montant: float = 0.0
+    montant: Montant = Decimal("0.00")
     lot_id: Optional[int] = None
     appel_id: Optional[int] = None
 
@@ -405,6 +414,7 @@ class MouvementIn(BaseModel):
 class MouvementOut(MouvementIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    montant: float = 0.0          # sortie : nombre JSON
     piece_path: str = ""
 
 
@@ -610,7 +620,7 @@ class ContratIn(BaseModel):
     contact_id: Optional[int] = None
     date_debut: str = ""
     date_fin: str = ""
-    montant: float = 0.0
+    montant: Montant = Decimal("0.00")
     periode: str = "annuel"
     renouvellement_auto: bool = False
     notes: str = ""
@@ -639,7 +649,7 @@ class TravauxIn(BaseModel):
     libelle: str
     categorie: str = "autres"
     annee: int
-    montant: float = 0.0
+    montant: Montant = Decimal("0.00")
     statut: str = "planifie"
     notes: str = ""
 
@@ -685,7 +695,7 @@ class EntretienIn(BaseModel):
     date: date
     type_intervention: str = ""
     prestataire: str = ""
-    cout: float = 0.0
+    cout: Montant = Decimal("0.00")
     lot_id: Optional[int] = None
     description: str = ""
 
@@ -693,6 +703,7 @@ class EntretienIn(BaseModel):
 class EntretienOut(EntretienIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    cout: float = 0.0             # sortie : nombre JSON
 
 
 # ---------- Sécurité : 2FA + journal d'audit ----------
@@ -850,7 +861,7 @@ class RecouvrementActeIn(BaseModel):
     date_envoi: Optional[date] = None
     mode_envoi: str = ""
     reference: str = ""
-    montant: float = 0.0
+    montant: Montant = Decimal("0.00")
     libelle: str = ""
 
 
