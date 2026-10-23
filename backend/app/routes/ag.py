@@ -31,6 +31,7 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
     return ResolutionOut(
         id=r.id, ag_id=r.ag_id, numero=r.numero, libelle=r.libelle,
         texte=r.texte, majorite=r.majorite, statut=r.statut,
+        second_vote_de_id=r.second_vote_de_id,
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
     )
@@ -133,6 +134,8 @@ def update_resolution(res_id: int, data: ResolutionIn, db: Session = Depends(get
 def delete_resolution(res_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    for enfant in db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).all():
+        db.delete(enfant)
     db.delete(r)
     db.commit()
     return {"ok": True}
@@ -168,6 +171,28 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     db.commit()
     db.refresh(r)
     return _resolution_out(db, r)
+
+
+@router.post("/resolutions/{res_id}/second-vote", response_model=ResolutionOut)
+def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Passerelles art. 25-1 / 26-1 : crée la résolution du second vote immédiat."""
+    copro = get_or_create_copro(db, user)
+    r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
+    resultat = calculer_statut_resolution(r, lots, r.votes)
+    majorite = resultat["second_vote_possible"]
+    if majorite is None:
+        raise HTTPException(400, "Aucun second vote possible pour cette résolution")
+    if db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).first():
+        raise HTTPException(409, "Le second vote de cette résolution existe déjà")
+    article = "art. 25-1" if majorite == "art24" else "art. 26-1"
+    r.statut = resultat["statut"]
+    sv = Resolution(ag_id=r.ag_id, numero=r.numero, texte=r.texte, majorite=majorite,
+                    libelle=f"{r.libelle} — second vote ({article})", second_vote_de_id=r.id)
+    db.add(sv)
+    db.commit()
+    db.refresh(sv)
+    return _resolution_out(db, sv)
 
 
 # ---------- Sondage de dates (type Doodle) ----------

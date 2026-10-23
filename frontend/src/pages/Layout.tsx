@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, clearToken } from "../api";
 import { useUser } from "../auth";
 import type { Copro } from "../types";
+import { UpdatesBanner, VersionTag } from "../components/Updates";
 
 const NAV: { to: string; label: string; icon: string; syndic?: boolean }[] = [
   { to: "/", label: "Tableau de bord", icon: "▦" },
@@ -188,9 +189,11 @@ export default function Layout() {
           <button onClick={logout} className="mt-2 text-xs font-medium text-slate-500 hover:text-red-600">
             Se déconnecter
           </button>
+          <VersionTag />
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
+        <UpdatesBanner />
         {alerteExposition && (
           <div className="border-b border-amber-200 bg-amber-50 px-8 py-2 text-sm text-amber-800">
             ⚠️ Cette application est joignable depuis internet sans que les protections aient été

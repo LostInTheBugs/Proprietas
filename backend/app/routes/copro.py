@@ -7,6 +7,7 @@ from app.models.copropriete import Copropriete
 from app.models.mouvement import Mouvement
 from app.schemas import CoproOut, CoproUpdate, TresorerieOut
 from app.services.two_factor import politique_defaut
+from app.core.money import D, arrondi, somme
 
 router = APIRouter(prefix="/api/copro", tags=["copro"])
 
@@ -62,17 +63,17 @@ def get_tresorerie(db: Session = Depends(get_db), user: User = Depends(get_curre
     Réservé au syndic : la modification (PUT /api/copro)."""
     copro = get_or_create_copro(db, user)
     mouvements = db.query(Mouvement).filter(Mouvement.copropriete_id == copro.id).all()
-    enc = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie != "fonds_travaux")
-    dep = sum(m.montant for m in mouvements if m.type == "depense" and m.categorie != "fonds_travaux")
-    ft_enc = sum(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
-    ft_dep = sum(m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux")
+    enc = somme(m.montant for m in mouvements if m.type == "encaissement" and m.categorie != "fonds_travaux")
+    dep = somme(m.montant for m in mouvements if m.type == "depense" and m.categorie != "fonds_travaux")
+    ft_enc = somme(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
+    ft_dep = somme(m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux")
     return TresorerieOut(
         compte_bancaire_separe=copro.compte_bancaire_separe or "",
-        solde_compte=round(enc - dep, 2),
+        solde_compte=arrondi(enc - dep),
         fonds_travaux_actif=bool(copro.fonds_travaux_actif),
         fonds_travaux_compte=copro.fonds_travaux_compte or "",
-        fonds_travaux_taux_pct=copro.fonds_travaux_taux_pct or 0.0,
-        fonds_travaux_solde=round(ft_enc - ft_dep, 2),
+        fonds_travaux_taux_pct=copro.fonds_travaux_taux_pct or D(0),
+        fonds_travaux_solde=arrondi(ft_enc - ft_dep),
     )
 
 

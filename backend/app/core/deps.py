@@ -89,3 +89,21 @@ def require_syndic(user: User = Depends(get_current_user)) -> User:
     if user.role != "syndic":
         raise HTTPException(403, "Réservé au syndic")
     return user
+
+
+def is_instance_admin(user: User) -> bool:
+    """Administrateur de l'INSTANCE (mises à jour, liste des administrateurs).
+
+    Serveur : case users.is_instance_admin, gérée dans Réglages → Administrateurs de
+    l'instance ; le compte de démonstration ne l'est JAMAIS, même si la case est cochée.
+    Bureau : instance mono-poste, le syndic local en est l'administrateur."""
+    from app.core.config import get_settings
+    if get_settings().update_mode == "desktop":
+        return user.role == "syndic"
+    return bool(user.is_instance_admin) and not user.is_demo
+
+
+def require_instance_admin(user: User = Depends(get_current_user)) -> User:
+    if not is_instance_admin(user):
+        raise HTTPException(403, "Réservé à l'administrateur de l'instance")
+    return user

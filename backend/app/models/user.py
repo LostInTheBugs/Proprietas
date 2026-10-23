@@ -21,6 +21,9 @@ class User(Base):
     nom = Column(String, nullable=False)
     role = Column(String, default="membre")  # syndic | membre
     is_demo = Column(Boolean, default=False)  # compte de démonstration (n'ouvre pas/ne ferme pas l'inscription)
+    # Administrateur de l'INSTANCE (mises à jour, administrateurs) — distinct du rôle
+    # syndic d'une copropriété. Géré dans Réglages → Administrateurs de l'instance.
+    is_instance_admin = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=True)
     # Coordonnées du copropriétaire (maintenues par lui-même dans Réglages →
     # Mes informations, ou par le syndic) — l'adresse sert notamment à la mise

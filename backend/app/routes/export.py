@@ -17,6 +17,7 @@ from app.services.compte_gestion import generer_compte_gestion_pdf
 from app.services.quittances import generer_quittances_pdf
 from app.services.rapport_annuel import generer_rapport_annuel_pdf
 from app.services.emailer import envoyer_email, situation_texte, EmailError
+from app.core.money import D, arrondi, somme
 from app.schemas import InvitationsResult
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -102,13 +103,13 @@ def envoyer_situation_fonds(request: Request, db: Session = Depends(get_db), use
     if not ex:
         raise HTTPException(404, "Aucun exercice — créez d'abord l'exercice en cours dans l'onglet Comptes")
 
-    budget = sum(b.montant for b in db.query(BudgetLine).filter(BudgetLine.exercice_id == ex.id).all())
-    objectif_ft = round(budget * 0.05, 2)
-    ft_encaisse = round(sum(m.montant for m in db.query(Mouvement).filter(
-        Mouvement.type == "encaissement", Mouvement.categorie == "fonds_travaux").all()), 2)
-    ft_depense = round(sum(m.montant for m in db.query(Mouvement).filter(
-        Mouvement.type == "depense", Mouvement.categorie == "fonds_travaux").all()), 2)
-    ft_encours = round(ft_encaisse - ft_depense, 2)
+    budget = somme(b.montant for b in db.query(BudgetLine).filter(BudgetLine.exercice_id == ex.id).all())
+    objectif_ft = arrondi(budget * D("0.05"))
+    ft_encaisse = arrondi(somme(m.montant for m in db.query(Mouvement).filter(
+        Mouvement.type == "encaissement", Mouvement.categorie == "fonds_travaux").all()))
+    ft_depense = arrondi(somme(m.montant for m in db.query(Mouvement).filter(
+        Mouvement.type == "depense", Mouvement.categorie == "fonds_travaux").all()))
+    ft_encours = arrondi(ft_encaisse - ft_depense)
 
     envoye, sans_email, erreurs = 0, 0, []
     for e in _etat_lots(db, copro):
@@ -185,16 +186,16 @@ def export_compte_gestion(request: Request, exercice_id: int | None = None, db: 
     if not ex:
         return _csv([], ["Date", "Libellé", "Lot", "Catégorie", "Débit (€)", "Crédit (€)"])
     rows = []
-    total_debit = 0.0
-    total_credit = 0.0
+    total_debit = D(0)
+    total_credit = D(0)
 
     def ligne(date, libelle, lot, categorie, debit, credit):
         nonlocal total_debit, total_credit
         rows.append([date, libelle, lot, categorie,
                      f"{debit:.2f}".replace(".", ",") if debit else "",
                      f"{credit:.2f}".replace(".", ",") if credit else ""])
-        total_debit += debit or 0
-        total_credit += credit or 0
+        total_debit += debit or D(0)
+        total_credit += credit or D(0)
 
     # Appels de fonds (une ligne par lot)
     appels = db.query(AppelFonds).filter(AppelFonds.exercice_id == ex.id).order_by(AppelFonds.date_echeance, AppelFonds.id).all()

@@ -1,6 +1,7 @@
 """Socle commun PDF : polices DejaVu embarquées + styles reportlab."""
 import os
 from copy import copy
+from decimal import Decimal
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
@@ -64,6 +65,7 @@ def page_margins():
     )
 
 
-def fmt_eur(v: float) -> str:
+def fmt_eur(v: float | Decimal | int | None) -> str:
     """Format monétaire français : 1 234,56 €"""
-    return f"{v:,.2f} €".replace(",", " ").replace(".", ",")
+    from app.core.money import to_money
+    return f"{to_money(v):,.2f} €".replace(",", " ").replace(".", ",")

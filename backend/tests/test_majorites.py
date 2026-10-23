@@ -166,3 +166,141 @@ def test_passerelle_25_1_rejet_art25_puis_adoption_art24():
     r24 = _res("art24")
     res24 = calculer_statut_resolution(r24, lots, votes)
     assert res24["statut"] == "adoptee"
+
+
+# ---------- Art. 22 al. 2 : réduction des voix du copropriétaire majoritaire ----------
+def _lots_majoritaire():
+    """A = 600/1000 (> moitié) ; B et C = 200 chacun. 3 copropriétaires distincts."""
+    return [_lot(1, 600, 101), _lot(2, 200, 102), _lot(3, 200, 103)]
+
+
+def test_art22_reduction_art25_majoritaire_seul_rejete():
+    # A réduit à 400 (= 200 + 200), total de référence 800 : 400 n'est pas > 400.
+    r = _res("art25")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["statut"] == "rejetee"
+    assert res["pour"] == 400 and res["total"] == 800
+    assert res["reduction_art22"] == 101
+
+
+def test_art22_reduction_art24_majoritaire_seul_rejete():
+    # Exprimés : 400 pour / 400 contre → égalité → rejetée.
+    r = _res("art24")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["statut"] == "rejetee"
+
+
+def test_art22_reduction_art25_majoritaire_plus_un_adopte():
+    # 400 + 200 = 600 > 400 → adoptée.
+    r = _res("art25")
+    res = calculer_statut_resolution(r, _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre")])
+    assert res["statut"] == "adoptee"
+    assert res["pour"] == 600
+
+
+def test_art22_pas_de_reduction_sans_majoritaire():
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots(), [_vote(1, "pour")])
+    assert res["reduction_art22"] is None
+    assert res["total"] == 1000
+
+
+# ---------- Art. 26 : double majorité (membres + 2/3 des voix) ----------
+def _cinq_coproprietaires():
+    return [_lot(1, 340, 101), _lot(2, 340, 102), _lot(3, 110, 103), _lot(4, 105, 104), _lot(5, 105, 105)]
+
+
+def test_art26_deux_tiers_des_voix_mais_minorite_des_membres_rejete():
+    # 680/1000 ≥ 2/3 des voix, mais 2 membres « pour » sur 5 : pas la majorité des membres.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre"), _vote(4, "contre"), _vote(5, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee"
+    assert res["membres_pour"] == 2 and res["nb_membres"] == 5
+
+
+def test_art26_double_majorite_atteinte_adopte():
+    # 790/1000 et 3 membres sur 5.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour"), _vote(4, "contre"), _vote(5, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "adoptee"
+
+
+def test_art26_membre_a_plusieurs_lots_compte_une_fois():
+    # _quatre_lots : le propriétaire 102 a 2 lots. 3 membres au total.
+    # Lots 2 et 3 pour (500) + lot 1 pour (280) = 780 ≥ 667, et 2 membres sur 3 → adoptée.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour"), _vote(4, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _quatre_lots(), votes)
+    assert res["nb_membres"] == 3 and res["membres_pour"] == 2
+    assert res["statut"] == "adoptee"
+
+
+# ---------- Passerelles : art. 25-1 (→ art. 24) et art. 26-1 (→ art. 25) ----------
+def test_25_1_tiers_atteint_second_vote_art24():
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre")]   # 500/1000 : rejeté, ≥ 1/3
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] == "art24"
+
+
+def test_25_1_tiers_non_atteint_pas_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")]  # 250 < 333,33
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["second_vote_possible"] is None
+
+
+def test_25_1_exactement_un_tiers_suffit():
+    lots = [_lot(1, 300, 101), _lot(2, 300, 102), _lot(3, 300, 103)]    # 300/900 = 1/3 pile
+    res = calculer_statut_resolution(_res("art25"), lots, [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["second_vote_possible"] == "art24"
+
+
+def test_25_1_avec_reduction_art22():
+    # A réduit à 400/800 : rejeté (400 pas > 400), mais 400 ≥ 800/3 → passerelle.
+    res = calculer_statut_resolution(_res("art25"), _lots_majoritaire(), [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre")])
+    assert res["second_vote_possible"] == "art24"
+
+
+def test_adoptee_jamais_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "pour")]
+    res = calculer_statut_resolution(_res("art25"), _quatre_lots_egaux(), votes)
+    assert res["statut"] == "adoptee" and res["second_vote_possible"] is None
+
+
+def test_26_1_moitie_des_presents_et_tiers_des_voix_second_vote_art25():
+    # Présents : 101, 102, 103, 104 (105 absent). 2 « pour » sur 4 présents = la moitié ; 680 ≥ 333,33.
+    votes = [_vote(1, "pour"), _vote(2, "pour"), _vote(3, "contre"), _vote(4, "contre")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] == "art25"
+
+
+def test_26_1_moins_de_la_moitie_des_presents_pas_de_second_vote():
+    votes = [_vote(1, "pour"), _vote(2, "contre"), _vote(3, "contre"), _vote(4, "contre")]  # 1 sur 4
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["second_vote_possible"] is None
+
+
+def test_26_1_moitie_des_presents_mais_moins_du_tiers_des_voix():
+    # 3 « pour » sur 4 présents, mais 320 < 333,33.
+    votes = [_vote(1, "contre"), _vote(3, "pour"), _vote(4, "pour"), _vote(5, "pour")]
+    res = calculer_statut_resolution(_res("art26"), _cinq_coproprietaires(), votes)
+    assert res["statut"] == "rejetee" and res["second_vote_possible"] is None
+
+
+def test_art24_et_unanimite_jamais_de_second_vote():
+    for maj in ("art24", "unanimite"):
+        res = calculer_statut_resolution(_res(maj), _quatre_lots_egaux(), [_vote(1, "contre")])
+        assert res["second_vote_possible"] is None
+
+
+# ---------- Corrections issues de la vérification aléatoire ----------
+def test_26_1_jamais_de_passerelle_en_regime_deux():
+    lots = [_lot(1, 700, 102), _lot(2, 500, 101)]          # 2 copropriétaires
+    res = calculer_statut_resolution(_res("art26"), lots, [_vote(1, "pour"), _vote(2, "contre")])
+    assert res["regime_deux"] is True
+    assert res["second_vote_possible"] is None
+
+
+def test_regime_deux_pas_declenche_par_des_lots_sans_proprietaire():
+    # 1 seul propriétaire saisi, mais 3 membres (2 lots sans propriétaire comptent chacun pour un membre).
+    lots = [_lot(1, 400, 101), _lot(2, 300), _lot(3, 300)]
+    res = calculer_statut_resolution(_res("art24"), lots, [_vote(1, "pour"), _vote(2, "abstention")])
+    assert res["regime_deux"] is False
+    assert res["statut"] == "adoptee"                      # art. 24 normal : 400 pour / 0 contre exprimés

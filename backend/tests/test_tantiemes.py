@@ -4,8 +4,10 @@ Couvre le cas « total ≠ 1000 » (commit b3f542b : le total réel sert de base
 répartition) et les arrondis : la somme des quotes-parts doit égaler le montant
 appelé au centime près.
 """
+from decimal import Decimal as D
 from app.models.lot import Lot
 from app.services.country_rules import repartir_par_tantiemes
+from app.core.money import somme
 from tests.conftest import auth
 
 
@@ -16,66 +18,65 @@ def _lot(id_, tantiemes):
 # ---------- Unité : répartition par millièmes ----------
 def test_repartition_total_1000():
     lots = [_lot(1, 280), _lot(2, 260), _lot(3, 240), _lot(4, 220)]
-    parts = repartir_par_tantiemes(3000.0, lots)
-    assert [p["montant_charges"] for p in parts] == [840.0, 780.0, 720.0, 660.0]
-    assert round(sum(p["montant_charges"] for p in parts), 2) == 3000.0
+    parts = repartir_par_tantiemes(D(3000), lots)
+    assert [p["montant_charges"] for p in parts] == [D("840.00"), D("780.00"), D("720.00"), D("660.00")]
+    assert somme(p["montant_charges"] for p in parts) == D("3000.00")
 
 
 def test_repartition_total_1000_avec_fonds_travaux():
     lots = [_lot(1, 280), _lot(2, 260), _lot(3, 240), _lot(4, 220)]
-    parts = repartir_par_tantiemes(3000.0, lots, fonds_travaux_taux=5.0)
+    parts = repartir_par_tantiemes(D(3000), lots, fonds_travaux_taux=D(5))
     # lot 1 : 840 + 5 % = 42
-    assert parts[0]["montant_fonds_travaux"] == 42.0
-    assert round(sum(p["montant_fonds_travaux"] for p in parts), 2) == 150.0
+    assert parts[0]["montant_fonds_travaux"] == D("42.00")
+    assert somme(p["montant_fonds_travaux"] for p in parts) == D("150.00")
     # total charges + fonds = 3150
-    total = sum(p["montant_charges"] + p["montant_fonds_travaux"] for p in parts)
-    assert round(total, 2) == 3150.0
+    total = somme(p["montant_charges"] + p["montant_fonds_travaux"] for p in parts)
+    assert total == D("3150.00")
 
 
 # ---------- Cas total ≠ 1000 (b3f542b) ----------
 def test_repartition_total_non_1000():
     """Total réel 900 : les parts sont proportionnelles à 900, pas à 1000."""
     lots = [_lot(1, 450), _lot(2, 450)]
-    parts = repartir_par_tantiemes(900.0, lots)
-    assert [p["montant_charges"] for p in parts] == [450.0, 450.0]
-    assert round(sum(p["montant_charges"] for p in parts), 2) == 900.0
+    parts = repartir_par_tantiemes(D(900), lots)
+    assert [p["montant_charges"] for p in parts] == [D("450.00"), D("450.00")]
+    assert somme(p["montant_charges"] for p in parts) == D("900.00")
 
 
 def test_repartition_total_non_1000_desequilibre():
     lots = [_lot(1, 600), _lot(2, 200), _lot(3, 100)]  # total 900
-    parts = repartir_par_tantiemes(900.0, lots)
+    parts = repartir_par_tantiemes(D(900), lots)
     # 600/900 = 2/3 → 600 ; 200/900 → 200 ; 100/900 → 100
-    assert [p["montant_charges"] for p in parts] == [600.0, 200.0, 100.0]
+    assert [p["montant_charges"] for p in parts] == [D("600.00"), D("200.00"), D("100.00")]
 
 
 # ---------- Arrondis ----------
 def test_arrondi_reste_impute_au_premier_lot():
     """123,45 € répartis sur 3 lots égaux : 41,15 × 3 = 123,45 (reste imputé)."""
     lots = [_lot(1, 333), _lot(2, 333), _lot(3, 334)]
-    parts = repartir_par_tantiemes(123.45, lots)
-    somme = round(sum(p["montant_charges"] for p in parts), 2)
-    assert somme == 123.45
+    parts = repartir_par_tantiemes(D(123.45), lots)
+    assert somme(p["montant_charges"] for p in parts) == D("123.45")
 
 
 def test_arrondi_somme_tombe_juste_au_centime():
     """Propriété générale : somme(parts) == montant appelé, quel que soit le découpage."""
-    for montant in (0.01, 1.00, 100.00, 3000.00, 1234.56, 9999.99):
+    for montant in (D("0.01"), D("1.00"), D("100.00"), D("3000.00"), D("1234.56"), D("9999.99")):
         lots = [_lot(1, 137), _lot(2, 246), _lot(3, 358), _lot(4, 259)]  # total 1000
         parts = repartir_par_tantiemes(montant, lots)
-        somme = round(sum(p["montant_charges"] for p in parts), 2)
-        assert abs(somme - montant) < 0.005, f"{montant} -> {somme}"
+        s = somme(p["montant_charges"] for p in parts)
+        assert abs(s - montant) < D("0.005"), f"{montant} -> {s}"
 
 
 def test_arrondi_fonds_travaux_inclus():
     """Avec fonds travaux : charges + fonds == montant × 1,05 (au centime près)."""
     lots = [_lot(1, 137), _lot(2, 246), _lot(3, 358), _lot(4, 259)]
-    parts = repartir_par_tantiemes(3000.0, lots, fonds_travaux_taux=5.0)
-    total = round(sum(p["montant_charges"] + p["montant_fonds_travaux"] for p in parts), 2)
-    assert abs(total - 3150.0) < 0.005
+    parts = repartir_par_tantiemes(D(3000), lots, fonds_travaux_taux=D(5))
+    total = somme(p["montant_charges"] + p["montant_fonds_travaux"] for p in parts)
+    assert total == D("3150.00")
 
 
 def test_repartition_sans_lots_renvoie_vide():
-    assert repartir_par_tantiemes(100.0, []) == []
+    assert repartir_par_tantiemes(D(100), []) == []
 
 
 # ---------- Via l'API : create_appel ----------

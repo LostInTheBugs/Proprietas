@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from app.core.money import D, arrondi, somme
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User, UserCopro
@@ -107,19 +108,19 @@ def lots_soldes(db: Session = Depends(get_db), user: User = Depends(get_current_
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     result = []
     for lot in lots:
-        appels_charges = sum(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_fonds = sum(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        encaisse = sum(
-            m.montant for m in db.query(Mouvement).filter(
+        appels_charges = somme([a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
+        appels_fonds = somme([a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
+        encaisse = somme(
+            [m.montant for m in db.query(Mouvement).filter(
                 Mouvement.lot_id == lot.id, Mouvement.type == "encaissement"
-            ).all()
+            ).all()]
         )
         result.append(LotSolde(
             lot=lot,
             proprietaire=lot.proprietaire,
-            total_appels=round(appels_charges, 2),
-            total_appels_fonds=round(appels_fonds, 2),
-            total_encaisse=round(encaisse, 2),
-            solde=round(appels_charges + appels_fonds - encaisse, 2),
+            total_appels=arrondi(appels_charges),
+            total_appels_fonds=arrondi(appels_fonds),
+            total_encaisse=arrondi(encaisse),
+            solde=arrondi(appels_charges + appels_fonds - encaisse),
         ))
     return result

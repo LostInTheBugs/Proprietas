@@ -18,7 +18,16 @@ class Settings(BaseSettings):
     # « off » | « syndic » (le syndic doit activer la double authentification) | « all ».
     # Défaut pensé pour une instance exposée sur internet ; l'app desktop la passe à « off ».
     totp_default_policy: str = "syndic"
-    model_config = {"env_prefix": "COPRO_", "env_file": ".env"}
+    # ---- Mises à jour (voir app/services/updates.py et deploy/apply-update.py) ----
+    # Les administrateurs de l'instance se gèrent dans l'application (users.is_instance_admin).
+    # Dossier partagé avec l'applicateur de l'hôte (bind mount ./data/updates).
+    update_dir: str = "./data/updates"
+    update_repo: str = "LostInTheBugs/Proprietas"
+    # « server » : l'applicateur de l'hôte peut appliquer ; « desktop » : notification seule.
+    update_mode: str = "server"
+    # extra=ignore : une ancienne variable restée dans un .env (ex. COPRO_INSTANCE_ADMINS)
+    # ne doit pas empêcher l'application de démarrer.
+    model_config = {"env_prefix": "COPRO_", "env_file": ".env", "extra": "ignore"}
 
     @property
     def is_sqlite(self) -> bool:

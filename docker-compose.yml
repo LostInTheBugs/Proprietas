@@ -15,6 +15,11 @@ services:
       retries: 5
 
   backend:
+    # Image publiée par GitHub à chaque release (workflow release.yml, job « image ») ;
+    # `build` reste disponible pour les serveurs qui construisent sur place.
+    # PROPRIETAS_VERSION (dans .env) : tag de l'image — écrit par deploy/apply-update.py
+    # en stratégie « pull ».
+    image: ghcr.io/lostinthebugs/proprietas:${PROPRIETAS_VERSION:-latest}
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -24,8 +29,11 @@ services:
       COPRO_SECRET_KEY: ${COPRO_SECRET_KEY}
       COPRO_UPLOAD_DIR: /data/uploads
       COPRO_FRONTEND_DIST: /app/frontend_dist
+      COPRO_UPDATE_DIR: /data/updates
     volumes:
       - uploads:/data/uploads
+      # Dossier partagé avec l'applicateur de mises à jour de l'hôte (deploy/apply-update.py)
+      - ./data/updates:/data/updates
     # (le bundle frontend est dans l'image multi-stage — plus de volume frontend_dist)
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')\""]

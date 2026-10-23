@@ -4,7 +4,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.09.016**.
+> Version courante : **2026.10.004**.
 
 Gestion de copropriété pour syndic bénévole, conçue pour le régime « petite copropriété »
 français (art. 41-8 de la loi du 10 juillet 1965, issu de l'ordonnance n° 2019-1101 :
@@ -288,7 +288,71 @@ lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
 - **Évolutions futures** : `alembic revision --autogenerate -m "..."` (backend/), relire la
   migration, commit, puis le déploiement l'applique au démarrage.
 
-### Mise à jour
+### Mises à jour depuis l'interface
+
+L'application vérifie les releases GitHub (toutes les heures par défaut, réglable ou
+désactivable) et affiche la version installée en bas de la barre latérale. Les
+**administrateurs de l'instance** voient un bandeau quand une version sort, et le panneau
+**Réglages → Mises à jour** : notes de toutes les versions intermédiaires, bouton
+« Mettre à jour », application automatique (désactivée par défaut).
+
+L'application ne redémarre jamais ses propres conteneurs (pas de socket Docker : choix de
+sécurité). Elle **dépose une demande** dans `data/updates/` ; un **applicateur côté hôte**
+(`deploy/apply-update.py`, timer systemd chaque minute) sauvegarde la base (`pg_dump` dans
+`data/backups/`, 10 dernières gardées), passe le dépôt sur le tag demandé, reconstruit les
+conteneurs et vérifie que l'API répond dans la nouvelle version.
+
+Installation, une fois, sur le serveur :
+
+```bash
+cd /opt/copro-app
+# .env : profil du proxy TLS
+echo 'COMPOSE_PROFILES=internet' >> .env          # si l'instance est exposée (Caddy) ; COPRO_DOMAIN doit aussi y être
+mkdir -p data/updates data/backups
+sudo cp deploy/proprietas-update.service deploy/proprietas-update.timer /etc/systemd/system/
+sudo sed -i "s#/opt/copro-app#$(pwd)#" /etc/systemd/system/proprietas-update.service
+sudo systemctl daemon-reload && sudo systemctl enable --now proprietas-update.timer
+sudo python3 deploy/apply-update.py --dry-run    # contrôle : aucune demande → battement de cœur
+```
+
+**Administrateurs de l'instance** (qui voit et pilote les mises à jour) : ils se gèrent dans
+**Réglages → Administrateurs de l'instance**. Le premier compte créé à l'installation l'est
+d'office ; il peut en ajouter d'autres par l'e-mail d'un compte existant, ou en retirer (jamais
+lui-même, donc il en reste toujours un). Le compte de démonstration ne peut jamais l'être.
+Ce n'est pas le rôle de syndic : un syndic d'une autre copropriété hébergée n'y a pas accès.
+
+En cas de perte d'accès (seul administrateur supprimé, e-mail changé…), sur le serveur :
+
+```bash
+docker compose exec db psql -U copro copro -c \
+  "UPDATE users SET is_instance_admin = true WHERE lower(email) = 'vous@exemple.fr';"
+```
+
+Version de bureau : notification seulement, avec un lien vers la release à télécharger.
+
+**Petits serveurs (moins de 2 Go de RAM) : télécharger l'image au lieu de la construire.**
+Construire l'image compile le frontend (`npm run build`), ce qui demande 1 à 2 Go de RAM
+et peut faire tomber un petit VPS. À chaque release, GitHub publie l'image toute prête
+(`ghcr.io/lostinthebugs/proprietas:<version>`). Pour l'utiliser :
+
+```bash
+echo 'PROPRIETAS_UPDATE_STRATEGY=pull' >> .env      # l'applicateur télécharge au lieu de construire
+echo 'PROPRIETAS_VERSION=2026.10.004' >> .env       # version de l'image (mise à jour par l'applicateur)
+docker compose pull backend && docker compose up -d --no-build
+```
+
+En stratégie « pull », ne lancez jamais `docker compose up -d --build` ni `docker compose up`
+sur une image absente : Compose construirait l'image sur place.
+
+Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, puis
+`scripts/bump-version.sh AAAA.MM.NNN`, commit, `git tag AAAA.MM.NNN && git push origin AAAA.MM.NNN`
+(le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG **et** publie
+l'image `ghcr.io/lostinthebugs/proprietas:<version>` ; pour un tag déjà publié :
+Actions → Release → *Run workflow* avec le tag). Le paquet GHCR doit être **public**
+(GitHub → Packages → proprietas → Package settings → Change visibility) pour que les
+serveurs le téléchargent sans identifiants.
+
+### Mise à jour manuelle
 
 ```bash
 # Sur le serveur de production (utilisateur avec droits docker)

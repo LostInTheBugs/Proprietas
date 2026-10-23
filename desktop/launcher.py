@@ -209,6 +209,10 @@ def prepare_env(base: Path, res: Path) -> None:
     # Instance mono-poste (pas d'accès internet) : pas de 2FA obligatoire — elle
     # reste activable à la main dans la page Sécurité.
     os.environ.setdefault("COPRO_TOTP_DEFAULT_POLICY", "off")
+    # Mises à jour : la version de bureau NOTIFIE seulement (lien vers la release à
+    # télécharger) ; aucun applicateur ne tourne sur un poste de travail.
+    os.environ.setdefault("COPRO_UPDATE_MODE", "desktop")
+    os.environ.setdefault("COPRO_UPDATE_DIR", str(data / "updates"))
     # Clé secrète persistée dans data/ : les sessions survivent au redémarrage.
     if "COPRO_SECRET_KEY" not in os.environ:
         keyfile = data / "secret.key"
