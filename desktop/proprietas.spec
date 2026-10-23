@@ -64,7 +64,7 @@ a = Analysis(
         'apscheduler.schedulers.background', 'apscheduler.triggers.interval',
         'apscheduler.triggers.cron', 'apscheduler.executors.pool',
         'email_validator', 'multipart',
-        'passlib.handlers.bcrypt', 'bcrypt',
+        'bcrypt', 'jwt',
         'sqlalchemy.dialects.sqlite',
     ],
     hookspath=[],

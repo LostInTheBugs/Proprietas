@@ -1,7 +1,7 @@
 """Révocation de sessions (« déconnecter tous mes appareils ») + compatibilité."""
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt
+import jwt
 
 from app.core.config import get_settings
 from app.core.security import create_access_token
