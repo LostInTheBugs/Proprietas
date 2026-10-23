@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.005 — 2026-10-23
+
+- Montants saisis : arrondis au centime (taux : 4 décimales) dès la validation, y compris sous SQLite ; 422 pour NaN, Infinity et valeurs hors limites (au lieu de 500).
+
 ## 2026.10.004 — 2026-10-22
 
 - Image Docker publiée sur GHCR à chaque release ; stratégie « pull » de l'applicateur pour les petits serveurs (PROPRIETAS_UPDATE_STRATEGY=pull).
