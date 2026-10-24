@@ -47,10 +47,12 @@ def _ag(client, token_a, type_ag="consultation_ecrite"):
                        headers=auth(token_a))
 
 
-def _resolution(client, token_a, ag_id, majorite="unanimite", nature=None):
+def _resolution(client, token_a, ag_id, majorite="unanimite", nature=None, exercice_id=None):
     corps = {"numero": 1, "libelle": "Remplacement de la porte d'entrée", "majorite": majorite}
     if nature is not None:
         corps["nature"] = nature
+    if exercice_id is not None:
+        corps["exercice_id"] = exercice_id
     return client.post(f"/api/ag/{ag_id}/resolutions", json=corps, headers=auth(token_a))
 
 
@@ -149,9 +151,14 @@ def test_budget_et_comptes_exclus_de_la_consultation(client, token_a, petite, na
 
 
 @pytest.mark.parametrize("nature", ["budget", "approbation_comptes"])
-def test_budget_et_comptes_possibles_en_ag(client, token_a, petite, nature):
+def test_budget_et_comptes_possibles_en_ag(client, token_a, petite, nature, db):
     ag = _ag(client, token_a, "annuelle").json()
-    r = _resolution(client, token_a, ag["id"], majorite="art24", nature=nature)
+    # Tâche 21 : une approbation des comptes désigne l'exercice approuvé.
+    ex = Exercice(copropriete_id=petite.id, annee=2025, cloture=True)
+    db.add(ex)
+    db.commit()
+    exercice_id = ex.id if nature == "approbation_comptes" else None
+    r = _resolution(client, token_a, ag["id"], majorite="art24", nature=nature, exercice_id=exercice_id)
     assert r.status_code == 200, r.text
     assert r.json()["nature"] == nature
 
