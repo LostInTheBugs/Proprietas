@@ -54,7 +54,7 @@ se créer normalement depuis la page de connexion.
   échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,
   **article 19-2** (exigibilité immédiate des provisions), intérêts au taux légal, frais,
   étapes amiables et judiciaires
-- **Assemblées générales** : e-mails d'information (la convocation régulière se notifie par LRE, LRAR ou remise contre récépissé, au moins 21 jours avant), résolutions, moteur de majorités légal
+- **Assemblées générales** : e-mails d'information (la convocation régulière se notifie par LRE — LRAR si le copropriétaire a demandé la voie postale — ou remise contre récépissé, au moins 21 jours avant), résolutions, moteur de majorités légal
   (art. 24 / 25 / 26, unanimité, régime 2 copropriétaires), procès-verbaux
 - **Consultation écrite** (régime petite copropriété, unanimité)
 - **Documents** : contrats, devis, factures, diagnostics (stockage local)

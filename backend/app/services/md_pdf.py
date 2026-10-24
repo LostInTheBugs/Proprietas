@@ -21,8 +21,8 @@ ART_19_2_TEXTE = (
     "infructueuse passé un délai de trente jours, les autres provisions non encore "
     "échues ainsi que les sommes restant dues appelées au titre des exercices "
     "précédents après approbation des comptes deviennent immédiatement exigibles. "
-    "[…] Le présent article est applicable aux cotisations du fonds de travaux mentionné "
-    "à l'article 14-2."
+    "[…] Le présent article est applicable aux cotisations au fonds de travaux mentionné "
+    "à l'article 14-2-1."
 )
 
 
