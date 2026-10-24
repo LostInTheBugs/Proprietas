@@ -8,6 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+# L'applicateur tourne sur l'HÔTE Linux (systemd, runuser, module pwd) : sans objet sous
+# Windows (version de bureau, postes de développement).
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="applicateur Linux uniquement")
+
 SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "apply-update.py"
 
 
