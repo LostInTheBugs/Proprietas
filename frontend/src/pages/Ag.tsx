@@ -34,7 +34,7 @@ export default function Ag() {
         <div>
           <h1 className="text-xl font-bold text-slate-800">Assemblées générales</h1>
           <p className="text-sm text-slate-500">
-            Sondage de dates, convocations par email, votes et majorités légales
+            Sondage de dates, e-mails d'information, votes et majorités légales
           </p>
         </div>
         {isSyndic && <Button onClick={() => setModal({ type: "ag" })}>+ Nouvelle AG</Button>}
@@ -63,10 +63,10 @@ export default function Ag() {
                   {ag.statut === "terminee" ? "Terminée" : ag.statut === "convoquee" ? "Convoquée" : "Projet"}
                 </Badge>
                 {ag.rappel_jours > 0 && !ag.convocation_envoyee && ag.statut !== "terminee" && (
-                  <Badge color="indigo">⏰ Convocation auto J-{ag.rappel_jours}</Badge>
+                  <Badge color="indigo">⏰ E-mail d'information auto J-{ag.rappel_jours}</Badge>
                 )}
                 {ag.convocation_envoyee && (
-                  <Badge color="green">📨 Convocation envoyée</Badge>
+                  <Badge color="green">📨 Information envoyée par e-mail</Badge>
                 )}
                 {isSyndic && (
                   <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ type: "resolution", agId: ag.id })}>
@@ -269,7 +269,7 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
       {(isSyndic || invitations.length > 0) && (
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-slate-700">✉️ Convocations et procès-verbal</p>
+            <p className="text-sm font-semibold text-slate-700">✉️ Information par e-mail et procès-verbal</p>
             <div className="flex items-center gap-2">
               <a
                 href={`/api/ag/${agId}/pv`}
@@ -280,16 +280,22 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
               </a>
               {isSyndic && (
                 <Button variant="secondary" className="px-2.5 py-1.5 text-xs" disabled={busy} onClick={envoyerInvitations}>
-                  {busy ? "Envoi…" : invitations.length > 0 ? "Renvoyer les convocations" : "Envoyer les convocations"}
+                  {busy ? "Envoi…" : invitations.length > 0 ? "Renvoyer l'information" : "Informer par e-mail"}
                 </Button>
               )}
               {isSyndic && (
                 <Button variant="secondary" className="px-2.5 py-1.5 text-xs" disabled={busyPv} onClick={envoyerPv}>
-                  {busyPv ? "Envoi…" : "✉️ Envoyer le PV"}
+                  {busyPv ? "Envoi…" : "✉️ Envoyer le PV (information)"}
                 </Button>
               )}
             </div>
           </div>
+          <p className="mb-2 text-xs text-slate-500">
+            Ces e-mails sont une <b>information</b>. La convocation régulière (au moins 21 jours avant
+            l'assemblée) et la notification du procès-verbal aux opposants et défaillants se font par
+            lettre recommandée électronique, par lettre recommandée avec avis de réception ou, pour la
+            convocation, par remise contre récépissé (décret n° 67-223, art. 9 et 64 et suivants).
+          </p>
           {envoiInfo && (
             <p className="mb-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
               {envoiInfo.envoyes} email(s) envoyé(s)
@@ -473,7 +479,7 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   const [typeAg, setTypeAg] = useState("annuelle");
   const [statut, setStatut] = useState("projet");
   const [lieu, setLieu] = useState("");
-  const [rappelJours, setRappelJours] = useState("15");
+  const [rappelJours, setRappelJours] = useState("21");
   async function save() {
     try {
       await api.post("/ag", { date, heure, type_ag: typeAg, statut, lieu, notes: "", rappel_jours: Number(rappelJours) || 0 });
@@ -499,7 +505,7 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
         </Select>
         <Input label="Lieu" value={lieu} onChange={(e) => setLieu(e.target.value)} placeholder="Chez M. Durand" />
         <Input
-          label="Envoi automatique de la convocation (jours avant l'AG, 0 = désactivé)"
+          label="E-mail d'information automatique (jours avant l'AG : 0 = désactivé, sinon 21 à 90)"
           type="number"
           min={0}
           max={90}
@@ -507,8 +513,9 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
           onChange={(e) => setRappelJours(e.target.value)}
         />
         <p className="text-xs text-slate-500">
-          ⏰ Le serveur enverra les convocations par email <b>{rappelJours === "0" || !rappelJours ? "— désactivé" : `${rappelJours} jours avant`}</b> l'AG.
-          Délai légal : 15 jours minimum (art. 9 décret n°67-223).
+          ⏰ Le serveur enverra un e-mail d'information <b>{rappelJours === "0" || !rappelJours ? "— désactivé" : `${rappelJours} jours avant`}</b> l'AG.
+          Délai légal de convocation : 21 jours minimum (art. 9 du décret n° 67-223). Cet e-mail ne remplace
+          pas la convocation régulière (lettre recommandée électronique, LRAR ou remise contre récépissé).
         </p>
         {typeAg !== "consultation_ecrite" && (
           <p className="text-xs text-slate-500">
