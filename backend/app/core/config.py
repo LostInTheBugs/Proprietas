@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 30
     upload_dir: str = "./uploads"
     upload_max_mb: float = 25.0
+    # RGPD : durée de conservation du journal d'audit et des infos de dernière connexion
+    # (IP, navigateur), en mois. 0 = jamais purgé. CNIL : 6 mois à 1 an pour la journalisation.
+    retention_journal_mois: int = 12
     frontend_dist: str = ""
     # Origines CORS autorisées (JSON dans l'environnement, ex. '["https://app.example.fr"]').
     # Vide en production : le frontend est servi par le même backend, le CORS ne sert à rien.
