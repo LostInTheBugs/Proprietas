@@ -45,6 +45,24 @@ def _json_fini(o):
     return o
 
 
+# Marge pour l'enveloppe multipart (autres champs, en-têtes de parties) au-delà du fichier.
+_MARGE_UPLOAD = 1024 * 1024
+
+
+@app.middleware("http")
+async def _limite_taille_upload(request: Request, call_next):
+    """Refuse d'emblée (413) un upload dont le Content-Length dépasse déjà la limite :
+    le corps n'est ni lu ni mis en tampon. La route recontrôle pendant la copie
+    (Content-Length absent ou mensonger)."""
+    if request.method == "POST" and request.url.path == "/api/documents":
+        longueur = request.headers.get("content-length", "")
+        limite_mo = documents.settings.upload_max_mb      # même source que la route
+        if longueur.isdigit() and int(longueur) > int(limite_mo * 1024 * 1024) + _MARGE_UPLOAD:
+            return JSONResponse(status_code=413,
+                                content={"detail": f"Requête trop volumineuse (maximum {limite_mo:g} Mo)"})
+    return await call_next(request)
+
+
 @app.exception_handler(RequestValidationError)
 async def _erreur_validation(request: Request, exc: RequestValidationError):
     """Même réponse 422 que FastAPI, mais sans planter quand la valeur refusée est NaN ou

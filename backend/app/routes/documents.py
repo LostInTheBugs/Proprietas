@@ -46,6 +46,9 @@ def list_documents(db: Session = Depends(get_db), user: User = Depends(get_curre
     return db.query(Document).filter(Document.copropriete_id == copro.id).order_by(Document.date_ajout.desc()).all()
 
 
+BLOC_UPLOAD = 1024 * 1024       # 1 Mo
+
+
 @router.post("", response_model=DocumentOut)
 async def upload_document(
     categorie: str = Form("autre"),
@@ -63,12 +66,22 @@ async def upload_document(
     os.makedirs(settings.upload_dir, exist_ok=True)
     nom_stocke = f"{uuid.uuid4().hex}{ext}"
     path = os.path.join(settings.upload_dir, nom_stocke)
-    content = await fichier.read()
+    # Copie PAR BLOCS avec arrêt dès que la limite est franchie : jamais le fichier entier
+    # en mémoire (un gros envoi saturait la RAM d'un petit serveur avant d'être refusé).
     max_bytes = int(settings.upload_max_mb * 1024 * 1024)
-    if len(content) > max_bytes:
-        raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
-    with open(path, "wb") as f:
-        f.write(content)
+    taille = 0
+    try:
+        with open(path, "wb") as f:
+            while bloc := await fichier.read(BLOC_UPLOAD):
+                taille += len(bloc)
+                if taille > max_bytes:
+                    raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
+                f.write(bloc)
+    except BaseException:
+        # Refus, erreur disque ou client parti : pas de fichier partiel sur le disque.
+        if os.path.exists(path):
+            os.remove(path)
+        raise
     doc = Document(
         copropriete_id=copro.id,
         categorie=categorie,
