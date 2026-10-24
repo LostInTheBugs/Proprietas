@@ -16,6 +16,7 @@ import { Badge, Button, Card, Empty, Input, Modal, Select } from "../components/
 const COULEUR_STATUT: Record<string, "green" | "red" | "amber" | "slate" | "indigo"> = {
   a_jour: "green",
   en_retard: "red",
+  mise_en_demeure_attente: "amber",
   mise_en_demeure: "amber",
   delai_19_2_depasse: "amber",
   apres_19_2: "indigo",
@@ -25,9 +26,11 @@ const COULEUR_STATUT: Record<string, "green" | "red" | "amber" | "slate" | "indi
 
 const AIDE_STATUT: Record<string, string> = {
   en_retard:
-    "Impayé constaté. Envoyez une relance (email) ; si elle reste sans effet, passez à la mise en demeure — c'est l'acte qui déclenche la suite (intérêts au taux légal, délai de 30 jours de l'article 19-2).",
+    "Impayé constaté. Envoyez une relance (e-mail, simple rappel) ; si elle reste sans effet, passez à la mise en demeure, notifiée par LRE, LRAR ou remise contre récépissé — c'est elle qui déclenche la suite (intérêts au taux légal, délai de 30 jours de l'article 19-2).",
+  mise_en_demeure_attente:
+    "Mise en demeure envoyée, mais sa date de première présentation (LRAR), d'avis électronique (LRE) ou de remise n'est pas encore saisie : le délai de 30 jours ne court qu'à compter du lendemain de cette date. Renseignez-la dès que vous la connaissez (avis du prestataire, suivi La Poste).",
   mise_en_demeure:
-    "Mise en demeure envoyée : le délai de 30 jours court. Des intérêts de retard courent au taux légal à compter de sa date. Passé 30 jours, les provisions futures pourront être rendues exigibles (article 19-2).",
+    "Mise en demeure présentée : le délai de 30 jours court depuis le lendemain de la présentation. Des intérêts de retard courent au taux légal à compter de cette date. Le délai expiré, les provisions futures pourront être rendues exigibles (article 19-2).",
   delai_19_2_depasse:
     "Mise en demeure restée infructueuse pendant 30 jours : les provisions non encore échues de l'exercice en cours et les restes des exercices précédents peuvent être rendus immédiatement exigibles (article 19-2 de la loi du 10 juillet 1965).",
   apres_19_2:
@@ -41,11 +44,13 @@ const AIDE_STATUT: Record<string, string> = {
 const MODES_ENVOI = [
   { value: "lre", label: "Lettre recommandée électronique (LRE)" },
   { value: "lrar", label: "LRAR papier (si demandée par le copropriétaire)" },
-  { value: "email", label: "Email (courtoisie)" },
-  { value: "remise", label: "Remise en main propre" },
+  { value: "remise", label: "Remise en main propre contre récépissé" },
 ];
 
-const LIBELLE_MODE: Record<string, string> = Object.fromEntries(MODES_ENVOI.map((m) => [m.value, m.label]));
+const LIBELLE_MODE: Record<string, string> = {
+  ...Object.fromEntries(MODES_ENVOI.map((m) => [m.value, m.label])),
+  email: "E-mail (ancien enregistrement, sans valeur de mise en demeure)",
+};
 
 const TYPES_PROCEDURE = [
   { value: "conciliation", label: "Conciliation / médiation (amiable)" },
@@ -54,7 +59,7 @@ const TYPES_PROCEDURE = [
   { value: "note", label: "Note" },
 ];
 
-const EN_PROCEDURE = ["mise_en_demeure", "delai_19_2_depasse", "apres_19_2", "amiable", "contentieux"];
+const EN_PROCEDURE = ["mise_en_demeure_attente", "mise_en_demeure", "delai_19_2_depasse", "apres_19_2", "amiable", "contentieux"];
 
 function Chiffre({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -342,6 +347,8 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
   const [mdMode, setMdMode] = useState("lre");
   const [mdDate, setMdDate] = useState(AUJOURDHUI());
   const [mdRef, setMdRef] = useState("");
+  const [mdRecep, setMdRecep] = useState("");
+  const [recepSaisie, setRecepSaisie] = useState(AUJOURDHUI());
   const [prev19, setPrev19] = useState<Mise19_2 | null>(null);
   const [fraisLib, setFraisLib] = useState("");
   const [fraisMontant, setFraisMontant] = useState("");
@@ -370,7 +377,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
     }
   }
 
-  const md = d ? [...d.actes].filter((a) => a.type === "mise_en_demeure").pop() : undefined;
+  const md = d ? [...d.actes].filter((a) => a.type === "mise_en_demeure" && a.mode_envoi !== "email").pop() : undefined;
   const actesFrais = d ? d.actes.filter((a) => a.type === "frais") : [];
   const timeline = d
     ? [
@@ -475,10 +482,33 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                   {md.mode_envoi && ` — ${LIBELLE_MODE[md.mode_envoi] ?? md.mode_envoi}`}
                   {md.reference && ` — réf. ${md.reference}`} · montant réclamé :{" "}
                   <strong className="tabular-nums">{fmtEUR(md.montant)}</strong>
+                  {md.date_reception && <> · présentée le {fmtDate(md.date_reception)}</>}
                 </p>
+                {!md.date_reception && (
+                  <div className="flex flex-wrap items-end gap-2 rounded-lg bg-amber-50 p-2">
+                    <Input
+                      label="Date de première présentation / avis électronique / remise"
+                      type="date"
+                      value={recepSaisie}
+                      onChange={(e) => setRecepSaisie(e.target.value)}
+                    />
+                    <Button
+                      disabled={busy || !recepSaisie}
+                      onClick={() =>
+                        action(
+                          () => api.put(`/recouvrement/acte/${md.id}/reception`, { date_reception: recepSaisie }),
+                          "Date de présentation enregistrée : le délai de 30 jours court depuis le lendemain."
+                        )
+                      }
+                    >
+                      Enregistrer la date
+                    </Button>
+                  </div>
+                )}
                 {d.statut === "mise_en_demeure" && d.jours_restants !== null && (
                   <p className="text-amber-700">
-                    Délai en cours — reste {d.jours_restants} jour(s) avant l'exigibilité des provisions futures (19-2).
+                    Délai en cours — reste {d.jours_restants} jour(s) avant l'exigibilité des provisions futures (19-2)
+                    {d.activable_le && <>, soit à partir du {fmtDate(d.activable_le)}</>}.
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -497,8 +527,11 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
               <div className="space-y-2">
                 <p className="text-xs leading-relaxed text-slate-500">
                   1. Téléchargez le PDF (provisions échues impayées, décompte détaillé par provision).
-                  Envoyez-le par voie électronique recommandée (LRE) — le LRAR papier n'est prévu que si le
-                  copropriétaire l'a demandé. 2. Enregistrez l'envoi : le délai de 30 jours démarre.
+                  Notifiez-le par lettre recommandée électronique (LRE), par LRAR si le copropriétaire l'a
+                  demandé, ou par remise contre récépissé — un e-mail simple ne vaut pas mise en demeure.
+                  2. Enregistrez l'envoi. Le délai de 30 jours court à compter du <b>lendemain de la première
+                  présentation</b> (LRAR), de l'avis électronique (LRE) ou de la remise : saisissez cette date
+                  dès que vous la connaissez.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Select label="Mode d'envoi" value={mdMode} onChange={(e) => setMdMode(e.target.value)}>
@@ -508,7 +541,19 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                   </Select>
                   <Input label="Date d'envoi" type="date" value={mdDate} onChange={(e) => setMdDate(e.target.value)} />
                 </div>
-                <Input label="Référence (n° LRE / AR)" value={mdRef} onChange={(e) => setMdRef(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label={mdMode === "remise" ? "Référence du récépissé signé (obligatoire)" : "Référence (n° LRE / AR)"}
+                    value={mdRef}
+                    onChange={(e) => setMdRef(e.target.value)}
+                  />
+                  <Input
+                    label={mdMode === "remise" ? "Date de remise (obligatoire)" : "Date de présentation / avis (si connue)"}
+                    type="date"
+                    value={mdRecep}
+                    onChange={(e) => setMdRecep(e.target.value)}
+                  />
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <a
                     className="inline-flex items-center rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
@@ -528,6 +573,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                             date_envoi: mdDate,
                             mode_envoi: mdMode,
                             reference: mdRef,
+                            date_reception: mdRecep || null,
                           }),
                         "Mise en demeure enregistrée."
                       ).then(() => setMdOpen(false))

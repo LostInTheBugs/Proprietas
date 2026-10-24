@@ -382,6 +382,8 @@ export interface RecouvrementLot {
   statut: string;
   statut_label: string;
   md_date: string | null;
+  md_reception: string | null;
+  activable_le: string | null;
   md_jours: number | null;
   jours_restants: number | null;
   frais_total: number;
@@ -405,6 +407,7 @@ export interface RecouvrementActe {
   type: string;
   date_acte: string;
   date_envoi: string | null;
+  date_reception: string | null;
   mode_envoi: string;
   reference: string;
   montant: number;
@@ -424,6 +427,8 @@ export interface RecouvrementDossier {
   statut: string;
   statut_label: string;
   md_date: string | null;
+  md_reception: string | null;
+  activable_le: string | null;
   md_jours: number | null;
   jours_restants: number | null;
   frais_total: number;
