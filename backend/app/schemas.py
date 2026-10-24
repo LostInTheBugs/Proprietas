@@ -1,3 +1,4 @@
+import math
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Optional, List, Union
@@ -9,6 +10,33 @@ from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
 # 422 si non fini / hors limites. Les schémas de SORTIE restent en float (nombres JSON).
 Montant = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.01"), LIMITE_MONTANT))]
 Taux = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.0001"), LIMITE_TAUX))]
+
+SURFACE_MAX_M2 = 100_000.0
+
+
+def _surface_saisie(v):
+    """Surface SAISIE (m²) : None accepté ; refus des booléens, du texte, de NaN/Infinity,
+    des valeurs négatives ou ≥ 100 000 m² ; arrondi à 0,01 m²."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        raise ValueError("Surface invalide")
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        raise ValueError("Surface invalide") from None
+    if not math.isfinite(f) or f < 0 or f >= SURFACE_MAX_M2:
+        raise ValueError("Surface invalide (0 à 100 000 m²)")
+    return round(f, 2)
+
+
+def _surface_lue(v):
+    """Surface LUE en base : une valeur non finie héritée du passé sort en null au lieu
+    de faire planter l'encodage JSON (500)."""
+    return v if v is None or not isinstance(v, float) or math.isfinite(v) else None
+
+
+Surface = Annotated[float, BeforeValidator(_surface_saisie)]
 
 
 # ---------- Auth / Users ----------
@@ -290,7 +318,7 @@ class LotIn(BaseModel):
     designation: str = ""
     type: str = "appartement"
     tantiemes: int = 0
-    surface_m2: Optional[float] = None
+    surface_m2: Optional[Surface] = None
     # Propriétaire = un COMPTE UTILISATEUR de la copropriété (modèle « zéro fiche »).
     proprietaire_id: Optional[int] = None
     # "" = non renseigné | "occupant" (le propriétaire occupe son logement)
@@ -309,6 +337,8 @@ class LotIn(BaseModel):
 class LotOut(LotIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    # Sortie : pas les contrôles de saisie (une donnée ancienne ne doit pas bloquer la lecture).
+    surface_m2: Annotated[Optional[float], BeforeValidator(_surface_lue)] = None
     # Enrichissements (GET/POST/PUT renseignés par _lots_out) :
     proprietaire_nom: str = ""  # « Prénom Nom » du compte propriétaire
     proprietaire_occupant: bool = False  # DÉRIVÉ : statut_occupation == "occupant"
