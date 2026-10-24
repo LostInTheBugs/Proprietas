@@ -5,7 +5,7 @@ from typing import Annotated, Optional, List, Union
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, field_validator
 
 from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
-from app.services.country_rules import TYPES_LOT
+from app.services.country_rules import NATURES_RESOLUTION, TYPES_AG, TYPES_LOT
 
 # Types des champs SAISIS (schémas d'entrée uniquement) : Decimal arrondi dès la validation,
 # 422 si non fini / hors limites. Les schémas de SORTIE restent en float (nombres JSON).
@@ -503,6 +503,13 @@ class AGIn(BaseModel):
     # 0 ou au moins 21 : délai de convocation de l'art. 9 du décret n° 67-223.
     rappel_jours: int = DELAI_CONVOCATION_JOURS
 
+    @field_validator("type_ag")
+    @classmethod
+    def _type_ag_ok(cls, v):
+        if v not in TYPES_AG:
+            raise ValueError("type d'assemblée invalide (" + " | ".join(TYPES_AG) + ")")
+        return v
+
     @field_validator("rappel_jours")
     @classmethod
     def _rappel_legal(cls, v):
@@ -522,6 +529,15 @@ class ResolutionIn(BaseModel):
     libelle: str
     texte: str = ""
     majorite: str = "art24"
+    # autre | budget | approbation_comptes (budget et comptes : jamais en consultation écrite)
+    nature: str = "autre"
+
+    @field_validator("nature")
+    @classmethod
+    def _nature_ok(cls, v):
+        if v not in NATURES_RESOLUTION:
+            raise ValueError("nature de résolution invalide (" + " | ".join(NATURES_RESOLUTION) + ")")
+        return v
 
 
 class ResolutionResult(BaseModel):
@@ -554,6 +570,7 @@ class ResolutionOut(BaseModel):
     libelle: str
     texte: str = ""
     majorite: str = "art24"
+    nature: str = "autre"
     statut: str = "a_voter"
     second_vote_de_id: Optional[int] = None
     votes: List[VoteOut] = []

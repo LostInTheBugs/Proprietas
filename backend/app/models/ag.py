@@ -58,6 +58,9 @@ class Resolution(Base):
     # art26 = majorité des 2/3 des voix de tous les copropriétaires
     # unanimite = tous les copropriétaires
     majorite = Column(String, default="art24")
+    # Objet de la décision : autre | budget | approbation_comptes. Le budget prévisionnel et
+    # l'approbation des comptes sont exclus de la consultation écrite (art. 41-12).
+    nature = Column(String, nullable=False, default="autre", server_default="autre")
     statut = Column(String, default="a_voter")  # a_voter | adoptee | rejetee
     # Second vote immédiat (passerelles art. 25-1 / 26-1) : id de la résolution
     # dont celle-ci est le second vote. NULL pour une résolution « normale ».
