@@ -349,6 +349,13 @@ docker compose pull backend && docker compose up -d --no-build
 En stratégie « pull », ne lancez jamais `docker compose up -d --build` ni `docker compose up`
 sur une image absente : Compose construirait l'image sur place.
 
+**Espace disque et ménage.** Avant toute mise à jour, l'applicateur vérifie l'espace libre :
+1,5 Go en « build », 0,5 Go en « pull » (réglable par `PROPRIETAS_MIN_FREE_GB` dans le `.env`).
+S'il manque de la place, il refuse sans rien modifier et l'indique dans l'interface. Après une
+mise à jour réussie, il supprime les images orphelines (`docker image prune -f`) et, en
+« build », le cache de construction (`docker builder prune -af`). Les valeurs du `.env` peuvent
+être entre guillemets (`PROPRIETAS_UPDATE_STRATEGY="pull"`), comme pour Docker Compose.
+
 Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, puis
 `scripts/bump-version.sh AAAA.MM.NNN`, commit, `git tag AAAA.MM.NNN && git push origin AAAA.MM.NNN`
 (le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG **et** publie

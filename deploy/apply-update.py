@@ -16,7 +16,12 @@ L'application ne fait que DÉPOSER une demande dans `data/updates/update-request
          puis `docker compose up -d --no-build`. Pour les petits serveurs : construire
          le frontend demande 1 à 2 Go de RAM et peut faire tomber un petit VPS ;
   5. attend que l'API réponde avec la NOUVELLE version, sinon signale l'échec
-     (la sauvegarde indiquée permet de revenir en arrière à la main).
+     (la sauvegarde indiquée permet de revenir en arrière à la main) ;
+  6. après un succès, fait le ménage Docker : images orphelines (`docker image prune -f`)
+     et, en stratégie « build », cache de construction (`docker builder prune -af`).
+
+Avant toute modification, vérifie l'espace disque libre : 1,5 Go en « build », 0,5 Go en
+« pull » (seuil réglable par PROPRIETAS_MIN_FREE_GB dans le .env). Sinon : refus, rien ne bouge.
 
     sudo python3 deploy/apply-update.py            # applique la demande en attente
     sudo python3 deploy/apply-update.py --dry-run  # montre ce qui serait fait, ne change rien
@@ -30,6 +35,7 @@ import json
 import os
 import pwd
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -45,6 +51,9 @@ LOG = UPD / "update.log"
 VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{3}(?:-c\d+)?$")
 KEEP_BACKUPS = 10
 HEALTH_TIMEOUT_S = 180
+# Espace disque minimal avant une mise à jour (Go). Cas réel du 24/10/2026 : ionos01 à 99 %
+# (cache de construction accumulé), `npm ci` échouait sans message clair.
+MIN_FREE_GB = {"build": 1.5, "pull": 0.5}
 DRY = "--dry-run" in sys.argv
 
 
@@ -94,8 +103,44 @@ def read_env(path: Path) -> dict:
     for line in lines:
         if "=" in line and not line.lstrip().startswith("#"):
             k, _, v = line.partition("=")
-            out[k.strip()] = v.strip()
+            v = v.strip()
+            # Comme docker compose : KEY="valeur" ou KEY='valeur' → valeur (guillemets appariés).
+            if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+                v = v[1:-1]
+            out[k.strip()] = v
     return out
+
+
+def espace_libre_gb() -> float:
+    return shutil.disk_usage(APP_DIR).free / 1024 ** 3
+
+
+def verifier_espace(strategy: str, env: dict) -> None:
+    """Refuse la mise à jour si le disque est trop plein (avant sauvegarde et checkout)."""
+    try:
+        minimum = float(env.get("PROPRIETAS_MIN_FREE_GB") or MIN_FREE_GB.get(strategy, 1.5))
+    except ValueError:
+        minimum = MIN_FREE_GB.get(strategy, 1.5)
+    libre = espace_libre_gb()
+    log(f"espace disque libre : {libre:.1f} Go (minimum {minimum:g} Go, stratégie {strategy})")
+    if libre < minimum:
+        conseil = ("libérez de la place (docker builder prune -af ; docker image prune -f) "
+                   "ou passez en PROPRIETAS_UPDATE_STRATEGY=pull") if strategy == "build" \
+            else "libérez de la place (docker image prune -af)"
+        raise RuntimeError(f"espace disque insuffisant : {libre:.1f} Go libres, {minimum:g} Go "
+                           f"nécessaires — {conseil}")
+
+
+def menage_docker(strategy: str) -> None:
+    """Après un succès : ne pas laisser grossir le disque à chaque version (best effort)."""
+    commandes = [["docker", "image", "prune", "-f"]]
+    if strategy != "pull":
+        commandes.insert(0, ["docker", "builder", "prune", "-af"])
+    for cmd in commandes:
+        try:
+            run(cmd)
+        except Exception as exc:  # noqa: BLE001 — le ménage n'invalide jamais la mise à jour
+            log(f"ménage non bloquant en échec : {exc}")
 
 
 def set_env(path: Path, key: str, value: str):
@@ -175,12 +220,14 @@ def main() -> int:
     log(f"demande de {by} : mise à jour vers {version}{' (dry-run)' if DRY else ''}")
     status(result="en cours", running=version, running_at=time.time())
     dump = ""
-    strategy = read_env(ENV).get("PROPRIETAS_UPDATE_STRATEGY", "build").lower()
+    env = read_env(ENV)
+    strategy = env.get("PROPRIETAS_UPDATE_STRATEGY", "build").lower()
     env_restore = False
     old_version = None
     try:
         run(["git", "fetch", "--tags", "--quiet", "origin"], as_owner=True)
         run(["git", "rev-parse", "--verify", f"refs/tags/{version}"], as_owner=True, capture=True)
+        verifier_espace(strategy, env)
         dump = backup()
         run(["git", "checkout", "--quiet", version], as_owner=True)
         if strategy == "pull":
@@ -205,6 +252,7 @@ def main() -> int:
         REQ.unlink(missing_ok=True)
         status(result=f"échec : {exc}"[:300], running="", backup=dump, at=time.time())
         return 1
+    menage_docker(strategy)
     log(f"mise à jour vers {version} terminée (sauvegarde : {dump})")
     if DRY:
         status(result="dry-run ok", running="")
