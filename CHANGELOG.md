@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.10.018 — 2026-10-25
+
+- Applicateur de mises à jour : vérifie l'espace disque avant toute modification (1,5 Go en build, 0,5 Go en pull, réglable par PROPRIETAS_MIN_FREE_GB) et refuse avec un message clair s'il manque de la place.
+- Applicateur : après une mise à jour réussie, supprime les images Docker orphelines et, en stratégie build, le cache de construction.
+- Applicateur : les valeurs du .env entre guillemets sont lues comme par Docker Compose.
+
 ## 2026.10.017 — 2026-10-25
 
 - Fonds de travaux : référence corrigée en article 14-2-1 de la loi du 10 juillet 1965 (PDF de mise en demeure, e-mail de situation du fonds).
