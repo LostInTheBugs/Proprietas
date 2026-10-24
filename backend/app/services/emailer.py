@@ -113,7 +113,7 @@ def situation_texte(copro, personne_prenom: str, lot_numero: str, solde_lot: flo
         "Situation de votre lot :",
         f"  • Lot {lot_numero} — solde de votre compte de charges : {_fmt_eur(solde_lot)}",
         "",
-        "Ce fonds est obligatoire (art. 14-2 de la loi n°65-557) et servira au financement "
+        "Ce fonds est obligatoire (art. 14-2-1 de la loi n°65-557) et servira au financement "
         "des travaux prévus au plan pluriannuel de travaux.",
         "",
         f"Pour toute question, contactez le syndic ({syndic_nom}).",
@@ -130,11 +130,14 @@ def _fmt_eur(v: float) -> str:
 
 # Un e-mail simple n'est pas une notification au sens du décret n° 67-223 (art. 64 et s.,
 # rédaction du décret n° 2025-1292 du 22/12/2025) : ces messages sont des INFORMATIONS.
+# La voie électronique est la règle ; le papier, l'exception à la demande du copropriétaire
+# (loi n° 65-557, art. 42-1 ; décret, art. 64-1).
 MENTION_CONVOCATION = (
     "Ce message vous informe de la tenue de l'assemblée. Il ne remplace pas la convocation "
-    "régulière, qui vous est notifiée par lettre recommandée électronique, par lettre "
-    "recommandée avec avis de réception ou par remise contre récépissé, au moins 21 jours "
-    "avant la réunion (décret n° 67-223 du 17 mars 1967, art. 9 et 64 et suivants)."
+    "régulière, notifiée au moins 21 jours avant la réunion par lettre recommandée "
+    "électronique (par défaut), par lettre recommandée avec avis de réception si vous avez "
+    "demandé à recevoir les notifications par voie postale, ou par remise contre récépissé "
+    "(loi n° 65-557, art. 42-1 ; décret n° 67-223 du 17 mars 1967, art. 9 et 64 et suivants)."
 )
 
 
@@ -155,8 +158,9 @@ def pv_email_texte(copro, ag, syndic_nom: str) -> str:
         f"Veuillez trouver ci-joint, pour information, le procès-verbal de {type_label} "
         f"de la copropriété {copro.nom} du {_date_fr(ag.date)}.\n\n"
         f"Cet e-mail ne vaut pas notification. Le procès-verbal est notifié aux copropriétaires "
-        f"opposants ou défaillants par lettre recommandée (électronique ou papier) dans le mois "
-        f"qui suit l'assemblée ; cette notification fait courir le délai de contestation de "
+        f"opposants ou défaillants dans le mois qui suit l'assemblée, par lettre recommandée "
+        f"électronique, ou par lettre recommandée papier pour ceux qui ont demandé la voie "
+        f"postale. Cette notification fait courir le délai de contestation de "
         f"deux mois (loi n° 65-557 du 10 juillet 1965, art. 42, alinéa 2).\n\n"
         f"Cordialement,\n{syndic_nom or 'Le syndic'}"
     )

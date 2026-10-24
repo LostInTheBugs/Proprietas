@@ -294,8 +294,9 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
           <p className="mb-2 text-xs text-slate-500">
             Ces e-mails sont une <b>information</b>. La convocation régulière (au moins 21 jours avant
             l'assemblée) et la notification du procès-verbal aux opposants et défaillants se font par
-            lettre recommandée électronique, par lettre recommandée avec avis de réception ou, pour la
-            convocation, par remise contre récépissé (décret n° 67-223, art. 9 et 64 et suivants).
+            lettre recommandée électronique (par défaut), par lettre recommandée avec avis de réception
+            pour les copropriétaires qui ont demandé la voie postale ou, pour la convocation, par remise
+            contre récépissé (loi n° 65-557, art. 42-1 ; décret n° 67-223, art. 9 et 64 et suivants).
           </p>
           {envoiInfo && (
             <p className="mb-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
@@ -544,7 +545,8 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
         <p className="text-xs text-slate-500">
           ⏰ Le serveur enverra un e-mail d'information <b>{rappelJours === "0" || !rappelJours ? "— désactivé" : `${rappelJours} jours avant`}</b> l'AG.
           Délai légal de convocation : 21 jours minimum (art. 9 du décret n° 67-223). Cet e-mail ne remplace
-          pas la convocation régulière (lettre recommandée électronique, LRAR ou remise contre récépissé).
+          pas la convocation régulière (lettre recommandée électronique par défaut, LRAR si le copropriétaire a
+          demandé la voie postale, ou remise contre récépissé).
         </p>
         {typeAg !== "consultation_ecrite" && (
           <p className="text-xs text-slate-500">
