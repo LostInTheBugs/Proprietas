@@ -153,6 +153,10 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   connexion depuis une nouvelle IP, 2FA désactivée ou réinitialisée, code de
   secours utilisé.
 
+### Données personnelles (RGPD)
+
+Données traitées, bases légales, destinataires, durées de conservation proposées, droits des personnes et écarts connus : [docs/rgpd.md](docs/rgpd.md). Modèle de note d'information à remettre aux copropriétaires : [docs/information-coproprietaires.md](docs/information-coproprietaires.md).
+
 ## Recouvrement des impayés
 
 Page « 💶 Recouvrement » (réservée au syndic) : par lot, un dossier suit la
