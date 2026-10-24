@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.10.015 — 2026-10-24
+
+- Approbation des comptes distincte de la clôture : date de l'AG saisie sur l'exercice (page Comptes) ou reportée par une résolution « approbation des comptes » adoptée (migration b9c0d1e2f3a4).
+- Article 19-2 : les restes dus des exercices précédents ne sont retenus qu'après approbation des comptes ; les exercices non approuvés sont exclus et signalés. À faire : saisir la date d'approbation des exercices passés.
+- Second vote (art. 25-1, 26-1) : l'objet de la résolution est conservé.
+
 ## 2026.10.014 — 2026-10-24
 
 - Consultation écrite (art. 41-12) : réservée aux petites copropriétés (art. 41-8), décisions à l'unanimité des voix de tous les copropriétaires. Le budget prévisionnel et l'approbation des comptes en sont exclus (assemblée générale obligatoire).
