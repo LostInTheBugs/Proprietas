@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.013 — 2026-10-24
+
+- Régime « petite copropriété » (art. 41-8) : seuls les lots de logements, bureaux et commerces sont comptés (caves, parkings et annexes exclus). Le critère du budget exige 3 exercices consécutifs budgétés : une copropriété sans historique n'est plus classée « petite » à tort. Détail affiché sur la page Comptes.
+- Lots : nouveaux types maison, bureau et annexe ; type contrôlé à la saisie.
+
 ## 2026.10.012 — 2026-10-24
 
 - Mise en demeure (art. 19-2) : le délai de 30 jours court à compter du lendemain de la première présentation (LRAR), de l'avis électronique (LRE) ou de la remise contre récépissé ; date à saisir dans le dossier (migration f3a4b5c6d7e8). Un e-mail simple n'est plus accepté comme mise en demeure ; la remise exige un récépissé. Intérêts au taux légal depuis la présentation.
