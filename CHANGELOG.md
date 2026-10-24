@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.011 — 2026-10-24
+
+- Assemblées : délai légal de convocation de 21 jours (art. 9 du décret n° 67-223) dans l'interface et pour l'e-mail automatique (migration : les AG à venir réglées sous 21 jours passent à 21).
+- Les e-mails d'AG et de PV sont présentés comme une information : la convocation et la notification se font par lettre recommandée électronique, LRAR ou remise contre récépissé (décret n° 2025-1292). E-mail du PV corrigé (art. 42, al. 2).
+
 ## 2026.10.010 — 2026-10-24
 
 - Documents : la limite de taille (COPRO_UPLOAD_MAX_MB) s'applique pendant la réception. Refus immédiat si la taille annoncée dépasse la limite ; sinon copie par bloc, sans jamais charger le fichier entier en mémoire.
