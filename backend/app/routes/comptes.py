@@ -9,7 +9,7 @@ from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
-from app.services.country_rules import repartir_par_tantiemes
+from app.services.country_rules import regime_petite_copro, repartir_par_tantiemes
 from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
@@ -217,21 +217,20 @@ def delete_mouvement(mouvement_id: int, db: Session = Depends(get_db), user: Use
 def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
 
-    # Régime « petite copropriété » (art. 41-8) : ≤ 5 lots ou budget prévisionnel
-    # moyen < 15 000 €/an sur les 3 derniers exercices — calculé avant le garde
-    # ci-dessous pour rester renseigné même sans exercice
+    # Régime « petite copropriété » (art. 41-8, voir country_rules.regime_petite_copro) :
+    # calculé avant le garde ci-dessous pour rester renseigné même sans exercice.
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
-    exercices = (db.query(Exercice).filter(Exercice.copropriete_id == copro.id)
-                 .order_by(Exercice.annee.desc()).limit(3).all())
-    budgets = [somme(b.montant for b in e.budget_lines) for e in exercices]
-    budget_moyen = (somme(budgets) / len(budgets)) if budgets else D(0)
-    regime_petite = len(lots) <= 5 or budget_moyen < 15000
+    budgets = {e.annee: somme(b.montant for b in e.budget_lines)
+               for e in db.query(Exercice).filter(Exercice.copropriete_id == copro.id).all()}
+    regime = regime_petite_copro(lots, budgets)
+    regime_out = dict(regime_petite_copro=regime["petite"], nb_lots_principaux=regime["nb_lots_principaux"],
+                      budget_moyen_3_exercices=regime["budget_moyen"])
 
     ex = db.query(Exercice).filter(Exercice.copropriete_id == copro.id, Exercice.cloture == False).order_by(Exercice.annee.desc()).first()  # noqa: E712
     if not ex:
         ex = db.query(Exercice).filter(Exercice.copropriete_id == copro.id).order_by(Exercice.annee.desc()).first()
     if not ex:
-        return RecapOut(exercice_id=0, annee=0, nb_lots=len(lots), regime_petite_copro=regime_petite)
+        return RecapOut(exercice_id=0, annee=0, nb_lots=len(lots), **regime_out)
 
     budget = somme(b.montant for b in ex.budget_lines)
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).all()
@@ -263,5 +262,5 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
         appels_en_cours=appels_en_cours,
         lots=lots_out,
         nb_lots=len(lots),
-        regime_petite_copro=regime_petite,
+        **regime_out,
     )
