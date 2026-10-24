@@ -276,3 +276,44 @@ def repartir_par_tantiemes(montant, lots, fonds_travaux_taux: Decimal = D(0)) ->
         for i, p in enumerate(parts):
             p["montant_fonds_travaux"] = arrondi(D(fonds_total[i]) / D(100))
     return parts
+
+
+# ---------------------------------------------------------------- petite copropriété (art. 41-8)
+# Loi n° 65-557, art. 41-8 : régime simplifié si la copropriété compte au plus 5 lots à usage
+# de logements, de bureaux ou de commerces, OU si son budget prévisionnel moyen sur une période
+# de 3 exercices consécutifs est inférieur à 15 000 €.
+TYPES_LOT = ("appartement", "maison", "bureau", "commerce", "cave", "parking", "annexe", "autre")
+# Annexes : ne comptent pas parmi les lots principaux. « autre » compte, par prudence : le régime
+# simplifié allège les règles (comptabilité, consultation écrite), mieux vaut ne pas l'appliquer à tort.
+TYPES_LOT_ANNEXES = ("cave", "parking", "annexe")
+PETITE_COPRO_MAX_LOTS = 5
+PETITE_COPRO_SEUIL_BUDGET = Decimal("15000")
+
+
+def nb_lots_principaux(lots) -> int:
+    """Nombre de lots à usage de logements, de bureaux ou de commerces (annexes exclues)."""
+    return sum(1 for lot in lots if (lot.type or "") not in TYPES_LOT_ANNEXES)
+
+
+def budget_moyen_3_exercices(budgets: dict) -> Decimal | None:
+    """Moyenne du budget prévisionnel sur les 3 derniers exercices CONSÉCUTIFS.
+
+    `budgets` = {année: total du budget prévisionnel}, pour les seuls exercices qui ont un
+    budget (> 0). On part de la dernière année budgétée N : N-1 et N-2 doivent l'être aussi.
+    Sinon None : le critère du budget n'est pas rempli (et non une moyenne de 0 ou sur 2 ans).
+    """
+    annees = sorted((a for a, m in budgets.items() if m and m > 0), reverse=True)
+    if not annees:
+        return None
+    n = annees[0]
+    if not all(a in budgets and budgets[a] > 0 for a in (n - 1, n - 2)):
+        return None
+    return arrondi(somme(budgets[a] for a in (n, n - 1, n - 2)) / 3)
+
+
+def regime_petite_copro(lots, budgets: dict) -> dict:
+    """Art. 41-8 : {"petite": bool, "nb_lots_principaux": int, "budget_moyen": Decimal | None}."""
+    principaux = nb_lots_principaux(lots)
+    moyen = budget_moyen_3_exercices(budgets)
+    petite = principaux <= PETITE_COPRO_MAX_LOTS or (moyen is not None and moyen < PETITE_COPRO_SEUIL_BUDGET)
+    return {"petite": petite, "nb_lots_principaux": principaux, "budget_moyen": moyen}
