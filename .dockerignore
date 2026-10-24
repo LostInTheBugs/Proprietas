@@ -11,4 +11,4 @@ uploads
 claude/
 .git
 *.tsbuildinfo
-rapport-*.md
+docs/
