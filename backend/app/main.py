@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 from contextlib import asynccontextmanager
@@ -18,6 +19,21 @@ from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export
 settings = get_settings()
 
 
+def _rechiffrer_smtp() -> None:
+    """Chiffre les mots de passe SMTP restés en clair (instances antérieures à 2026.10.016)."""
+    from app.core.crypto import rechiffrer_secrets_smtp
+    from app.core.database import SessionLocal
+    db = SessionLocal()
+    try:
+        n = rechiffrer_secrets_smtp(db)
+        if n:
+            logging.getLogger("uvicorn.error").info("Mots de passe SMTP chiffrés : %s", n)
+    except Exception:  # noqa: BLE001 — base pas encore migrée, etc. : ne bloque pas le démarrage
+        logging.getLogger("uvicorn.error").exception("Chiffrement des mots de passe SMTP impossible")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs(settings.upload_dir, exist_ok=True)
@@ -25,6 +41,7 @@ async def lifespan(app: FastAPI):
     # étape explicite au démarrage du conteneur / en dev — pas ici :
     # un démarrage qui migre est dangereux quand plusieurs conteneurs
     # démarrent en même temps (voir README, section Déploiement).
+    _rechiffrer_smtp()
     from app.core.scheduler import start_scheduler, stop_scheduler
     start_scheduler()
     yield

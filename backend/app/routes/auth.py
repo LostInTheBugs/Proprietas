@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 from app.core import audit
@@ -22,6 +24,7 @@ from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResp
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
 from app.services import two_factor
+from app.services.donnees_personnelles import donnees_personnelles
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -152,6 +155,18 @@ def creer_copropriete(data: CoproCreate, request: Request, response: Response, d
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.get("/me/export")
+def exporter_mes_donnees(request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Droit d'accès (RGPD, art. 15) : toutes les données du compte, en JSON téléchargeable."""
+    donnees = donnees_personnelles(db, user)
+    audit.enregistrer(db, "export_donnees_personnelles", user=user,
+                      copro_id=user.copropriete_id, request=request)
+    db.commit()
+    contenu = json.dumps(donnees, ensure_ascii=False, indent=2, default=str)
+    return Response(content=contenu, media_type="application/json",
+                    headers={"Content-Disposition": 'attachment; filename="mes-donnees-proprietas.json"'})
 
 
 @router.post("/theme")

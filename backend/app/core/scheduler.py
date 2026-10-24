@@ -38,8 +38,16 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    # Purge RGPD des journaux (durée COPRO_RETENTION_JOURNAL_MOIS) : une fois par jour.
+    _scheduler.add_job(
+        _tick_retention,
+        IntervalTrigger(hours=24, start_date=datetime.now() + timedelta(minutes=10)),
+        id="retention",
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.start()
-    log.info("Scheduler démarré (relances auto toutes les 30 min)")
+    log.info("Scheduler démarré (relances auto toutes les 30 min, purge des journaux quotidienne)")
 
 
 def stop_scheduler() -> None:
@@ -61,6 +69,19 @@ def _tick_relances() -> None:
             log.info("Rappels AG : %s", stats_ag)
     except Exception:
         log.exception("Erreur pendant les tâches automatiques")
+    finally:
+        db.close()
+
+
+def _tick_retention() -> None:
+    from app.services.retention import purger_journaux
+    db = SessionLocal()
+    try:
+        stats = purger_journaux(db)
+        if stats["audit"] or stats["connexions"]:
+            log.info("Purge RGPD des journaux : %s", stats)
+    except Exception:
+        log.exception("Erreur pendant la purge des journaux")
     finally:
         db.close()
 
