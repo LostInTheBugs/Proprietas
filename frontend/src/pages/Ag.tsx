@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult, Recap } from "../types";
+import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult, Recap, Exercice } from "../types";
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -570,9 +570,18 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
   // Consultation écrite : unanimité imposée (art. 41-12).
   const [majorite, setMajorite] = useState(consultation ? "unanimite" : "art24");
   const [nature, setNature] = useState("autre");
+  // Approbation des comptes : l'exercice approuvé (reporté sur l'exercice si la résolution est adoptée).
+  const [exercices, setExercices] = useState<Exercice[]>([]);
+  const [exerciceId, setExerciceId] = useState("");
+  useEffect(() => {
+    api.get<Exercice[]>("/exercices").then(setExercices).catch(() => {});
+  }, []);
   async function save() {
     try {
-      await api.post(`/ag/${agId}/resolutions`, { numero: Number(numero), libelle, texte, majorite, nature });
+      await api.post(`/ag/${agId}/resolutions`, {
+        numero: Number(numero), libelle, texte, majorite, nature,
+        exercice_id: nature === "approbation_comptes" && exerciceId ? Number(exerciceId) : null,
+      });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
@@ -593,6 +602,15 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
             <option key={k} value={k} disabled={consultation && k !== "autre"}>{l}</option>
           ))}
         </Select>
+        {nature === "approbation_comptes" && (
+          <Select label="Exercice dont les comptes sont approuvés" value={exerciceId}
+            onChange={(e) => setExerciceId(e.target.value)}>
+            <option value="">— choisir —</option>
+            {exercices.map((e) => (
+              <option key={e.id} value={e.id}>{e.annee}{e.comptes_approuves_le ? " (déjà approuvés)" : ""}</option>
+            ))}
+          </Select>
+        )}
         {consultation && (
           <p className="text-xs text-slate-500">
             Consultation écrite : unanimité de tous les copropriétaires ; le budget prévisionnel et

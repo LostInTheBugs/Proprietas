@@ -610,6 +610,12 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                     )}
                     {" — l'arriéré déjà échu reste dû en parallèle ("}{fmtEUR(prev19.arriere_echu)}{")."}
                   </p>
+                  {prev19.exercices_non_approuves.length > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Exclus : restes dus de l'exercice {prev19.exercices_non_approuves.join(", ")} — comptes non encore
+                      approuvés par l'assemblée générale (art. 19-2). Renseignez la date d'approbation sur la page Comptes.
+                    </p>
+                  )}
                   {d.statut !== "apres_19_2" && (
                     <Button
                       disabled={busy}
