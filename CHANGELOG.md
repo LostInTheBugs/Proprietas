@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.008 — 2026-10-24
+
+- Un compte copropriétaire sans liaison reçoit une 404 au lieu de se voir créer une copropriété par une simple lecture (GET).
+- Rapports de travail déplacés dans docs/rapports ; capture d'écran de la démo dans le README.
+
 ## 2026.10.007 — 2026-10-24
 
 - Sécurité : le jeton de session n'est plus accepté dans l'URL (?token=) ; seuls l'en-tête Bearer et le cookie HttpOnly restent valables.
