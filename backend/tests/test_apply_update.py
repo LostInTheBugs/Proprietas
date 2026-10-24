@@ -102,3 +102,48 @@ def test_strategie_par_defaut_build(tmp_path):
     assert mod.read_env(tmp_path / ".env") == {}            # pas de .env
     (tmp_path / ".env").write_text("PROPRIETAS_UPDATE_STRATEGY = pull \n", encoding="utf-8")
     assert mod.read_env(tmp_path / ".env")["PROPRIETAS_UPDATE_STRATEGY"] == "pull"
+
+
+# ---------------------------------------------------------------- tâche 18b : robustesse
+# Cas réel (24/10/2026) : ionos01 a échoué 3 fois sur `npm ci` avec un disque plein à 99 %
+# (2,2 Go de cache de construction accumulé) ; et un .env avec des guillemets
+# (PROPRIETAS_UPDATE_STRATEGY="pull") aurait silencieusement choisi « build ».
+
+def test_read_env_retire_les_guillemets_comme_docker(tmp_path):
+    mod = _module()
+    (tmp_path / ".env").write_text('A="pull"\nB=\'pull\'\nC="pull\nD=x"y\n', encoding="utf-8")
+    env = mod.read_env(tmp_path / ".env")
+    assert env["A"] == "pull" and env["B"] == "pull"
+    assert env["C"] == '"pull' and env["D"] == 'x"y'          # guillemets non appariés : intacts
+
+
+def test_strategie_pull_entre_guillemets(tmp_path):
+    app = _app(tmp_path, tag="2026.10.004")
+    (app / ".env").write_text('PROPRIETAS_UPDATE_STRATEGY="pull"\n', encoding="utf-8")
+    res, status, _ = _run(app, {"version": "2026.10.004", "by": "x"})
+    journal = (app / "data" / "updates" / "update.log").read_text(encoding="utf-8")
+    assert "docker compose pull backend" in journal and "up -d --build" not in journal
+
+
+def test_espace_disque_insuffisant_refuse_avant_tout_changement(tmp_path):
+    app = _app(tmp_path, tag="2026.10.004")
+    (app / ".env").write_text("PROPRIETAS_MIN_FREE_GB=999999\n", encoding="utf-8")
+    res, status, demande = _run(app, {"version": "2026.10.004", "by": "x"})
+    assert res.returncode == 1 and "espace disque insuffisant" in status["result"] and not demande
+    journal = (app / "data" / "updates" / "update.log").read_text(encoding="utf-8")
+    assert "sauvegarde →" not in journal and "git checkout" not in journal   # rien n'a bougé
+
+
+def test_build_reussi_vide_le_cache(tmp_path):
+    res, status, _ = _run(_app(tmp_path, tag="2026.10.002"), {"version": "2026.10.002", "by": "x"})
+    assert res.returncode == 0, res.stdout + res.stderr
+    journal = (tmp_path / "app" / "data" / "updates" / "update.log").read_text(encoding="utf-8")
+    assert "docker builder prune -af" in journal and "docker image prune -f" in journal
+
+
+def test_pull_reussi_supprime_les_images_orphelines_sans_toucher_au_cache(tmp_path):
+    app = _app(tmp_path, tag="2026.10.004")
+    (app / ".env").write_text("PROPRIETAS_UPDATE_STRATEGY=pull\n", encoding="utf-8")
+    res, status, _ = _run(app, {"version": "2026.10.004", "by": "x"})
+    journal = (app / "data" / "updates" / "update.log").read_text(encoding="utf-8")
+    assert "docker image prune -f" in journal and "builder prune" not in journal
