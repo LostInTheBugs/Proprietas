@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.009 — 2026-10-24
+
+- Lots : surface validée à la saisie (NaN, Infinity, négatif ou ≥ 100 000 m² refusés ; arrondi au centième de m²). Une valeur invalide déjà en base n'empêche plus l'affichage des lots.
+
 ## 2026.10.008 — 2026-10-24
 
 - Un compte copropriétaire sans liaison reçoit une 404 au lieu de se voir créer une copropriété par une simple lecture (GET).
