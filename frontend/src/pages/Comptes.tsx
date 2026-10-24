@@ -49,6 +49,16 @@ export default function Comptes() {
               ? "Comptabilité simplifiée (régime petite copropriété, art. 41-8)"
               : "Comptabilité (régime général de la loi du 10 juillet 1965)"}
           </p>
+          {recap && (
+            <p className="text-xs text-slate-400">
+              Art. 41-8 : {recap.nb_lots_principaux} lot(s) de logements, bureaux ou commerces (seuil : 5 au plus) ·
+              budget moyen sur 3 exercices consécutifs :{" "}
+              {recap.budget_moyen_3_exercices === null
+                ? "non disponible"
+                : fmtEUR(recap.budget_moyen_3_exercices)}{" "}
+              (seuil : moins de 15 000 €)
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {exercices.length > 0 && (
