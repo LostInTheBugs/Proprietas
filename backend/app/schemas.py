@@ -869,6 +869,8 @@ class RecouvrementLotOut(BaseModel):
     statut: str = "a_jour"
     statut_label: str = ""
     md_date: Optional[date] = None
+    md_reception: Optional[date] = None
+    activable_le: Optional[date] = None
     md_jours: Optional[int] = None
     jours_restants: Optional[int] = None
     frais_total: float = 0.0
@@ -892,6 +894,7 @@ class RecouvrementActeOut(BaseModel):
     type: str
     date_acte: datetime
     date_envoi: Optional[date] = None
+    date_reception: Optional[date] = None
     mode_envoi: str = ""
     reference: str = ""
     montant: float = 0.0
@@ -902,10 +905,17 @@ class RecouvrementActeOut(BaseModel):
 class RecouvrementActeIn(BaseModel):
     type: str
     date_envoi: Optional[date] = None
+    # Première présentation (LRAR) / avis électronique (LRE) / remise contre récépissé.
+    date_reception: Optional[date] = None
     mode_envoi: str = ""
     reference: str = ""
     montant: Montant = Decimal("0.00")
     libelle: str = ""
+
+
+class ReceptionIn(BaseModel):
+    date_reception: date
+    reference: Optional[str] = None
 
 
 class RecouvrementDossierOut(BaseModel):
@@ -920,6 +930,8 @@ class RecouvrementDossierOut(BaseModel):
     statut: str = "a_jour"
     statut_label: str = ""
     md_date: Optional[date] = None
+    md_reception: Optional[date] = None
+    activable_le: Optional[date] = None
     md_jours: Optional[int] = None
     jours_restants: Optional[int] = None
     frais_total: float = 0.0

@@ -23,6 +23,7 @@ from app.routes.copro import get_or_create_copro
 from app.schemas import (
     DecompteLigne,
     Mise19_2Out,
+    ReceptionIn,
     RecouvrementActeIn,
     RecouvrementActeOut,
     RecouvrementDossierOut,
@@ -70,6 +71,7 @@ def _acte_out(db: Session, a: ActeRecouvrement) -> RecouvrementActeOut:
             auteur = u.nom or u.email or ""
     return RecouvrementActeOut(
         id=a.id, type=a.type, date_acte=a.date_acte, date_envoi=a.date_envoi,
+        date_reception=a.date_reception,
         mode_envoi=a.mode_envoi or "", reference=a.reference or "",
         montant=a.montant or D(0), libelle=a.libelle or LIBELLES_TYPE.get(a.type, a.type),
         auteur=auteur,
@@ -92,9 +94,19 @@ def _snapshot(lignes: list[dict]) -> str:
 
 
 def _conditions_19_2(d: dict) -> None:
-    if d["md"] is None or (d["md_jours"] if d["md_jours"] is not None else -1) < svc.DELAI_19_2_JOURS:
+    if not d["activable_19_2"]:
         raise HTTPException(
-            400, "Article 19-2 : une mise en demeure restée infructueuse pendant 30 jours est requise.")
+            400, "Article 19-2 : une mise en demeure notifiée (LRE, LRAR ou remise) et restée "
+                 "infructueuse pendant 30 jours à compter du lendemain de sa présentation est requise.")
+
+
+def _valider_reception(date_envoi, date_reception) -> None:
+    if date_reception is None:
+        return
+    if date_envoi and date_reception < date_envoi:
+        raise HTTPException(422, "La date de présentation ne peut pas précéder la date d'envoi")
+    if date_reception > date.today():
+        raise HTTPException(422, "La date de présentation ne peut pas être dans le futur")
 
 
 @router.get("", response_model=list[RecouvrementLotOut])
@@ -112,6 +124,8 @@ def liste(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
             solde=d["solde"], retard_depuis=d["retard_depuis"], statut=d["statut"],
             statut_label=d["statut_label"],
             md_date=d["md"].date_envoi if d["md"] else None,
+            md_reception=d["md"].date_reception if d["md"] else None,
+            activable_le=d["activable_le"],
             md_jours=d["md_jours"], jours_restants=d["jours_restants"],
             frais_total=d["frais_total"], interets=d["interets"], total_reclame=d["total_reclame"],
         ))
@@ -135,6 +149,8 @@ def dossier(lot_id: int, db: Session = Depends(get_db), user: User = Depends(req
         solde=d["solde"], arriere_echu=d["arriere_echu"], retard_depuis=d["retard_depuis"],
         statut=d["statut"], statut_label=d["statut_label"],
         md_date=d["md"].date_envoi if d["md"] else None,
+        md_reception=d["md"].date_reception if d["md"] else None,
+        activable_le=d["activable_le"],
         md_jours=d["md_jours"], jours_restants=d["jours_restants"],
         frais_total=d["frais_total"], interets=d["interets"], taux_legal=d["taux"],
         total_reclame=d["total_reclame"],
@@ -176,8 +192,15 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
     if data.type == "mise_en_demeure":
         if not data.date_envoi:
             raise HTTPException(422, "Date d'envoi requise pour la mise en demeure")
+        if (data.mode_envoi or "") == "email":
+            raise HTTPException(422, "Un e-mail simple ne vaut pas mise en demeure : notifiez-la par "
+                                     "lettre recommandée électronique, LRAR ou remise contre récépissé")
         if (data.mode_envoi or "") not in svc.MODES_ENVOI:
-            raise HTTPException(422, "Mode d'envoi requis (lre | lrar | email | remise)")
+            raise HTTPException(422, "Mode d'envoi requis (lre | lrar | remise)")
+        if data.mode_envoi == "remise" and (not data.date_reception or not (data.reference or "").strip()):
+            raise HTTPException(422, "Remise en main propre : date de remise et référence du récépissé "
+                                     "signé obligatoires")
+        _valider_reception(data.date_envoi, data.date_reception)
 
     lignes = svc.appels_lot(db, copro, lot)
     montant = svc.arrondi(svc.D(data.montant or svc.D(0)))
@@ -192,6 +215,7 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
     acte = ActeRecouvrement(
         copropriete_id=copro.id, lot_id=lot.id, personne_id=lot.proprietaire_id,
         type=data.type, date_envoi=data.date_envoi,
+        date_reception=data.date_reception if data.type == "mise_en_demeure" else None,
         mode_envoi=data.mode_envoi if data.type == "mise_en_demeure" else "",
         reference=data.reference or "", montant=montant, libelle=data.libelle or "",
         details_json=details, created_by_id=user.id,
@@ -203,6 +227,28 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
     if data.date_envoi and data.type == "mise_en_demeure":
         detail += f" (envoyée le {data.date_envoi:%d/%m/%Y}, {data.mode_envoi})"
     audit.enregistrer(db, "recouvrement_acte", user=user, copro_id=copro.id, request=request, detail=detail)
+    db.commit()
+    db.refresh(acte)
+    return _acte_out(db, acte)
+
+
+@router.put("/acte/{acte_id}/reception", response_model=RecouvrementActeOut)
+def saisir_reception(acte_id: int, data: ReceptionIn, request: Request,
+                     db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Date de première présentation / d'avis électronique / de remise d'une mise en demeure
+    (connue après l'envoi) : c'est elle qui fait courir le délai de 30 jours."""
+    copro = get_or_create_copro(db, user)
+    acte = db.query(ActeRecouvrement).filter(
+        ActeRecouvrement.id == acte_id, ActeRecouvrement.copropriete_id == copro.id).first()
+    if not acte or acte.type != "mise_en_demeure":
+        raise HTTPException(404, "Mise en demeure introuvable")
+    _valider_reception(acte.date_envoi, data.date_reception)
+    acte.date_reception = data.date_reception
+    if data.reference is not None and data.reference.strip():
+        acte.reference = data.reference.strip()
+    lot = db.query(Lot).filter(Lot.id == acte.lot_id).first()
+    audit.enregistrer(db, "recouvrement_md_reception", user=user, copro_id=copro.id, request=request,
+                      detail=f"Lot {lot.numero if lot else acte.lot_id} — présentée le {data.date_reception:%d/%m/%Y}")
     db.commit()
     db.refresh(acte)
     return _acte_out(db, acte)

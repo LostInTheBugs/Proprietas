@@ -9,7 +9,7 @@ Principes :
   en cours + restants dus des exercices précédents.
 """
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -24,12 +24,15 @@ from app.models.recouvrement import ActeRecouvrement
 
 # Types d'actes créables via l'API (l'activation 19-2 a sa route dédiée).
 TYPES_ACTE = ("mise_en_demeure", "frais", "conciliation", "commissaire_justice", "tribunal", "note")
-MODES_ENVOI = ("lre", "lrar", "email", "remise")
+# Modes valant notification de la mise en demeure (décret n° 67-223, art. 64 et s., rédaction
+# du décret n° 2025-1292) : un e-mail simple n'en fait pas partie.
+MODES_ENVOI = ("lre", "lrar", "remise")
 DELAI_19_2_JOURS = 30
 
 LIBELLES_STATUT = {
     "a_jour": "À jour",
     "en_retard": "Impayé — à relancer",
+    "mise_en_demeure_attente": "Mise en demeure envoyée — date de présentation à saisir",
     "mise_en_demeure": "Mise en demeure — délai en cours",
     "delai_19_2_depasse": "Délai de 30 jours dépassé — 19-2 activable",
     "apres_19_2": "Article 19-2 activé — provisions exigibles",
@@ -122,13 +125,15 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
 
     md = None
     for a in actes:
-        if a.type == "mise_en_demeure":
+        # Seule une mise en demeure NOTIFIÉE (LRE, LRAR, remise) compte ; une ancienne
+        # « mise en demeure » par e-mail reste au journal mais ne fait courir aucun délai.
+        if a.type == "mise_en_demeure" and (a.mode_envoi or "") in MODES_ENVOI:
             md = a  # actes triés par date → le dernier MD gagne
     a_19_2 = any(a.type == "activation_19_2" for a in actes)
     a_conciliation = any(a.type == "conciliation" for a in actes)
     a_justice = any(a.type in ("commissaire_justice", "tribunal") for a in actes)
 
-    statut, md_jours, jours_restants = "a_jour", None, None
+    statut, md_jours, jours_restants, activable_le = "a_jour", None, None, None
     if solde > D("0.005"):
         if a_justice:
             statut = "contentieux"
@@ -136,21 +141,26 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
             statut = "amiable"
         elif a_19_2:
             statut = "apres_19_2"
-        elif md is not None and md.date_envoi:
-            md_jours = (date.today() - md.date_envoi).days
-            if md_jours >= DELAI_19_2_JOURS:
+        elif md is not None and md.date_reception is None:
+            statut = "mise_en_demeure_attente"
+        elif md is not None:
+            # Délai de 30 jours du LENDEMAIN de la présentation (J+1) à J+30 : exigible à J+31.
+            md_jours = (date.today() - md.date_reception).days
+            activable_le = md.date_reception + timedelta(days=DELAI_19_2_JOURS + 1)
+            if date.today() >= activable_le:
                 statut = "delai_19_2_depasse"
             else:
                 statut = "mise_en_demeure"
-                jours_restants = DELAI_19_2_JOURS - md_jours
+                jours_restants = (activable_le - date.today()).days
         else:
             statut = "en_retard"
 
     taux = copro.taux_legal_retard or D(0)
     interets = D(0)
-    if md is not None and md.date_envoi and solde > D("0.005") and taux > 0:
+    if md is not None and md.date_reception and solde > D("0.005") and taux > 0:
+        # Intérêts au taux légal à compter de la mise en demeure, c'est-à-dire de sa présentation.
         base = md.montant or echu or solde
-        jours = max((date.today() - md.date_envoi).days, 0)
+        jours = max((date.today() - md.date_reception).days, 0)
         interets = arrondi(base * taux / D(100) * D(jours) / D(365))
 
     return {
@@ -161,6 +171,8 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
         "statut_label": LIBELLES_STATUT[statut],
         "md": md,
         "md_jours": md_jours,
+        "activable_le": activable_le,
+        "activable_19_2": activable_le is not None and date.today() >= activable_le,
         "jours_restants": jours_restants,
         "frais_total": frais,
         "interets": interets,
