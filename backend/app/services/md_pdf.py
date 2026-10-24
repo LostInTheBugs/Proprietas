@@ -20,7 +20,9 @@ ART_19_2_TEXTE = (
     "l'article 14-1 de la loi du 10 juillet 1965, et après mise en demeure restée "
     "infructueuse passé un délai de trente jours, les autres provisions non encore "
     "échues ainsi que les sommes restant dues appelées au titre des exercices "
-    "précédents après approbation des comptes deviennent immédiatement exigibles."
+    "précédents après approbation des comptes deviennent immédiatement exigibles. "
+    "[…] Le présent article est applicable aux cotisations du fonds de travaux mentionné "
+    "à l'article 14-2."
 )
 
 
@@ -66,9 +68,11 @@ def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: st
     el.append(Paragraph("Madame, Monsieur,", style("normal")))
     el.append(Spacer(1, 5))
     intro = (f"En ma qualité de syndic de la copropriété {copro.nom}, je vous mets en demeure "
-             f"de me régler, dans un délai de trente (30) jours à compter de la présente, la somme "
+             f"de me régler, dans un délai de trente (30) jours à compter du lendemain de la première "
+             f"présentation de la présente (ou de l'avis électronique de son dépôt), la somme "
              f"de <b>{fmt_eur(total)}</b>, correspondant aux provisions suivantes demeurées impayées "
-             f"à leur date d'exigibilité :")
+             f"à leur date d'exigibilité (provisions de charges et, le cas échéant, cotisations "
+             f"du fonds de travaux) :")
     el.append(Paragraph(intro, style("normal")))
     el.append(Spacer(1, 7))
 
@@ -95,7 +99,8 @@ def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: st
 
     para = ("Conformément à l'article 19-2 de la loi n° 65-557 du 10 juillet 1965, à défaut de "
             "règlement dans ce délai de trente (30) jours, les autres provisions non encore échues "
-            "au titre du budget prévisionnel ainsi que les sommes restant dues appelées au titre "
+            "au titre du budget prévisionnel et les cotisations du fonds de travaux non encore "
+            "échues, ainsi que les sommes restant dues appelées au titre "
             "des exercices précédents après approbation des comptes deviendront immédiatement "
             "exigibles. Le syndicat des copropriétaires pourra alors saisir le président du "
             "tribunal judiciaire statuant selon la procédure accélérée au fond pour obtenir votre "
@@ -106,7 +111,8 @@ def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: st
     el.append(Paragraph("Texte de l'article 19-2 : « " + ART_19_2_TEXTE + " »", style("legal")))
     el.append(Spacer(1, 6))
     el.append(Paragraph(
-        "Des intérêts de retard sont dus au taux légal à compter de la présente mise en demeure. "
+        "Des intérêts de retard sont dus au taux légal à compter de la présentation de la présente "
+        "mise en demeure. "
         "Les frais de la présente mise en demeure sont à votre charge.", style("normal")))
     el.append(Spacer(1, 6))
     el.append(Paragraph(
