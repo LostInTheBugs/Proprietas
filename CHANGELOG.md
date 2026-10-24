@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.007 — 2026-10-24
+
+- Sécurité : le jeton de session n'est plus accepté dans l'URL (?token=) ; seuls l'en-tête Bearer et le cookie HttpOnly restent valables.
+
 ## 2026.10.006 — 2026-10-23
 
 - Authentification : python-jose remplacé par PyJWT, passlib par bcrypt (bibliothèques maintenues). Sessions et mots de passe existants inchangés. Un hash illisible donne un refus (401) au lieu d'une erreur 500.
