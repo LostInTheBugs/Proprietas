@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.012 — 2026-10-24
+
+- Mise en demeure (art. 19-2) : le délai de 30 jours court à compter du lendemain de la première présentation (LRAR), de l'avis électronique (LRE) ou de la remise contre récépissé ; date à saisir dans le dossier (migration f3a4b5c6d7e8). Un e-mail simple n'est plus accepté comme mise en demeure ; la remise exige un récépissé. Intérêts au taux légal depuis la présentation.
+- PDF de mise en demeure : point de départ du délai et cotisations du fonds de travaux.
+
 ## 2026.10.011 — 2026-10-24
 
 - Assemblées : délai légal de convocation de 21 jours (art. 9 du décret n° 67-223) dans l'interface et pour l'e-mail automatique (migration : les AG à venir réglées sous 21 jours passent à 21).
