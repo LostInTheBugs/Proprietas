@@ -33,7 +33,9 @@ def _campagne(db, copro):
     db.flush()
     lot.proprietaire_id = p.id
 
-    ex_prev = Exercice(copropriete_id=copro.id, annee=AUJOURDHUI.year - 1, cloture=True)
+    # Exercice précédent clôturé ET comptes approuvés (art. 19-2 : restes dus « après approbation »).
+    ex_prev = Exercice(copropriete_id=copro.id, annee=AUJOURDHUI.year - 1, cloture=True,
+                       comptes_approuves_le=AUJOURDHUI - timedelta(days=30))
     ex_cur = Exercice(copropriete_id=copro.id, annee=AUJOURDHUI.year, cloture=False)
     db.add_all([ex_prev, ex_cur])
     db.flush()
@@ -139,6 +141,18 @@ def test_mode_envoi_requis_pour_md(client, db, copro_a, syndic_a, token_a):
     assert r.status_code == 422
 
 
+def test_19_2_exclut_un_exercice_precedent_non_approuve(client, db, copro_a, syndic_a, token_a):
+    lot, p, _, _ = _campagne(db, copro_a)
+    ex_prev = db.query(Exercice).filter(Exercice.annee == AUJOURDHUI.year - 1).one()
+    ex_prev.comptes_approuves_le = None
+    db.commit()
+    _md_enregistree(client, token_a, lot.id, jours_avant=31)
+    b = client.get(f"/api/recouvrement/lot/{lot.id}/19-2", headers=auth(token_a)).json()
+    assert b["total"] == 150.0                       # seule la provision à échoir de l'exercice en cours
+    assert b["exercices_non_approuves"] == [AUJOURDHUI.year - 1]
+    assert b["arriere_echu"] == 400.0                # l'arriéré échu reste dû, indépendamment du 19-2
+
+
 def test_article_19_2_apres_30_jours(client, db, copro_a, syndic_a, token_a):
     lot, p, _, _ = _campagne(db, copro_a)
     acte = _md_enregistree(client, token_a, lot.id, jours_avant=31)
@@ -150,6 +164,7 @@ def test_article_19_2_apres_30_jours(client, db, copro_a, syndic_a, token_a):
     assert b["total"] == 350.0
     assert b["arriere_echu"] == 400.0
     assert len(b["lignes"]) == 2
+    assert b["exercices_non_approuves"] == []
 
     r = client.post(f"/api/recouvrement/lot/{lot.id}/19-2", headers=auth(token_a))
     assert r.status_code == 200
