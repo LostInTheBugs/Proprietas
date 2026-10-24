@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult } from "../types";
+import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult, Recap } from "../types";
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -96,7 +96,8 @@ export default function Ag() {
 
       {modal?.type === "ag" && <AgModal onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />}
       {modal?.type === "resolution" && (
-        <ResolutionModal agId={modal.agId} majorites={majorites} onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />
+        <ResolutionModal agId={modal.agId} majorites={majorites}
+          consultation={ags.find((a) => a.id === modal.agId)?.type_ag === "consultation_ecrite"} onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />
       )}
     </div>
   );
@@ -389,7 +390,10 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
             <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-500">Résolution {r.numero}</span>
             {r.libelle}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">{majorite?.label ?? r.majorite} · {majorite?.description ?? ""}</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {r.nature && r.nature !== "autre" && <b>{NATURES[r.nature] ?? r.nature} · </b>}
+            {majorite?.label ?? r.majorite} · {majorite?.description ?? ""}
+          </p>
           {r.texte && <p className="mt-1 text-xs text-slate-500">{r.texte}</p>}
         </div>
         <div className="flex items-center gap-2">
@@ -473,6 +477,14 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
   );
 }
 
+// Objet de la résolution : le budget prévisionnel et l'approbation des comptes sont exclus de la
+// consultation écrite (art. 41-12 de la loi du 10 juillet 1965).
+const NATURES: Record<string, string> = {
+  autre: "Autre décision",
+  budget: "Vote du budget prévisionnel",
+  approbation_comptes: "Approbation des comptes",
+};
+
 function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [heure, setHeure] = useState("");
@@ -480,6 +492,11 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   const [statut, setStatut] = useState("projet");
   const [lieu, setLieu] = useState("");
   const [rappelJours, setRappelJours] = useState("21");
+  // Consultation écrite réservée aux petites copropriétés (art. 41-8 et 41-12) : null = inconnu.
+  const [petite, setPetite] = useState<boolean | null>(null);
+  useEffect(() => {
+    api.get<Recap>("/recap").then((r) => setPetite(r.regime_petite_copro)).catch(() => setPetite(null));
+  }, []);
   async function save() {
     try {
       await api.post("/ag", { date, heure, type_ag: typeAg, statut, lieu, notes: "", rappel_jours: Number(rappelJours) || 0 });
@@ -496,8 +513,20 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
         <Select label="Type" value={typeAg} onChange={(e) => setTypeAg(e.target.value)}>
           <option value="annuelle">AG annuelle</option>
           <option value="extraordinaire">AG extraordinaire</option>
-          <option value="consultation_ecrite">Consultation écrite (unanimité)</option>
+          <option value="consultation_ecrite" disabled={petite === false}>Consultation écrite (unanimité)</option>
         </Select>
+        {petite === false && (
+          <p className="text-xs text-slate-500">
+            La consultation écrite est réservée aux petites copropriétés (art. 41-8 et 41-12 de la loi du
+            10 juillet 1965) : voir le détail du régime sur la page Comptes.
+          </p>
+        )}
+        {typeAg === "consultation_ecrite" && (
+          <p className="text-xs text-slate-500">
+            Décisions à l'unanimité des voix de tous les copropriétaires. Le budget prévisionnel et
+            l'approbation des comptes ne peuvent pas être décidés par consultation écrite.
+          </p>
+        )}
         <Select label="Statut" value={statut} onChange={(e) => setStatut(e.target.value)}>
           <option value="projet">Projet</option>
           <option value="convoquee">Convoquée</option>
@@ -531,16 +560,19 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   );
 }
 
-function ResolutionModal({ agId, majorites, onClose, onSaved, onError }: {
-  agId: number; majorites: Record<string, Majorite>; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onError }: {
+  agId: number; majorites: Record<string, Majorite>; consultation: boolean;
+  onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [numero, setNumero] = useState("1");
   const [libelle, setLibelle] = useState("");
   const [texte, setTexte] = useState("");
-  const [majorite, setMajorite] = useState("art24");
+  // Consultation écrite : unanimité imposée (art. 41-12).
+  const [majorite, setMajorite] = useState(consultation ? "unanimite" : "art24");
+  const [nature, setNature] = useState("autre");
   async function save() {
     try {
-      await api.post(`/ag/${agId}/resolutions`, { numero: Number(numero), libelle, texte, majorite });
+      await api.post(`/ag/${agId}/resolutions`, { numero: Number(numero), libelle, texte, majorite, nature });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
@@ -549,12 +581,24 @@ function ResolutionModal({ agId, majorites, onClose, onSaved, onError }: {
       <div className="space-y-3">
         <div className="grid grid-cols-3 gap-3">
           <Input label="N°" type="number" value={numero} onChange={(e) => setNumero(e.target.value)} />
-          <Select label="Majorité requise" value={majorite} onChange={(e) => setMajorite(e.target.value)} className="col-span-2">
+          <Select label="Majorité requise" value={majorite} onChange={(e) => setMajorite(e.target.value)} className="col-span-2"
+            disabled={consultation}>
             {Object.entries(majorites).map(([k, m]) => (
               <option key={k} value={k}>{m.label}</option>
             ))}
           </Select>
         </div>
+        <Select label="Objet" value={nature} onChange={(e) => setNature(e.target.value)}>
+          {Object.entries(NATURES).map(([k, l]) => (
+            <option key={k} value={k} disabled={consultation && k !== "autre"}>{l}</option>
+          ))}
+        </Select>
+        {consultation && (
+          <p className="text-xs text-slate-500">
+            Consultation écrite : unanimité de tous les copropriétaires ; le budget prévisionnel et
+            l'approbation des comptes exigent une assemblée générale (art. 41-12).
+          </p>
+        )}
         <Input label="Libellé" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Approbation des comptes de l'exercice précédent" />
         <label className="block text-sm">
           <span className="mb-1 block font-medium text-slate-600">Texte détaillé (optionnel)</span>

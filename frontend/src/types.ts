@@ -213,6 +213,7 @@ export interface Resolution {
   libelle: string;
   texte: string;
   majorite: string;
+  nature: string; // autre | budget | approbation_comptes
   statut: string;
   second_vote_de_id: number | null;
   votes: Vote[];
