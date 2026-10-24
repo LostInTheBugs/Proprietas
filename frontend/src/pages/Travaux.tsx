@@ -141,7 +141,7 @@ export default function TravauxPage() {
           <b>Règle légale (France)</b> : le plan pluriannuel de travaux (PPT) se vote en assemblée générale. S'il est
           adopté, la cotisation annuelle minimale au fonds de travaux devient <b>2,5 % du montant du plan</b>{" "}
           <i>en plus</i> des 5 % du budget prévisionnel (service-public.fr, F34026). Le fonds de travaux sert à financer
-          ces travaux ; pour les petites copropriétés (≤ 5 lots, régime 41-8) le PPT reste facultatif mais recommandé.
+          ces travaux ; pour les petites copropriétés (≤ 5 lots de logements, bureaux ou commerces, régime 41-8) le PPT reste facultatif mais recommandé.
         </p>
       </Card>
 

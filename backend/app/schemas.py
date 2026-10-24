@@ -2,9 +2,10 @@ import math
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Optional, List, Union
-from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, field_validator
 
 from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
+from app.services.country_rules import TYPES_LOT
 
 # Types des champs SAISIS (schémas d'entrée uniquement) : Decimal arrondi dès la validation,
 # 422 si non fini / hors limites. Les schémas de SORTIE restent en float (nombres JSON).
@@ -316,10 +317,20 @@ class ProfilIn(BaseModel):
 
 
 # ---------- Lots ----------
+def _type_lot(v: str) -> str:
+    # Le type décide du régime « petite copropriété » (art. 41-8) : liste fermée à la saisie.
+    if v not in TYPES_LOT:
+        raise ValueError("type de lot invalide (" + " | ".join(TYPES_LOT) + ")")
+    return v
+
+
+TypeLot = Annotated[str, AfterValidator(_type_lot)]
+
+
 class LotIn(BaseModel):
     numero: str
     designation: str = ""
-    type: str = "appartement"
+    type: TypeLot = "appartement"
     tantiemes: int = 0
     surface_m2: Optional[Surface] = None
     # Propriétaire = un COMPTE UTILISATEUR de la copropriété (modèle « zéro fiche »).
@@ -340,6 +351,8 @@ class LotIn(BaseModel):
 class LotOut(LotIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    # Sortie : un type saisi avant le contrôle reste lisible.
+    type: str = "appartement"
     # Sortie : pas les contrôles de saisie (une donnée ancienne ne doit pas bloquer la lecture).
     surface_m2: Annotated[Optional[float], BeforeValidator(_surface_lue)] = None
     # Enrichissements (GET/POST/PUT renseignés par _lots_out) :
@@ -471,7 +484,11 @@ class RecapOut(BaseModel):
     appels_en_cours: int = 0
     lots: List[EtatDateLot] = []
     nb_lots: int = 0
-    regime_petite_copro: bool = True  # art. 41-8 : ≤ 5 lots ou budget moyen < 15 000 €/an
+    # Art. 41-8 : ≤ 5 lots de logements, bureaux ou commerces, OU budget prévisionnel moyen
+    # < 15 000 € sur 3 exercices consécutifs (None = moins de 3 exercices consécutifs budgétés).
+    regime_petite_copro: bool = False
+    nb_lots_principaux: int = 0
+    budget_moyen_3_exercices: Optional[float] = None
 
 
 # ---------- AG / résolutions ----------
