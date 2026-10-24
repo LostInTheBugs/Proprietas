@@ -286,6 +286,8 @@ def apercu_19_2(lot_id: int, db: Session = Depends(get_db), user: User = Depends
         lignes=[_ligne_out(l) for l in b["lignes"]], total=b["total"],
         arriere_echu=b["arriere_echu"], exercice=b["exercice"],
         exercices_non_approuves=b["exercices_non_approuves"],
+        a_echoir=b["a_echoir"], precedents_approuves=b["precedents_approuves"],
+        echu_courant=b["echu_courant"], precedents_non_approuves=b["precedents_non_approuves"],
     )
 
 
@@ -317,4 +319,6 @@ def activer_19_2(lot_id: int, request: Request,
         lignes=[_ligne_out(l) for l in b["lignes"]], total=b["total"],
         arriere_echu=b["arriere_echu"], exercice=b["exercice"],
         exercices_non_approuves=b["exercices_non_approuves"],
+        a_echoir=b["a_echoir"], precedents_approuves=b["precedents_approuves"],
+        echu_courant=b["echu_courant"], precedents_non_approuves=b["precedents_non_approuves"],
     )

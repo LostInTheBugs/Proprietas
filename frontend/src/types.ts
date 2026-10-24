@@ -451,5 +451,10 @@ export interface Mise19_2 {
   arriere_echu: number;
   exercice: number | null;
   exercices_non_approuves: number[]; // restes dus exclus : comptes non approuvés
+  // Ventilation disjointe (somme = solde du lot)
+  a_echoir: number;                 // provisions non échues de l'exercice en cours (19-2)
+  precedents_approuves: number;     // restes des exercices précédents approuvés (19-2)
+  echu_courant: number;             // arriéré échu de l'exercice en cours (déjà dû, hors 19-2)
+  precedents_non_approuves: number; // exercices précédents non approuvés (déjà dus, hors 19-2)
 }
 

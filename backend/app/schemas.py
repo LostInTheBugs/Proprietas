@@ -990,3 +990,9 @@ class Mise19_2Out(BaseModel):
     exercice: Optional[int] = None
     # Exercices précédents avec un reste dû mais des comptes NON approuvés : exclus du 19-2.
     exercices_non_approuves: List[int] = []
+    # Ventilation disjointe (somme = solde) : a_echoir + precedents_approuves = total 19-2 ;
+    # echu_courant et precedents_non_approuves restent dus hors 19-2.
+    a_echoir: float = 0.0
+    precedents_approuves: float = 0.0
+    echu_courant: float = 0.0
+    precedents_non_approuves: float = 0.0

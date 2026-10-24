@@ -603,12 +603,30 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-slate-700">
-                    Total nouvellement exigible : <strong className="tabular-nums">{fmtEUR(prev19.total)}</strong>
-                    {prev19.exercice !== null && (
-                      <span className="text-slate-500"> (provisions non échues {prev19.exercice} + restes des exercices précédents)</span>
+                  <table className="w-full text-xs text-slate-700">
+                    <tbody>
+                      <tr>
+                        <td className="py-0.5">Provisions à échoir{prev19.exercice !== null ? ` de l'exercice ${prev19.exercice}` : ""}, rendues exigibles</td>
+                        <td className="py-0.5 text-right tabular-nums">{fmtEUR(prev19.a_echoir)}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-0.5">Restes dus des exercices précédents (comptes approuvés)</td>
+                        <td className="py-0.5 text-right tabular-nums">{fmtEUR(prev19.precedents_approuves)}</td>
+                      </tr>
+                      <tr className="border-t border-indigo-100 font-medium">
+                        <td className="py-0.5">Total exigible au titre de l'article 19-2</td>
+                        <td className="py-0.5 text-right tabular-nums">{fmtEUR(prev19.total)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-slate-500">
+                    Restent dus en plus, hors article 19-2 : arriéré échu de l'exercice en cours{" "}
+                    <span className="tabular-nums">{fmtEUR(prev19.echu_courant)}</span>
+                    {prev19.precedents_non_approuves > 0 && (
+                      <> ; exercices précédents non approuvés{" "}
+                        <span className="tabular-nums">{fmtEUR(prev19.precedents_non_approuves)}</span></>
                     )}
-                    {" — l'arriéré déjà échu reste dû en parallèle ("}{fmtEUR(prev19.arriere_echu)}{")."}
+                    . Ces montants ne sont pas comptés deux fois.
                   </p>
                   {prev19.exercices_non_approuves.length > 0 && (
                     <p className="text-xs text-amber-700">

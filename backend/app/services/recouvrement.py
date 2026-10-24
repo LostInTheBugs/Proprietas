@@ -193,7 +193,11 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
     """
     lignes = lignes if lignes is not None else appels_lot(db, copro, lot)
     ex = exercice_courant(db, copro)
-    retenues, total, non_approuves = [], D(0), set()
+    retenues, non_approuves = [], set()
+    # Ventilation en 4 parts DISJOINTES (leur somme = solde du lot) : les deux premières forment
+    # le total 19-2 ; les deux autres restent dues en dehors du 19-2.
+    parts = {"a_echoir": D(0), "precedents_approuves": D(0),
+             "echu_courant": D(0), "precedents_non_approuves": D(0)}
     for l in lignes:
         if l["restant_du"] <= D("0.005"):
             continue
@@ -202,16 +206,20 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
         if l["exercice_id"] == ex.id:
             if not l["echu"]:
                 retenues.append(l)
-                total += l["restant_du"]
+                parts["a_echoir"] += l["restant_du"]
+            else:
+                parts["echu_courant"] += l["restant_du"]
         elif l.get("comptes_approuves"):
             retenues.append(l)
-            total += l["restant_du"]
+            parts["precedents_approuves"] += l["restant_du"]
         else:
             non_approuves.add(l["exercice"])
+            parts["precedents_non_approuves"] += l["restant_du"]
     return {
         "lignes": retenues,
-        "total": arrondi(total),
+        "total": arrondi(parts["a_echoir"] + parts["precedents_approuves"]),
         "arriere_echu": arriere_echu(lignes),
         "exercice": ex.annee if ex else None,
         "exercices_non_approuves": sorted(non_approuves),
+        **{k: arrondi(v) for k, v in parts.items()},
     }
