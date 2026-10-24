@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.010 — 2026-10-24
+
+- Documents : la limite de taille (COPRO_UPLOAD_MAX_MB) s'applique pendant la réception. Refus immédiat si la taille annoncée dépasse la limite ; sinon copie par bloc, sans jamais charger le fichier entier en mémoire.
+- Tests de l'applicateur de mises à jour ignorés sous Windows (script réservé à l'hôte Linux).
+
 ## 2026.10.009 — 2026-10-24
 
 - Lots : surface validée à la saisie (NaN, Infinity, négatif ou ≥ 100 000 m² refusés ; arrondi au centième de m²). Une valeur invalide déjà en base n'empêche plus l'affichage des lots.
