@@ -317,3 +317,27 @@ def regime_petite_copro(lots, budgets: dict) -> dict:
     moyen = budget_moyen_3_exercices(budgets)
     petite = principaux <= PETITE_COPRO_MAX_LOTS or (moyen is not None and moyen < PETITE_COPRO_SEUIL_BUDGET)
     return {"petite": petite, "nb_lots_principaux": principaux, "budget_moyen": moyen}
+
+
+# ---------------------------------------------------------------- consultation écrite (art. 41-12)
+# Loi n° 65-557, art. 41-12 : dans une petite copropriété, les décisions peuvent être prises sans
+# assemblée générale, par consultation écrite, à l'UNANIMITÉ des voix de tous les copropriétaires ;
+# sauf le vote du budget prévisionnel et l'approbation des comptes.
+TYPES_AG = ("annuelle", "extraordinaire", "consultation_ecrite")
+NATURES_RESOLUTION = {
+    "autre": "Autre décision",
+    "budget": "Vote du budget prévisionnel",
+    "approbation_comptes": "Approbation des comptes",
+}
+NATURES_EXCLUES_CONSULTATION = ("budget", "approbation_comptes")
+
+
+def refus_consultation_ecrite(majorite: str, nature: str) -> str | None:
+    """Motif de refus d'une résolution en consultation écrite (None si elle est conforme)."""
+    if nature in NATURES_EXCLUES_CONSULTATION:
+        return (f"{NATURES_RESOLUTION[nature]} : impossible par consultation écrite (art. 41-12 de la loi "
+                "du 10 juillet 1965). Réunissez une assemblée générale.")
+    if majorite != "unanimite":
+        return ("Consultation écrite : la décision exige l'unanimité des voix de tous les "
+                "copropriétaires (art. 41-12 de la loi du 10 juillet 1965).")
+    return None

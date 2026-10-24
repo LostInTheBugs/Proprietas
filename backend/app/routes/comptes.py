@@ -9,7 +9,8 @@ from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
-from app.services.country_rules import regime_petite_copro, repartir_par_tantiemes
+from app.services.country_rules import repartir_par_tantiemes
+from app.services.regime import regime_copro
 from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
@@ -220,9 +221,7 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     # Régime « petite copropriété » (art. 41-8, voir country_rules.regime_petite_copro) :
     # calculé avant le garde ci-dessous pour rester renseigné même sans exercice.
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
-    budgets = {e.annee: somme(b.montant for b in e.budget_lines)
-               for e in db.query(Exercice).filter(Exercice.copropriete_id == copro.id).all()}
-    regime = regime_petite_copro(lots, budgets)
+    regime = regime_copro(db, copro.id)
     regime_out = dict(regime_petite_copro=regime["petite"], nb_lots_principaux=regime["nb_lots_principaux"],
                       budget_moyen_3_exercices=regime["budget_moyen"])
 

@@ -11,7 +11,8 @@ from app.models.invitation import Invitation
 from app.models.copropriete import Copropriete
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
-from app.services.country_rules import calculer_statut_resolution, MAJORITES
+from app.services.country_rules import calculer_statut_resolution, refus_consultation_ecrite, MAJORITES
+from app.services.regime import regime_copro
 from app.services.emailer import (envoyer_email, convocation_sujet, convocation_texte, pv_email_texte,
                                   EmailError)
 from app.services.pv_pdf import generer_pv_pdf
@@ -31,7 +32,7 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
     resultat = calculer_statut_resolution(r, lots, r.votes)
     return ResolutionOut(
         id=r.id, ag_id=r.ag_id, numero=r.numero, libelle=r.libelle,
-        texte=r.texte, majorite=r.majorite, statut=r.statut,
+        texte=r.texte, majorite=r.majorite, nature=r.nature or "autre", statut=r.statut,
         second_vote_de_id=r.second_vote_de_id,
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
@@ -63,6 +64,29 @@ def _creneau_out(db: Session, c: AgCreneau) -> CreneauOut:
     return CreneauOut(id=c.id, debut=c.debut, fin=c.fin, votes=votes)
 
 
+CONSULTATION = "consultation_ecrite"
+
+
+def _exiger_petite_copro(db: Session, copro: Copropriete) -> None:
+    """Consultation écrite : réservée aux petites copropriétés (art. 41-8 et 41-12)."""
+    regime = regime_copro(db, copro.id)
+    if regime["petite"]:
+        return
+    budget = ("non disponible (moins de 3 exercices consécutifs budgétés)" if regime["budget_moyen"] is None
+              else f"{regime['budget_moyen']} €")
+    raise HTTPException(422, "La consultation écrite est réservée aux petites copropriétés (art. 41-8 et 41-12 "
+                             f"de la loi du 10 juillet 1965) : {regime['nb_lots_principaux']} lots de logements, "
+                             f"bureaux ou commerces (5 au plus), budget moyen sur 3 exercices : {budget} "
+                             "(moins de 15 000 €). Réunissez une assemblée générale.")
+
+
+def _controler_resolution(ag: AG, majorite: str, nature: str) -> None:
+    if ag.type_ag == CONSULTATION:
+        motif = refus_consultation_ecrite(majorite, nature)
+        if motif:
+            raise HTTPException(422, motif)
+
+
 @router.get("/majorites")
 def majorites():
     """Description des majorités légales (module France)."""
@@ -79,6 +103,8 @@ def list_ag(db: Session = Depends(get_db), user: User = Depends(get_current_user
 @router.post("/ag", response_model=AGOut)
 def create_ag(data: AGIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
+    if data.type_ag == CONSULTATION:
+        _exiger_petite_copro(db, copro)
     ag = AG(copropriete_id=copro.id, **data.model_dump())
     db.add(ag)
     db.commit()
@@ -90,6 +116,14 @@ def create_ag(data: AGIn, db: Session = Depends(get_db), user: User = Depends(re
 def update_ag(ag_id: int, data: AGIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
+    if data.type_ag == CONSULTATION and ag.type_ag != CONSULTATION:
+        # Transformation en consultation écrite : régime et résolutions déjà saisies contrôlés.
+        # Une consultation existante reste modifiable (on ne bloque pas l'existant).
+        _exiger_petite_copro(db, copro)
+        for r in ag.resolutions:
+            motif = refus_consultation_ecrite(r.majorite, r.nature or "autre")
+            if motif:
+                raise HTTPException(422, f"Résolution n° {r.numero} : {motif}")
     for field, value in data.model_dump().items():
         setattr(ag, field, value)
     db.commit()
@@ -113,6 +147,7 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
     if data.majorite not in MAJORITES:
         raise HTTPException(400, f"Majorité inconnue : {data.majorite}")
+    _controler_resolution(ag, data.majorite, data.nature)
     r = Resolution(ag_id=ag.id, **data.model_dump())
     db.add(r)
     db.commit()
@@ -124,6 +159,9 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
 def update_resolution(res_id: int, data: ResolutionIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    if data.majorite not in MAJORITES:
+        raise HTTPException(400, f"Majorité inconnue : {data.majorite}")
+    _controler_resolution(r.ag, data.majorite, data.nature)
     for field, value in data.model_dump().items():
         setattr(r, field, value)
     db.commit()
