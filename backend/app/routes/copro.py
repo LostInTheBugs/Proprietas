@@ -16,7 +16,12 @@ def get_or_create_copro(db: Session, user: User) -> Copropriete:
     """Copropriété active du user :
     1. copro_id porté par le token JWT (après switch) — accès vérifié via la liaison
     2. sinon : copropriété principale (liaison principale, puis première liaison)
-    3. sinon : première copro existante, sinon création (premier login)
+    3. sinon : SYNDIC → création de sa copropriété (premier accès d'une installation
+       neuve) ; tout autre compte → 404, rien n'est créé.
+
+    Appelée par des GET : un GET est une méthode « sûre » (préchargement, robot, nouvelle
+    tentative réseau). Seul le syndic garde cette initialisation au premier accès ; un
+    copropriétaire sans liaison ne doit jamais se voir créer un immeuble vide à son nom.
     """
     token_copro = getattr(user, "_token_data", None) or {}
     cid = token_copro.get("copro_id")
@@ -38,7 +43,9 @@ def get_or_create_copro(db: Session, user: User) -> Copropriete:
             return copro
     # Aucune liaison : on ne s'attribue JAMAIS une copropriété existante qui n'est
     # pas liée au compte — elle appartient potentiellement à un autre syndic.
-    # Premier login (base vide) : création d'une copropriété neuve, liée au compte.
+    if user.role != "syndic":
+        raise HTTPException(404, "Aucune copropriété associée à ce compte")
+    # Premier accès d'un syndic (installation neuve) : copropriété neuve, liée au compte.
     copro = Copropriete(nom="Ma copropriété", totp_policy=politique_defaut())
     db.add(copro)
     db.commit()
