@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -9,6 +9,9 @@ class Exercice(Base):
     copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=False)
     annee = Column(Integer, nullable=False, index=True)
     cloture = Column(Boolean, default=False)
+    # Date de l'AG qui a approuvé les comptes de l'exercice. La clôture ne vaut PAS approbation :
+    # l'art. 19-2 ne vise les restes dus des exercices précédents qu'« après approbation des comptes ».
+    comptes_approuves_le = Column(Date, nullable=True)
 
     copropriete = relationship("Copropriete", back_populates="exercices")
     budget_lines = relationship("BudgetLine", back_populates="exercice", cascade="all, delete-orphan")

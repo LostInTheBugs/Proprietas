@@ -285,6 +285,7 @@ def apercu_19_2(lot_id: int, db: Session = Depends(get_db), user: User = Depends
     return Mise19_2Out(
         lignes=[_ligne_out(l) for l in b["lignes"]], total=b["total"],
         arriere_echu=b["arriere_echu"], exercice=b["exercice"],
+        exercices_non_approuves=b["exercices_non_approuves"],
     )
 
 
@@ -315,4 +316,5 @@ def activer_19_2(lot_id: int, request: Request,
     return Mise19_2Out(
         lignes=[_ligne_out(l) for l in b["lignes"]], total=b["total"],
         arriere_echu=b["arriere_echu"], exercice=b["exercice"],
+        exercices_non_approuves=b["exercices_non_approuves"],
     )

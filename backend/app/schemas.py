@@ -393,6 +393,8 @@ class LotSolde(BaseModel):
 class ExerciceIn(BaseModel):
     annee: int
     cloture: bool = False
+    # Date de l'AG qui a approuvé les comptes (None = non approuvés). Contrôles dans la route.
+    comptes_approuves_le: Optional[date] = None
 
 
 class BudgetLineIn(BaseModel):
@@ -412,6 +414,7 @@ class ExerciceOut(BaseModel):
     id: int
     annee: int
     cloture: bool = False
+    comptes_approuves_le: Optional[date] = None
     budget_total: float = 0.0
 
 
@@ -531,6 +534,8 @@ class ResolutionIn(BaseModel):
     majorite: str = "art24"
     # autre | budget | approbation_comptes (budget et comptes : jamais en consultation écrite)
     nature: str = "autre"
+    # Exercice approuvé : obligatoire pour « approbation_comptes », ignoré sinon.
+    exercice_id: Optional[int] = None
 
     @field_validator("nature")
     @classmethod
@@ -571,6 +576,7 @@ class ResolutionOut(BaseModel):
     texte: str = ""
     majorite: str = "art24"
     nature: str = "autre"
+    exercice_id: Optional[int] = None
     statut: str = "a_voter"
     second_vote_de_id: Optional[int] = None
     votes: List[VoteOut] = []
@@ -982,3 +988,5 @@ class Mise19_2Out(BaseModel):
     total: float = 0.0
     arriere_echu: float = 0.0
     exercice: Optional[int] = None
+    # Exercices précédents avec un reste dû mais des comptes NON approuvés : exclus du 19-2.
+    exercices_non_approuves: List[int] = []
