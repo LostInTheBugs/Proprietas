@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -25,15 +26,31 @@ def get_exercice(db: Session, exercice_id: int, copro) -> Exercice:
 
 
 # ---------- Exercices ----------
+def _exercice_out(ex: Exercice) -> ExerciceOut:
+    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture,
+                       comptes_approuves_le=ex.comptes_approuves_le,
+                       budget_total=arrondi(somme(b.montant for b in ex.budget_lines)))
+
+
+def _controler_approbation(data: ExerciceIn) -> None:
+    """Approbation des comptes par l'AG : exercice clôturé, date passée, pas avant l'exercice."""
+    d = data.comptes_approuves_le
+    if d is None:
+        return
+    if not data.cloture:
+        raise HTTPException(422, "Les comptes ne peuvent être approuvés que sur un exercice clôturé.")
+    if d > date.today():
+        raise HTTPException(422, "La date d'approbation des comptes ne peut pas être dans le futur.")
+    if d.year < data.annee:
+        raise HTTPException(422, f"Les comptes de l'exercice {data.annee} ne peuvent pas avoir été "
+                                 f"approuvés avant {data.annee}.")
+
+
 @router.get("/exercices", response_model=list[ExerciceOut])
 def list_exercices(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
     exercices = db.query(Exercice).filter(Exercice.copropriete_id == copro.id).order_by(Exercice.annee.desc()).all()
-    out = []
-    for ex in exercices:
-        budget = somme(b.montant for b in ex.budget_lines)
-        out.append(ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=arrondi(budget)))
-    return out
+    return [_exercice_out(ex) for ex in exercices]
 
 
 @router.post("/exercices", response_model=ExerciceOut)
@@ -41,23 +58,26 @@ def create_exercice(data: ExerciceIn, db: Session = Depends(get_db), user: User 
     copro = get_or_create_copro(db, user)
     if db.query(Exercice).filter(Exercice.copropriete_id == copro.id, Exercice.annee == data.annee).first():
         raise HTTPException(400, "Cet exercice existe déjà")
-    ex = Exercice(copropriete_id=copro.id, annee=data.annee, cloture=data.cloture)
+    _controler_approbation(data)
+    ex = Exercice(copropriete_id=copro.id, annee=data.annee, cloture=data.cloture,
+                  comptes_approuves_le=data.comptes_approuves_le)
     db.add(ex)
     db.commit()
     db.refresh(ex)
-    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=D(0))
+    return _exercice_out(ex)
 
 
 @router.put("/exercices/{exercice_id}", response_model=ExerciceOut)
 def update_exercice(exercice_id: int, data: ExerciceIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
+    _controler_approbation(data)
     ex.annee = data.annee
     ex.cloture = data.cloture
+    ex.comptes_approuves_le = data.comptes_approuves_le
     db.commit()
     db.refresh(ex)
-    budget = somme(b.montant for b in ex.budget_lines)
-    return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture, budget_total=arrondi(budget))
+    return _exercice_out(ex)
 
 
 @router.delete("/exercices/{exercice_id}")

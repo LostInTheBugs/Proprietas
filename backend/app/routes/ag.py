@@ -9,6 +9,7 @@ from app.models.lot import Lot
 from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote
 from app.models.invitation import Invitation
 from app.models.copropriete import Copropriete
+from app.models.exercice import Exercice
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
 from app.services.country_rules import calculer_statut_resolution, refus_consultation_ecrite, MAJORITES
@@ -32,7 +33,8 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
     resultat = calculer_statut_resolution(r, lots, r.votes)
     return ResolutionOut(
         id=r.id, ag_id=r.ag_id, numero=r.numero, libelle=r.libelle,
-        texte=r.texte, majorite=r.majorite, nature=r.nature or "autre", statut=r.statut,
+        texte=r.texte, majorite=r.majorite, nature=r.nature or "autre", exercice_id=r.exercice_id,
+        statut=r.statut,
         second_vote_de_id=r.second_vote_de_id,
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
@@ -85,6 +87,33 @@ def _controler_resolution(ag: AG, majorite: str, nature: str) -> None:
         motif = refus_consultation_ecrite(majorite, nature)
         if motif:
             raise HTTPException(422, motif)
+
+
+def _exercice_approuve(db: Session, copro: Copropriete, data: ResolutionIn) -> int | None:
+    """Exercice d'une résolution « approbation des comptes » (obligatoire) ; None pour les autres."""
+    if data.nature != "approbation_comptes":
+        return None
+    if data.exercice_id is None:
+        raise HTTPException(422, "Approbation des comptes : choisissez l'exercice dont les comptes sont approuvés.")
+    return get_owned(db, Exercice, data.exercice_id, copro, label="Exercice").id
+
+
+def _reporter_approbation(db: Session, r: Resolution) -> None:
+    """Résolution « approbation des comptes » : reporte le résultat du vote sur l'exercice.
+
+    Adoptée → comptes approuvés à la date de l'AG (et exercice clôturé). Recalculée rejetée →
+    on retire l'approbation seulement si elle venait de cette AG (même date).
+    """
+    if r.nature != "approbation_comptes" or not r.exercice_id:
+        return
+    ex = db.get(Exercice, r.exercice_id)
+    if ex is None or ex.copropriete_id != r.ag.copropriete_id:
+        return
+    if r.statut == "adoptee":
+        ex.comptes_approuves_le = r.ag.date
+        ex.cloture = True
+    elif ex.comptes_approuves_le == r.ag.date:
+        ex.comptes_approuves_le = None
 
 
 @router.get("/majorites")
@@ -148,7 +177,9 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
     if data.majorite not in MAJORITES:
         raise HTTPException(400, f"Majorité inconnue : {data.majorite}")
     _controler_resolution(ag, data.majorite, data.nature)
-    r = Resolution(ag_id=ag.id, **data.model_dump())
+    valeurs = data.model_dump()
+    valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
+    r = Resolution(ag_id=ag.id, **valeurs)
     db.add(r)
     db.commit()
     db.refresh(r)
@@ -162,7 +193,9 @@ def update_resolution(res_id: int, data: ResolutionIn, db: Session = Depends(get
     if data.majorite not in MAJORITES:
         raise HTTPException(400, f"Majorité inconnue : {data.majorite}")
     _controler_resolution(r.ag, data.majorite, data.nature)
-    for field, value in data.model_dump().items():
+    valeurs = data.model_dump()
+    valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
+    for field, value in valeurs.items():
         setattr(r, field, value)
     db.commit()
     db.refresh(r)
@@ -207,6 +240,7 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     resultat = calculer_statut_resolution(r, lots, r.votes)
     r.statut = resultat["statut"]
+    _reporter_approbation(db, r)
     db.commit()
     db.refresh(r)
     return _resolution_out(db, r)
@@ -227,6 +261,7 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     article = "art. 25-1" if majorite == "art24" else "art. 26-1"
     r.statut = resultat["statut"]
     sv = Resolution(ag_id=r.ag_id, numero=r.numero, texte=r.texte, majorite=majorite,
+                    nature=r.nature or "autre", exercice_id=r.exercice_id,
                     libelle=f"{r.libelle} — second vote ({article})", second_vote_de_id=r.id)
     db.add(sv)
     db.commit()

@@ -6,7 +6,7 @@ Principes :
   « échu » (échéance dépassée). Distingue l'arriéré exigible des provisions à échoir.
 - Statut : jamais stocké, recalculé à la lecture depuis les actes + le solde.
 - Article 19-2 : sommes devenues exigibles = provisions NON échues de l'exercice
-  en cours + restants dus des exercices précédents.
+  en cours + restants dus des exercices précédents dont les comptes sont approuvés.
 """
 import json
 from datetime import date, timedelta
@@ -72,6 +72,7 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
             "montant": montant,
             "restant_du": arrondi(montant - impute),
             "echu": bool(echeance and echeance <= date.today()),
+            "comptes_approuves": ex.comptes_approuves_le is not None,
         })
     return lignes
 
@@ -186,11 +187,13 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
     """Sommes qui deviennent exigibles au titre de l'article 19-2.
 
     = provisions NON échues de l'exercice en cours + restants dus des exercices
-    précédents (après approbation des comptes — proxy : exercices antérieurs).
+    précédents dont les comptes ont été APPROUVÉS par l'AG (exercices.comptes_approuves_le).
+    Un exercice précédent non approuvé est exclu et signalé (exercices_non_approuves) :
+    ses provisions échues restent dues au titre de l'arriéré, hors 19-2.
     """
     lignes = lignes if lignes is not None else appels_lot(db, copro, lot)
     ex = exercice_courant(db, copro)
-    retenues, total = [], D(0)
+    retenues, total, non_approuves = [], D(0), set()
     for l in lignes:
         if l["restant_du"] <= D("0.005"):
             continue
@@ -200,12 +203,15 @@ def breakdown_19_2(db: Session, copro: Copropriete, lot, lignes=None) -> dict:
             if not l["echu"]:
                 retenues.append(l)
                 total += l["restant_du"]
-        else:
+        elif l.get("comptes_approuves"):
             retenues.append(l)
             total += l["restant_du"]
+        else:
+            non_approuves.add(l["exercice"])
     return {
         "lignes": retenues,
         "total": arrondi(total),
         "arriere_echu": arriere_echu(lignes),
         "exercice": ex.annee if ex else None,
+        "exercices_non_approuves": sorted(non_approuves),
     }

@@ -61,6 +61,8 @@ class Resolution(Base):
     # Objet de la décision : autre | budget | approbation_comptes. Le budget prévisionnel et
     # l'approbation des comptes sont exclus de la consultation écrite (art. 41-12).
     nature = Column(String, nullable=False, default="autre", server_default="autre")
+    # Exercice dont la résolution approuve les comptes (nature « approbation_comptes » seulement).
+    exercice_id = Column(Integer, ForeignKey("exercices.id", ondelete="SET NULL"), nullable=True)
     statut = Column(String, default="a_voter")  # a_voter | adoptee | rejetee
     # Second vote immédiat (passerelles art. 25-1 / 26-1) : id de la résolution
     # dont celle-ci est le second vote. NULL pour une résolution « normale ».
