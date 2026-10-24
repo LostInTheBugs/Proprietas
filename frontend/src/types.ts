@@ -119,6 +119,7 @@ export interface Exercice {
   id: number;
   annee: number;
   cloture: boolean;
+  comptes_approuves_le: string | null; // date de l'AG qui a approuvé les comptes (art. 19-2)
   budget_total: number;
 }
 
@@ -214,6 +215,7 @@ export interface Resolution {
   texte: string;
   majorite: string;
   nature: string; // autre | budget | approbation_comptes
+  exercice_id: number | null; // exercice approuvé (nature « approbation_comptes »)
   statut: string;
   second_vote_de_id: number | null;
   votes: Vote[];
@@ -448,5 +450,6 @@ export interface Mise19_2 {
   total: number;
   arriere_echu: number;
   exercice: number | null;
+  exercices_non_approuves: number[]; // restes dus exclus : comptes non approuvés
 }
 

@@ -117,6 +117,14 @@ export default function Comptes() {
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+      {exId && (() => {
+        const ex = exercices.find((e) => e.id === exId);
+        return ex ? (
+          <ExerciceStatut key={ex.id} ex={ex} isSyndic={isSyndic} onError={setError}
+            onSaved={(maj) => setExercices((l) => l.map((e) => (e.id === maj.id ? maj : e)))} />
+        ) : null;
+      })()}
+
       {!exId ? (
         <Empty text="Aucun exercice. Créez l'exercice de l'année en cours pour commencer." />
       ) : (
@@ -300,6 +308,42 @@ export default function Comptes() {
     setMouvements(await api.get(`/exercices/${exId}/mouvements`));
     setRecap(await api.get("/recap"));
   }
+}
+
+// Clôture et approbation des comptes : deux étapes distinctes. L'art. 19-2 ne vise les restes
+// dus des exercices précédents qu'« après approbation des comptes » par l'assemblée générale.
+function ExerciceStatut({ ex, isSyndic, onSaved, onError }: {
+  ex: Exercice; isSyndic: boolean; onSaved: (e: Exercice) => void; onError: (e: string) => void;
+}) {
+  const [cloture, setCloture] = useState(ex.cloture);
+  const [approuve, setApprouve] = useState(ex.comptes_approuves_le ?? "");
+  async function save() {
+    try {
+      onError("");
+      onSaved(await api.put<Exercice>(`/exercices/${ex.id}`, {
+        annee: ex.annee, cloture, comptes_approuves_le: approuve || null,
+      }));
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
+  const resume = ex.comptes_approuves_le
+    ? `Comptes ${ex.annee} approuvés par l'AG le ${fmtDate(ex.comptes_approuves_le)}`
+    : ex.cloture ? `Exercice ${ex.annee} clôturé — comptes non encore approuvés` : `Exercice ${ex.annee} en cours`;
+  return (
+    <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+      <p className="flex-1 text-slate-600">{resume}</p>
+      {isSyndic && (
+        <>
+          <label className="flex items-center gap-2 text-slate-600">
+            <input type="checkbox" checked={cloture} onChange={(e) => setCloture(e.target.checked)} />
+            Clôturé
+          </label>
+          <Input label="Comptes approuvés par l'AG le" type="date" value={approuve}
+            onChange={(e) => setApprouve(e.target.value)} disabled={!cloture} />
+          <Button variant="secondary" onClick={save}>Enregistrer</Button>
+        </>
+      )}
+    </div>
+  );
 }
 
 function ExerciceModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: (id: number) => void; onError: (e: string) => void }) {
