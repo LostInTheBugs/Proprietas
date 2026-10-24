@@ -129,6 +129,10 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   25 Mo, `413` au-delà) et liste blanche d'extensions
   (`.pdf .jpg .jpeg .png .doc .docx .xls .xlsx .odt .ods`, `400` sinon).
 - **CORS** : liste d'origines configurable `COPRO_CORS_ORIGINS` (JSON).
+- **RGPD** : journal d'audit et IP de dernière connexion purgés chaque jour au-delà de
+  `COPRO_RETENTION_JOURNAL_MOIS` (défaut 12, 0 = jamais) ; export « mes données » dans
+  Réglages ; mot de passe SMTP chiffré en base (clé dérivée de `COPRO_SECRET_KEY` : si elle
+  change, ressaisir le mot de passe SMTP).
   Vide en production — le frontend est servi par le même backend. En dev
   (SQLite), `http://localhost:5173` est autorisé automatiquement.
 - **Isolation multi-copropriétés** : tout accès par identifiant est scopé à la

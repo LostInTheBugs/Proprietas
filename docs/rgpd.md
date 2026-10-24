@@ -58,7 +58,7 @@ Aucune donnée n'est utilisée pour de la prospection commerciale, ni transmise 
 
 ## 5. Durées de conservation
 
-Ces durées sont **proposées**. Proprietas ne supprime **rien automatiquement** pour l'instant (voir § 8). Le syndic applique ces durées lors de revues périodiques, par exemple chaque année après l'AG.
+Ces durées sont **proposées**. Proprietas purge **automatiquement** le journal d'audit et les informations de dernière connexion (voir ci-dessous) ; pour le reste, le syndic applique ces durées lors de revues périodiques, par exemple chaque année après l'AG.
 
 | Données | Durée proposée | Justification |
 |---|---|---|
@@ -67,7 +67,7 @@ Ces durées sont **proposées**. Proprietas ne supprime **rien automatiquement**
 | Dossier de recouvrement (relances, mises en demeure, actes) | **5 ans** après le paiement complet, ou jusqu'à la fin de la procédure | Prescription des actions personnelles relatives à la copropriété : 5 ans (loi de 1965, art. 42, renvoi à l'art. 2224 du code civil) |
 | Pièces comptables du syndicat | **10 ans** | Usage aligné sur l'obligation de conservation des documents comptables (code de commerce, art. L123-22, par analogie) |
 | PV d'AG, registre, résultats des votes | **Durée de vie du syndicat** | Archives du syndicat, transmises de syndic en syndic |
-| Journal d'audit et dernières connexions (IP, navigateur) | **6 mois à 1 an** | Recommandation de la CNIL pour la journalisation (sécurité) |
+| Journal d'audit et dernières connexions (IP, navigateur) | **12 mois** par défaut, purge automatique quotidienne (`COPRO_RETENTION_JOURNAL_MOIS`, 0 = jamais) | Recommandation de la CNIL pour la journalisation (6 mois à 1 an) |
 | Sauvegardes de la base (`data/backups/`) | Les 10 dernières (rotation automatique) | Une donnée supprimée peut rester dans une sauvegarde jusqu'à sa rotation : le dire à la personne qui demande l'effacement |
 | Fichiers déposés | Selon leur nature (contrat : durée du contrat + 5 ans ; diagnostic : durée de validité) | À trier lors de la revue annuelle |
 
@@ -75,7 +75,7 @@ Ces durées sont **proposées**. Proprietas ne supprime **rien automatiquement**
 
 | Droit | Comment y répondre aujourd'hui |
 |---|---|
-| **Accès** (art. 15) | Le syndic exporte ou communique les données de la personne : profil (Réglages), lots, décompte de son lot (Recouvrement), PV. |
+| **Accès** (art. 15) | La personne télécharge elle-même ses données (Réglages → Mes informations → « Télécharger mes données », fichier JSON : profil, lots, décomptes, votes, courriers reçus, actes de recouvrement la concernant, journal de ses actions). Le syndic complète si besoin (PV, documents). |
 | **Rectification** (art. 16) | La personne corrige elle-même son profil (Réglages). Le syndic corrige le reste. |
 | **Effacement** (art. 17) | Suppression du compte par le syndic. Limite : les données nécessaires à une obligation légale (comptes, PV) ou au recouvrement en cours sont conservées, détachées du nom quand c'est possible. |
 | **Opposition** (art. 21) | Possible pour les traitements fondés sur l'intérêt légitime (e-mails d'information, déclaration d'occupation), pas pour les obligations légales. |
@@ -94,15 +94,22 @@ En place :
 - journal d'audit des actions sensibles (connexion, 2FA, exports, recouvrement) ;
 - limite de taille des fichiers déposés ;
 - HTTPS via le proxy (Caddy ou Traefik) ;
+- mot de passe SMTP chiffré en base (clé dérivée de `COPRO_SECRET_KEY`) ;
 - mises à jour par version publiée (tag) et sauvegarde automatique de la base avant chaque mise à jour.
 
 ## 8. Écarts connus et pistes
 
-- **Pas de purge automatique** : le journal d'audit et les informations de dernière connexion ne sont jamais effacés. Piste : purge configurable, 12 mois par défaut.
-- **Le journal d'audit survit à la suppression d'un compte**, avec l'e-mail et le nom de l'auteur. C'est voulu (preuve), mais il faut l'inclure dans la durée de 6 mois à 1 an.
-- **Pas d'export « mes données »** en un clic pour le droit d'accès. Piste : export JSON ou PDF du profil, des lots et des décomptes.
-- **Mot de passe SMTP** stocké en clair dans la base. Il ne sort jamais par l'API, mais il est lisible par qui accède à la base ou à une sauvegarde. Piste : le chiffrer avec la clé de l'instance.
+Corrigés en 2026.10.016 :
+
+- purge automatique quotidienne du journal d'audit et de l'IP et du navigateur de dernière connexion, au-delà de `COPRO_RETENTION_JOURNAL_MOIS` (12 mois par défaut) ;
+- export « mes données » (droit d'accès) depuis Réglages ;
+- mot de passe SMTP chiffré en base ; les anciens mots de passe en clair sont chiffrés au démarrage. **Si `COPRO_SECRET_KEY` change, le mot de passe SMTP devient illisible et doit être ressaisi** (comme la 2FA).
+
+Restent :
+
+- **Le journal d'audit survit à la suppression d'un compte**, avec l'e-mail et le nom de l'auteur, jusqu'à sa purge (12 mois). C'est voulu (preuve).
 - **Ancienne table `personnes`** (avant le modèle « zéro fiche ») : plus utilisée par l'interface. À vider sur les instances anciennes après vérification.
+- **Sauvegardes** : une donnée purgée ou supprimée reste dans les 10 dernières sauvegardes jusqu'à leur rotation.
 
 ## 9. Modèle d'information des copropriétaires
 

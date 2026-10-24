@@ -248,6 +248,13 @@ export default function Settings() {
             Ces informations sont celles de votre compte : votre nom et votre adresse servent au
             syndic pour les courriers officiels (mise en demeure).
           </p>
+          <p className="text-xs text-slate-500">
+            <a href="/api/auth/me/export" className="font-medium text-indigo-600 hover:underline">
+              Télécharger mes données
+            </a>{" "}
+            (fichier JSON : profil, lots, décomptes, votes, courriers reçus, journal de vos actions —
+            droit d'accès, RGPD art. 15).
+          </p>
         </div>
       </Card>
 
