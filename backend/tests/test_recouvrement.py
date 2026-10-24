@@ -63,7 +63,7 @@ def _md_enregistree(client, token, lot_id, jours_avant=0, mode="lre", montant_md
     d = (AUJOURDHUI - timedelta(days=jours_avant)).isoformat()
     r = client.post(f"/api/recouvrement/lot/{lot_id}/acte",
                     json={"type": "mise_en_demeure", "date_envoi": d, "mode_envoi": mode,
-                          "reference": "LRE-123"},
+                          "reference": "LRE-123", "date_reception": d},
                     headers=auth(token))
     assert r.status_code == 200, r.text
     return r.json()
@@ -115,7 +115,8 @@ def test_mise_en_demeure_pdf_et_acte(client, db, copro_a, syndic_a, token_a):
 
     d = {e["lot_id"]: e for e in client.get("/api/recouvrement", headers=auth(token_a)).json()}[lot.id]
     assert d["statut"] == "mise_en_demeure"
-    assert d["jours_restants"] == 30
+    # présentée aujourd'hui : le délai court du lendemain (J+1) à J+30 → exigible à J+31
+    assert d["jours_restants"] == 31
 
 
 def test_md_sans_provision_echue_refusee(client, db, copro_a, syndic_a, token_a):
