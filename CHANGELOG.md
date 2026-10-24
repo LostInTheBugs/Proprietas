@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.014 — 2026-10-24
+
+- Consultation écrite (art. 41-12) : réservée aux petites copropriétés (art. 41-8), décisions à l'unanimité des voix de tous les copropriétaires. Le budget prévisionnel et l'approbation des comptes en sont exclus (assemblée générale obligatoire).
+- Résolutions : nouveau champ « Objet » (autre décision, budget prévisionnel, approbation des comptes), migration a8b9c0d1e2f3 ; les résolutions existantes reçoivent « autre ».
+
 ## 2026.10.013 — 2026-10-24
 
 - Régime « petite copropriété » (art. 41-8) : seuls les lots de logements, bureaux et commerces sont comptés (caves, parkings et annexes exclus). Le critère du budget exige 3 exercices consécutifs budgétés : une copropriété sans historique n'est plus classée « petite » à tort. Détail affiché sur la page Comptes.
