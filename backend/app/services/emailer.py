@@ -128,8 +128,42 @@ def _fmt_eur(v: float) -> str:
     return f"{v:,.2f} €".replace(",", " ").replace(".", ",")
 
 
+# Un e-mail simple n'est pas une notification au sens du décret n° 67-223 (art. 64 et s.,
+# rédaction du décret n° 2025-1292 du 22/12/2025) : ces messages sont des INFORMATIONS.
+MENTION_CONVOCATION = (
+    "Ce message vous informe de la tenue de l'assemblée. Il ne remplace pas la convocation "
+    "régulière, qui vous est notifiée par lettre recommandée électronique, par lettre "
+    "recommandée avec avis de réception ou par remise contre récépissé, au moins 21 jours "
+    "avant la réunion (décret n° 67-223 du 17 mars 1967, art. 9 et 64 et suivants)."
+)
+
+
+def convocation_sujet(copro, ag) -> str:
+    return (f"Information : {ag.type_ag.replace('_', ' ')} — {copro.nom} "
+            f"({ag.date.strftime('%d/%m/%Y')})")
+
+
+def pv_email_texte(copro, ag, syndic_nom: str) -> str:
+    """Corps de l'e-mail accompagnant le PV (information, pas notification)."""
+    type_label = {
+        "annuelle": "l'assemblée générale annuelle",
+        "extraordinaire": "l'assemblée générale extraordinaire",
+        "consultation_ecrite": "la consultation écrite",
+    }.get(ag.type_ag, "l'assemblée générale")
+    return (
+        f"Bonjour,\n\n"
+        f"Veuillez trouver ci-joint, pour information, le procès-verbal de {type_label} "
+        f"de la copropriété {copro.nom} du {_date_fr(ag.date)}.\n\n"
+        f"Cet e-mail ne vaut pas notification. Le procès-verbal est notifié aux copropriétaires "
+        f"opposants ou défaillants par lettre recommandée (électronique ou papier) dans le mois "
+        f"qui suit l'assemblée ; cette notification fait courir le délai de contestation de "
+        f"deux mois (loi n° 65-557 du 10 juillet 1965, art. 42, alinéa 2).\n\n"
+        f"Cordialement,\n{syndic_nom or 'Le syndic'}"
+    )
+
+
 def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
-    """Corps du message de convocation (texte brut)."""
+    """Corps de l'e-mail d'INFORMATION sur l'assemblée (texte brut)."""
     type_label = {
         "annuelle": "Assemblée Générale annuelle",
         "extraordinaire": "Assemblée Générale extraordinaire",
@@ -139,7 +173,9 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
     lignes = [
         f"Bonjour,",
         "",
-        f"Vous êtes convoqué(e) à {_article(type_label)} de la copropriété {copro.nom}.",
+        f"La copropriété {copro.nom} tiendra {_article(type_label)}.",
+        "",
+        MENTION_CONVOCATION,
         "",
     ]
     if ag.type_ag == "consultation_ecrite":

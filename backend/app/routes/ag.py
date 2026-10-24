@@ -12,7 +12,8 @@ from app.models.copropriete import Copropriete
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
 from app.services.country_rules import calculer_statut_resolution, MAJORITES
-from app.services.emailer import envoyer_email, convocation_texte, _date_fr, EmailError
+from app.services.emailer import (envoyer_email, convocation_sujet, convocation_texte, pv_email_texte,
+                                  EmailError)
 from app.services.pv_pdf import generer_pv_pdf
 from app.schemas import (
     AGIn, AGOut, ResolutionIn, ResolutionOut, VoteIn, VoteOut, ResolutionResult,
@@ -267,7 +268,7 @@ def choisir_creneau(ag_id: int, creneau_id: int, db: Session = Depends(get_db), 
     return _ag_out(db, ag)
 
 
-# ---------- Invitations (convocations par email) ----------
+# ---------- E-mails d'information sur l'AG (pas une convocation régulière) ----------
 @router.get("/ag/{ag_id}/invitations", response_model=list[InvitationOut])
 def list_invitations(ag_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
@@ -288,7 +289,7 @@ def list_invitations(ag_id: int, db: Session = Depends(get_db), user: User = Dep
 
 
 def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: str, marquer_envoyee: bool = True) -> InvitationsResult:
-    """Envoie la convocation par email à tous les propriétaires ayant une adresse."""
+    """E-mail d'INFORMATION sur l'AG aux propriétaires ayant une adresse (pas une notification)."""
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     proprietaires = {}
     for lot in lots:
@@ -297,7 +298,7 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
     personnes = db.query(User).filter(User.id.in_(list(proprietaires.keys()))).all() if proprietaires else []
 
     corps = convocation_texte(copro, ag, ag.resolutions, syndic_nom)
-    sujet = f"Convocation {ag.type_ag.replace('_', ' ')} — {copro.nom} ({ag.date.strftime('%d/%m/%Y')})"
+    sujet = convocation_sujet(copro, ag)
 
     envoyes = 0
     sans_email = 0
@@ -329,7 +330,7 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
 
 @router.post("/ag/{ag_id}/invitations", response_model=InvitationsResult)
 def envoyer_invitations(ag_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    """Envoie la convocation par email à tous les propriétaires ayant une adresse."""
+    """E-mail d'INFORMATION sur l'AG aux propriétaires ayant une adresse (pas une notification)."""
     copro = get_or_create_copro(db, user)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
     return envoyer_convocations(db, ag, copro, user.nom or "Le syndic")
@@ -364,15 +365,8 @@ def envoyer_pv(ag_id: int, db: Session = Depends(get_db), user: User = Depends(r
     personnes = db.query(User).filter(User.id.in_(proprietaires)).all() if proprietaires else []
 
     type_label = _TYPE_AG_LABEL.get(ag.type_ag, "l'assemblée générale")
-    corps = (
-        f"Bonjour,\n\n"
-        f"Veuillez trouver ci-joint le procès-verbal de {type_label} "
-        f"de la copropriété {copro.nom} du {_date_fr(ag.date)}.\n\n"
-        f"Conformément à l'article 17 du décret n°67-223 du 17 mars 1967, ce PV vous est notifié "
-        f"dans un délai de deux mois à compter de l'assemblée.\n\n"
-        f"Cordialement,\n{user.nom or 'Le syndic'}"
-    )
-    sujet = f"PV de {type_label} — {copro.nom} ({ag.date.strftime('%d/%m/%Y')})"
+    corps = pv_email_texte(copro, ag, user.nom or "Le syndic")
+    sujet = f"Information : PV de {type_label} — {copro.nom} ({ag.date.strftime('%d/%m/%Y')})"
 
     envoyes = 0
     sans_email = 0

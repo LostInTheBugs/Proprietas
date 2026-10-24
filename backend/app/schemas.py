@@ -8,6 +8,9 @@ from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
 
 # Types des champs SAISIS (schémas d'entrée uniquement) : Decimal arrondi dès la validation,
 # 422 si non fini / hors limites. Les schémas de SORTIE restent en float (nombres JSON).
+# Décret n° 67-223 du 17 mars 1967, art. 9 : convocation notifiée au moins 21 jours avant l'AG.
+DELAI_CONVOCATION_JOURS = 21
+
 Montant = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.01"), LIMITE_MONTANT))]
 Taux = Annotated[Decimal, BeforeValidator(lambda v: decimal_saisi(v, Decimal("0.0001"), LIMITE_TAUX))]
 
@@ -479,7 +482,17 @@ class AGIn(BaseModel):
     statut: str = "projet"
     lieu: str = ""
     notes: str = ""
-    rappel_jours: int = 15  # envoi auto de la convocation N jours avant (0 = désactivé)
+    # Envoi automatique de l'E-MAIL D'INFORMATION N jours avant l'AG (0 = désactivé).
+    # 0 ou au moins 21 : délai de convocation de l'art. 9 du décret n° 67-223.
+    rappel_jours: int = DELAI_CONVOCATION_JOURS
+
+    @field_validator("rappel_jours")
+    @classmethod
+    def _rappel_legal(cls, v):
+        if v != 0 and not DELAI_CONVOCATION_JOURS <= v <= 90:
+            raise ValueError("Envoi automatique : 0 (désactivé) ou de 21 jours (délai légal de convocation, "
+                             "art. 9 du décret n° 67-223) à 90 jours avant l'assemblée")
+        return v
 
 
 class VoteIn(BaseModel):
@@ -539,7 +552,7 @@ class AGOut(BaseModel):
     statut: str = "projet"
     lieu: str = ""
     notes: str = ""
-    rappel_jours: int = 15
+    rappel_jours: int = DELAI_CONVOCATION_JOURS
     convocation_envoyee: bool = False
     resolutions: List[ResolutionOut] = []
 
