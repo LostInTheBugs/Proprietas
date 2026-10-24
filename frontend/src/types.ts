@@ -180,6 +180,8 @@ export interface Recap {
   appels_en_cours: number;
   nb_lots: number;
   regime_petite_copro: boolean;
+  nb_lots_principaux: number;              // logements, bureaux, commerces (art. 41-8)
+  budget_moyen_3_exercices: number | null; // null = moins de 3 exercices consécutifs budgétés
   lots: EtatDateLot[];
 }
 

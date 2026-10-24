@@ -176,10 +176,13 @@ function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
         <Input label="Désignation" value={f.designation} onChange={(e) => set("designation", e.target.value)} placeholder="Appartement T3" />
         <Select label="Type" value={f.type} onChange={(e) => set("type", e.target.value)}>
           <option value="appartement">Appartement</option>
+          <option value="maison">Maison</option>
+          <option value="bureau">Bureau</option>
+          <option value="commerce">Commerce</option>
           <option value="cave">Cave</option>
           <option value="parking">Parking</option>
-          <option value="commerce">Commerce</option>
-          <option value="autre">Autre</option>
+          <option value="annexe">Annexe (grenier, box, local…)</option>
+          <option value="autre">Autre (compté comme logement)</option>
         </Select>
         <Select label="Propriétaire" value={f.proprietaire_id} onChange={(e) => set("proprietaire_id", e.target.value)}>
           <option value="">— aucun —</option>
