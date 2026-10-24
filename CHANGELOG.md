@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.10.016 — 2026-10-24
+
+- RGPD : mot de passe SMTP chiffré en base (clé dérivée de COPRO_SECRET_KEY ; les anciens mots de passe sont chiffrés au démarrage ; si la clé change, ressaisir le mot de passe).
+- RGPD : purge quotidienne du journal d'audit et de l'IP et du navigateur de dernière connexion au-delà de COPRO_RETENTION_JOURNAL_MOIS (12 mois par défaut, 0 = jamais).
+- RGPD : export « mes données » (droit d'accès) dans Réglages → Mes informations.
+- Documentation : docs/rgpd.md et modèle d'information des copropriétaires.
+
 ## 2026.10.015 — 2026-10-24
 
 - Approbation des comptes distincte de la clôture : date de l'AG saisie sur l'exercice (page Comptes) ou reportée par une résolution « approbation des comptes » adoptée (migration b9c0d1e2f3a4).
