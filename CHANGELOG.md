@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.017 — 2026-10-25
+
+- Fonds de travaux : référence corrigée en article 14-2-1 de la loi du 10 juillet 1965 (PDF de mise en demeure, e-mail de situation du fonds).
+- Notifications : la lettre recommandée électronique est la règle ; la LRAR papier est réservée au copropriétaire qui a demandé la voie postale (loi de 1965, art. 42-1 ; décret n° 67-223, art. 64-1). Textes de convocation, e-mail du PV et écran AG.
+
 ## 2026.10.016 — 2026-10-24
 
 - RGPD : mot de passe SMTP chiffré en base (clé dérivée de COPRO_SECRET_KEY ; les anciens mots de passe sont chiffrés au démarrage ; si la clé change, ressaisir le mot de passe).
