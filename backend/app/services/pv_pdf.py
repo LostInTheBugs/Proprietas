@@ -3,6 +3,10 @@
 Contenu exigé par l'art. 17 du décret n° 67-223 du 17 mars 1967 : pour chaque résolution,
 le résultat du vote et les noms et nombre de voix des copropriétaires opposants, abstenus
 et défaillants ; signature par le président de séance, le secrétaire et le(s) scrutateur(s).
+
+Consultation écrite (petites copropriétés, décret n° 67-223 dans sa rédaction issue du décret
+n° 2020-834) : il n'y a pas de bureau de séance. Le procès-verbal est établi et signé par le
+SYNDIC et indique le sens du vote de CHAQUE copropriétaire ; les écrits de vote y sont annexés.
 """
 from io import BytesIO
 from xml.sax.saxutils import escape
@@ -31,6 +35,12 @@ _STATUT_LABEL = {"projet": "Projet", "convoquee": "Convoquée", "terminee": "Ter
 _LISTES = (("contre", "Opposants"), ("abstention", "Abstentionnistes"), ("defaillant", "Défaillants"))
 
 # Art. 42 al. 2 de la loi du 10 juillet 1965 (rédaction issue de la loi ELAN du 23 novembre 2018).
+_MENTION_CONSULTATION = (
+    "Les écrits par lesquels les copropriétaires ont exprimé leur vote sont annexés au présent "
+    "procès-verbal, lui-même annexé au registre des procès-verbaux des assemblées générales. "
+    "Notification et contestation des décisions : article 42 de la loi n° 65-557 du 10 juillet 1965."
+)
+
 _MENTION_ART42 = (
     "Article 42, alinéa 2, de la loi n° 65-557 du 10 juillet 1965 : les actions en contestation des "
     "décisions des assemblées générales doivent, à peine de déchéance, être introduites par les "
@@ -43,7 +53,7 @@ _MENTION_ART42 = (
 def votants_nommes(resolution, lots, db) -> dict:
     """Copropriétaires opposants, abstenus et défaillants d'une résolution, avec leurs voix.
 
-    Retourne {"contre": [...], "abstention": [...], "defaillant": [...]}, chaque élément
+    Retourne {"pour": [...], "contre": [...], "abstention": [...], "defaillant": [...]}, chaque élément
     étant (nom, [numéros de lots], voix), trié par nom.
     - Les voix sont les poids de vote du décompte (réduction art. 22 al. 2 comprise) :
       leur somme est égale au « contre » / à l'« abstention » de calculer_statut_resolution.
@@ -65,11 +75,12 @@ def votants_nommes(resolution, lots, db) -> dict:
         key = l.proprietaire_id if l.proprietaire_id else f"lot-{l.id}"
         membres.setdefault(key, []).append(l)
 
-    out = {"contre": [], "abstention": [], "defaillant": []}
+    out = {"pour": [], "contre": [], "abstention": [], "defaillant": []}
     for key, ls in membres.items():
         nom = noms.get(key, "Propriétaire non renseigné")
         a_vote = any(voix_lot.get(l.id) in ("pour", "contre", "abstention") for l in ls)
-        for cle, choisis in (("contre", [l for l in ls if voix_lot.get(l.id) == "contre"]),
+        for cle, choisis in (("pour", [l for l in ls if voix_lot.get(l.id) == "pour"]),
+                             ("contre", [l for l in ls if voix_lot.get(l.id) == "contre"]),
                              ("abstention", [l for l in ls if voix_lot.get(l.id) == "abstention"]),
                              ("defaillant", [] if a_vote else ls)):
             if choisis:
@@ -103,8 +114,13 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     total = sum(l.tantiemes for l in lots) or 1
 
+    consultation = ag.type_ag == "consultation_ecrite"
+    # Consultation écrite : le sens du vote de CHAQUE copropriétaire, donc aussi les « pour ».
+    listes = ((("pour", "Pour"),) + _LISTES) if consultation else _LISTES
+
     el = []
-    el.append(Paragraph("PROCÈS-VERBAL D'ASSEMBLÉE GÉNÉRALE", style("titre", fontSize=15)))
+    titre = "PROCÈS-VERBAL DE CONSULTATION ÉCRITE" if consultation else "PROCÈS-VERBAL D'ASSEMBLÉE GÉNÉRALE"
+    el.append(Paragraph(titre, style("titre", fontSize=15)))
     el.append(Paragraph(_TYPE_LABEL.get(ag.type_ag, "Assemblée Générale"), style("sous_titre")))
 
     el.append(Paragraph(f"<b>Copropriété :</b> {copro.nom}", style("normal", fontSize=10.5)))
@@ -209,7 +225,7 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
                 style("small", spaceAfter=2),
             ))
         noms = votants_nommes(r, lots, db)
-        for cle, libelle in _LISTES:
+        for cle, libelle in listes:
             el.append(Paragraph(
                 f"<b>{libelle} :</b> {_liste_nominative(noms[cle], u)}",
                 style("small", spaceAfter=1),
@@ -232,17 +248,18 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
     jour = _date_fr(ag.date).split(" ", 1)[1]          # « vendredi 20 novembre 2026 » → « 20 novembre 2026 »
     ville = (copro.ville or "").strip()
     fait = f"Fait à {ville}, le {jour}" if ville else f"Fait le {jour}"
-    signataires = ("Le président de séance", "Le secrétaire", "Le ou les scrutateurs")
+    signataires = (("Le syndic",) if consultation
+                   else ("Le président de séance", "Le secrétaire", "Le ou les scrutateurs"))
     sig = Table(
         [[Paragraph(f"<b>{s}</b>", style("cell")) for s in signataires],
          [Paragraph("Nom et signature", style("small")) for _ in signataires]],
-        colWidths=[56 * MM] * 3, rowHeights=[None, 22 * MM],
+        colWidths=[56 * MM] * len(signataires), rowHeights=[None, 22 * MM],
     )
     sig.setStyle(table_style())
     # « Fait à … » et les signatures restent sur la même page.
     el.append(KeepTogether([Paragraph(fait, style("normal", spaceAfter=10)), sig]))
     el.append(Spacer(1, 10))
-    el.append(Paragraph(_MENTION_ART42, style("legal")))
+    el.append(Paragraph(_MENTION_CONSULTATION if consultation else _MENTION_ART42, style("legal")))
 
     doc.build(el)
     buf.seek(0)
