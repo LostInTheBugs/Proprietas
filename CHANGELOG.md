@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.020 — 2026-10-25
+
+- Voie postale : chaque copropriétaire (ou le syndic pour lui) peut demander à recevoir ses notifications par lettre recommandée papier ; la lettre recommandée électronique reste la règle (art. 42-1). Demande datée et tracée (migration c0d1e2f3a4b5).
+- Notification du procès-verbal : liste des copropriétaires opposants ou défaillants (art. 42 al. 2), mode LRE ou LRAR, saisie de l'envoi et de la première présentation, date limite d'un mois et fin indicative du délai de contestation. Une notification envoyée n'est jamais modifiée.
+
 ## 2026.10.019 — 2026-10-25
 
 - Consultation écrite : procès-verbal dédié, signé par le syndic, indiquant le sens du vote de chaque copropriétaire, avec mention des écrits de vote annexés.
