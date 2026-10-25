@@ -128,7 +128,8 @@ def test_saisie_envoi_et_fin_du_delai_de_contestation(client, token_a, seance):
     assert r.status_code == 200, r.text
     saisi = next(i for i in r.json()["items"] if i["id"] == item["id"])
     assert saisi["reference"] == "LRE-123"
-    assert saisi["fin_contestation"] == ajouter_mois(presentation, 2).isoformat()
+    from app.services.delais import reporter   # fin reportée au premier jour ouvrable (CPC 642)
+    assert saisi["fin_contestation"] == reporter(ajouter_mois(presentation, 2)).isoformat()
 
 
 @pytest.mark.parametrize("corps", [

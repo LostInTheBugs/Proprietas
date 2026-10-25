@@ -72,16 +72,30 @@ def test_saisie_ulterieure_de_la_date_de_reception(client, db, copro_a, syndic_a
     assert r.status_code == 200, r.text
     assert r.json()["date_reception"] == _jour(1)
     d = _statut(client, token_a, lot.id)
-    assert d["statut"] == "mise_en_demeure" and d["jours_restants"] == 30
+    from app.services.delais import reporter
+    presentee = AUJOURDHUI - timedelta(days=1)
+    attendu = (reporter(presentee + timedelta(days=30)) - AUJOURDHUI).days + 1   # CPC 642
+    assert d["statut"] == "mise_en_demeure" and d["jours_restants"] == attendu
     assert d["md_reception"] == _jour(1)
 
 
-@pytest.mark.parametrize("jours,statut,activable", [
-    (30, "mise_en_demeure", False),       # J+30 : dernier jour du délai
-    (31, "delai_19_2_depasse", True),     # J+31 : délai expiré
+def _jours_pour_fin_hier_ouvrable():
+    """Présentation telle que le 30e jour soit le dernier jour ouvrable passé : le délai, non
+    reporté, est expiré depuis hier (le test ne dépend pas du jour où il s'exécute)."""
+    from app.services.delais import est_ouvrable
+    n = 1
+    while not est_ouvrable(AUJOURDHUI - timedelta(days=n)):
+        n += 1
+    return n + 30
+
+
+@pytest.mark.parametrize("cas,statut,activable", [
+    ("j30", "mise_en_demeure", False),             # J+30 : dernier jour du délai (ou reporté)
+    ("expire", "delai_19_2_depasse", True),        # délai expiré (fin un jour ouvrable)
 ])
-def test_limite_du_delai_de_30_jours(client, db, copro_a, syndic_a, token_a, jours, statut, activable):
+def test_limite_du_delai_de_30_jours(client, db, copro_a, syndic_a, token_a, cas, statut, activable):
     lot, *_ = _campagne(db, copro_a)
+    jours = 30 if cas == "j30" else _jours_pour_fin_hier_ouvrable()
     _md(client, token_a, lot.id, date_envoi=_jour(jours + 2), date_reception=_jour(jours))
     assert _statut(client, token_a, lot.id)["statut"] == statut
     r = client.get(f"/api/recouvrement/lot/{lot.id}/19-2", headers=auth(token_a))

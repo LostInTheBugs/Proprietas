@@ -77,7 +77,7 @@ def _apercu(client, token_a, lot):
 
 def test_apercu_19_2_ventile_sans_recouvrement(client, db, copro_a, syndic_a, token_a):
     lot, *_ = _campagne(db, copro_a)                 # solde 550 = 200 (n-1) + 200 échu + 150 à échoir
-    _md_enregistree(client, token_a, lot.id, jours_avant=31)
+    _md_enregistree(client, token_a, lot.id, jours_avant=45)
     b = _apercu(client, token_a, lot)
     assert (b["a_echoir"], b["precedents_approuves"], b["echu_courant"], b["precedents_non_approuves"]) \
         == (150.0, 200.0, 200.0, 0.0)
@@ -90,6 +90,6 @@ def test_apercu_19_2_exercice_non_approuve(client, db, copro_a, syndic_a, token_
     prev = db.query(Exercice).filter(Exercice.annee == AUJOURDHUI.year - 1).one()
     prev.comptes_approuves_le = None
     db.commit()
-    _md_enregistree(client, token_a, lot.id, jours_avant=31)
+    _md_enregistree(client, token_a, lot.id, jours_avant=45)
     b = _apercu(client, token_a, lot)
     assert (b["precedents_approuves"], b["precedents_non_approuves"], b["total"]) == (0.0, 200.0, 150.0)
