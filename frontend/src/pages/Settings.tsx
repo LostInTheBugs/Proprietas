@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
 import type { Copro, Lot, Tresorerie, User } from "../types";
-import { fmtEUR } from "../types";
+import { fmtDate, fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
@@ -37,6 +37,18 @@ export default function Settings() {
 
   async function loadComptes() {
     setUsers(await api.get<User[]>("/auth/users"));
+  }
+
+  // Voie postale (art. 42-1) : enregistrée à chaque clic, indépendamment des coordonnées.
+  const [postale, setPostale] = useState(false);
+  useEffect(() => { setPostale(!!me?.notification_postale); }, [me?.notification_postale]);
+  async function changerVoiePostale(v: boolean) {
+    setError("");
+    try {
+      await api.put("/auth/me/voie-postale", { postale: v });
+      setPostale(v);
+      refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Erreur"); }
   }
 
   async function saveMoi() {
@@ -248,6 +260,18 @@ export default function Settings() {
             Ces informations sont celles de votre compte : votre nom et votre adresse servent au
             syndic pour les courriers officiels (mise en demeure).
           </p>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" className="mt-1" checked={postale}
+              onChange={(e) => changerVoiePostale(e.target.checked)} />
+            <span>
+              Je souhaite recevoir les notifications officielles (convocations, procès-verbaux, mises en
+              demeure) par <b>lettre recommandée papier</b> plutôt que par lettre recommandée électronique
+              (loi du 10 juillet 1965, art. 42-1).
+              {postale && me?.notification_postale_depuis && (
+                <span className="block text-xs text-slate-500">Demande enregistrée le {fmtDate(me.notification_postale_depuis)}.</span>
+              )}
+            </span>
+          </label>
           <p className="text-xs text-slate-500">
             <a href="/api/auth/me/export" className="font-medium text-indigo-600 hover:underline">
               Télécharger mes données
@@ -506,6 +530,7 @@ export default function Settings() {
                     <p className="text-xs text-slate-500">{u.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {u.notification_postale && <Badge color="amber">Voie postale</Badge>}
                     <Badge color={u.role === "syndic" ? "indigo" : "slate"}>
                       {u.role === "syndic" ? "Syndic" : "Copropriétaire"}
                     </Badge>
@@ -563,6 +588,7 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
     telephone: item?.telephone ?? "",
     password: "",
   });
+  const [postale, setPostale] = useState(!!item?.notification_postale);
   const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
 
   async function save() {
@@ -580,8 +606,12 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
         adresse: f.adresse, telephone: f.telephone,
         password: f.password || null, // vide = mot de passe conservé (édition)
       };
-      if (item) await api.put(`/auth/users/${item.id}`, payload);
-      else await api.post("/auth/users", payload);
+      if (item) {
+        await api.put(`/auth/users/${item.id}`, payload);
+        if (postale !== !!item.notification_postale) {
+          await api.put(`/auth/users/${item.id}/voie-postale`, { postale });
+        }
+      } else await api.post("/auth/users", payload);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
@@ -610,6 +640,12 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
           <Input label="Téléphone" value={f.telephone} onChange={(e) => set("telephone", e.target.value)} />
           <Input label="Adresse postale" value={f.adresse} onChange={(e) => set("adresse", e.target.value)} />
         </div>
+        {item && (
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" className="mt-1" checked={postale} onChange={(e) => setPostale(e.target.checked)} />
+            <span>A demandé à recevoir les notifications par voie postale (LRAR) — art. 42-1</span>
+          </label>
+        )}
         <p className="text-xs text-slate-500">
           Le copropriétaire peut modifier lui-même ces coordonnées (Réglages → Mes informations) ;
           les lots se règlent dans « Lots &amp; occupants ».

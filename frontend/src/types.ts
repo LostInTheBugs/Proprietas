@@ -10,6 +10,9 @@ export interface User {
   telephone: string;
   two_factor_enabled?: boolean;
   theme?: string;
+  // Notifications officielles par lettre recommandée papier (demande du copropriétaire, art. 42-1)
+  notification_postale?: boolean;
+  notification_postale_depuis?: string | null;
 }
 
 export interface Copro {
@@ -458,3 +461,24 @@ export interface Mise19_2 {
   precedents_non_approuves: number; // exercices précédents non approuvés (déjà dus, hors 19-2)
 }
 
+
+// Notification du PV aux opposants et défaillants (loi 1965, art. 42 al. 2)
+export interface NotificationPV {
+  id: number;
+  user_id: number | null;
+  nom: string;
+  qualite: string;
+  resolutions: string;
+  mode: string; // lre | lrar
+  date_envoi: string | null;
+  date_presentation: string | null;
+  reference: string;
+  fin_contestation: string | null; // indicatif
+  en_retard: boolean;
+}
+
+export interface NotificationsPV {
+  limite_envoi: string;
+  sans_proprietaire: string[];
+  items: NotificationPV[];
+}
