@@ -31,6 +31,7 @@ from app.schemas import (
     RelanceOut,
 )
 from app.services import recouvrement as svc
+from app.services import voie_postale
 from app.services.md_pdf import generer_mise_en_demeure_pdf
 from app.core.money import D
 
@@ -96,7 +97,7 @@ def _snapshot(lignes: list[dict]) -> str:
 def _conditions_19_2(d: dict) -> None:
     if not d["activable_19_2"]:
         raise HTTPException(
-            400, "Article 19-2 : une mise en demeure notifiée (LRE, LRAR ou remise) et restée "
+            400, "Article 19-2 : une mise en demeure notifiée (LRE, LRAR ou signification) et restée "
                  "infructueuse pendant 30 jours à compter du lendemain de sa présentation est requise.")
 
 
@@ -194,12 +195,23 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
             raise HTTPException(422, "Date d'envoi requise pour la mise en demeure")
         if (data.mode_envoi or "") == "email":
             raise HTTPException(422, "Un e-mail simple ne vaut pas mise en demeure : notifiez-la par "
-                                     "lettre recommandée électronique, LRAR ou remise contre récépissé")
+                                     "lettre recommandée électronique (LRAR si la voie postale est demandée) "
+                                     "ou par signification d'un commissaire de justice")
+        if data.mode_envoi == "remise":
+            raise HTTPException(422, "La remise contre récépissé ne vaut pas notification d'une mise en "
+                                     "demeure (décret n° 67-223, art. 64-3 : convocations seulement). "
+                                     "Utilisez la LRE, la LRAR si la voie postale est demandée, ou une "
+                                     "signification par commissaire de justice.")
         if (data.mode_envoi or "") not in svc.MODES_ENVOI:
-            raise HTTPException(422, "Mode d'envoi requis (lre | lrar | remise)")
-        if data.mode_envoi == "remise" and (not data.date_reception or not (data.reference or "").strip()):
-            raise HTTPException(422, "Remise en main propre : date de remise et référence du récépissé "
-                                     "signé obligatoires")
+            raise HTTPException(422, "Mode d'envoi requis (lre | lrar | signification)")
+        if data.mode_envoi == "signification":
+            if not data.date_reception or not (data.reference or "").strip():
+                raise HTTPException(422, "Signification : date de l'acte et référence du commissaire de "
+                                         "justice obligatoires")
+        else:
+            proprio = db.get(User, lot.proprietaire_id) if lot.proprietaire_id else None
+            voie_postale.controler_mode(proprio, data.mode_envoi, data.date_envoi,
+                                        _nom(proprio) if proprio else f"Le propriétaire du lot {lot.numero}")
         _valider_reception(data.date_envoi, data.date_reception)
 
     lignes = svc.appels_lot(db, copro, lot)
@@ -235,7 +247,7 @@ def creer_acte(lot_id: int, data: RecouvrementActeIn, request: Request,
 @router.put("/acte/{acte_id}/reception", response_model=RecouvrementActeOut)
 def saisir_reception(acte_id: int, data: ReceptionIn, request: Request,
                      db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    """Date de première présentation / d'avis électronique / de remise d'une mise en demeure
+    """Date de première présentation / d'avis électronique / de signification d'une mise en demeure
     (connue après l'envoi) : c'est elle qui fait courir le délai de 30 jours."""
     copro = get_or_create_copro(db, user)
     acte = db.query(ActeRecouvrement).filter(

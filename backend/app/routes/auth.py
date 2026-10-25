@@ -25,7 +25,7 @@ from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResp
                          VoiePostaleIn)
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
-from app.services import two_factor
+from app.services import two_factor, voie_postale
 from app.services.donnees_personnelles import donnees_personnelles
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -171,14 +171,25 @@ def exporter_mes_donnees(request: Request, db: Session = Depends(get_db), user: 
                     headers={"Content-Disposition": 'attachment; filename="mes-donnees-proprietas.json"'})
 
 
-def _maj_voie_postale(db, cible: User, postale: bool, auteur: User, request: Request) -> None:
+def _maj_voie_postale(db, cible: User, postale: bool, auteur: User, request: Request,
+                      recue_le: date | None = None, en_assemblee: bool = False) -> None:
+    """Décret n° 67-223, art. 64-4 : la demande de voie postale prend effet le 9e jour suivant
+    sa réception par le syndic, ou le jour même si elle est formulée en assemblée générale.
+    notification_postale_depuis = date d'effet."""
+    recue_le = recue_le or date.today()
+    if recue_le > date.today():
+        raise HTTPException(422, "La date de réception de la demande ne peut pas être dans le futur.")
     if bool(cible.notification_postale) == postale:
         return
     cible.notification_postale = postale
-    cible.notification_postale_depuis = date.today() if postale else None
+    cible.notification_postale_depuis = voie_postale.date_effet(recue_le, en_assemblee) if postale else None
     copro = get_or_create_copro(db, auteur)
+    detail = cible.email
+    if postale:
+        detail += (f" — demande reçue le {recue_le:%d/%m/%Y}{' en AG' if en_assemblee else ''}, "
+                   f"effet le {cible.notification_postale_depuis:%d/%m/%Y}")
     audit.enregistrer(db, "voie_postale_activee" if postale else "voie_postale_desactivee",
-                      user=auteur, copro_id=copro.id, detail=cible.email, request=request)
+                      user=auteur, copro_id=copro.id, detail=detail, request=request)
 
 
 @router.put("/me/voie-postale", response_model=UserOut)
@@ -201,7 +212,7 @@ def voie_postale_compte(user_id: int, data: VoiePostaleIn, request: Request, db:
              .filter(User.id == user_id, UserCopro.copropriete_id == copro.id).first())
     if not cible:
         raise HTTPException(404, "Utilisateur introuvable")
-    _maj_voie_postale(db, cible, data.postale, current, request)
+    _maj_voie_postale(db, cible, data.postale, current, request, data.recue_le, data.en_assemblee)
     db.commit()
     db.refresh(cible)
     return cible

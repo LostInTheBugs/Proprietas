@@ -14,6 +14,7 @@ from app.models.user import User
 from app.routes.copro import get_or_create_copro
 from app.schemas import NotificationPVIn, NotificationsPVOut
 from app.services import notifications_pv as svc
+from app.services import voie_postale
 
 router = APIRouter(prefix="/api", tags=["notifications"])
 
@@ -55,11 +56,10 @@ def saisir(notif_id: int, data: NotificationPVIn, request: Request,
     if n.date_envoi is not None and data.mode != n.mode:
         raise HTTPException(422, "Notification envoyée : son mode ne peut pas être changé. "
                                  "Effacez d'abord la date d'envoi si elle a été saisie par erreur.")
-    destinataire = db.get(User, n.user_id) if n.user_id else None
-    if (n.date_envoi is None and data.mode == "lre"
-            and destinataire is not None and destinataire.notification_postale):
-        raise HTTPException(422, f"{n.nom} a demandé la voie postale : notification par LRAR "
-                                 "obligatoire (art. 42-1).")
+    if n.date_envoi is None:
+        # Décret n° 67-223, art. 64, 64-1 et 64-4 : LRE par défaut, LRAR sur demande en vigueur.
+        destinataire = db.get(User, n.user_id) if n.user_id else None
+        voie_postale.controler_mode(destinataire, data.mode, data.date_envoi or date.today(), n.nom)
     n.mode, n.date_envoi, n.date_presentation = data.mode, data.date_envoi, data.date_presentation
     n.reference = (data.reference or "").strip()[:120]
     audit.enregistrer(db, "notification_pv_saisie", user=user, copro_id=copro.id,

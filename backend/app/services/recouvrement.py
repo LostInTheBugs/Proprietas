@@ -25,8 +25,11 @@ from app.models.recouvrement import ActeRecouvrement
 # Types d'actes créables via l'API (l'activation 19-2 a sa route dédiée).
 TYPES_ACTE = ("mise_en_demeure", "frais", "conciliation", "commissaire_justice", "tribunal", "note")
 # Modes valant notification de la mise en demeure (décret n° 67-223, art. 64 et s., rédaction
-# du décret n° 2025-1292) : un e-mail simple n'en fait pas partie.
-MODES_ENVOI = ("lre", "lrar", "remise")
+# du décret n° 2025-1292) : LRE (règle), LRAR (si la voie postale est demandée, art. 64-1),
+# signification par commissaire de justice (toujours possible, CPC art. 651). Un e-mail simple
+# n'en fait pas partie ; la remise contre récépissé non plus (art. 64-3 : convocations et avis
+# de l'art. 59 seulement) — d'anciennes saisies « remise » restent au journal sans effet.
+MODES_ENVOI = ("lre", "lrar", "signification")
 DELAI_19_2_JOURS = 30
 
 LIBELLES_STATUT = {
@@ -126,8 +129,8 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
 
     md = None
     for a in actes:
-        # Seule une mise en demeure NOTIFIÉE (LRE, LRAR, remise) compte ; une ancienne
-        # « mise en demeure » par e-mail reste au journal mais ne fait courir aucun délai.
+        # Seule une mise en demeure NOTIFIÉE (LRE, LRAR, signification) compte ; une ancienne
+        # « mise en demeure » par e-mail ou remise reste au journal mais ne fait courir aucun délai.
         if a.type == "mise_en_demeure" and (a.mode_envoi or "") in MODES_ENVOI:
             md = a  # actes triés par date → le dernier MD gagne
     a_19_2 = any(a.type == "activation_19_2" for a in actes)
