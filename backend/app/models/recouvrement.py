@@ -25,9 +25,9 @@ class ActeRecouvrement(Base):
     type = Column(String, nullable=False)
     date_acte = Column(DateTime, default=datetime.now)  # date de saisie dans l'app
     date_envoi = Column(Date, nullable=True)  # date d'envoi / de l'étape (fait générateur)
-    mode_envoi = Column(String, default="")  # lre | lrar | remise (« email » : ancien, sans valeur)
+    mode_envoi = Column(String, default="")  # lre | lrar | signification (« email », « remise » : anciens, sans valeur)
     # Date de la première présentation (LRAR), de l'avis électronique du prestataire (LRE)
-    # ou de la remise contre récépissé : le délai de 30 jours court à compter du LENDEMAIN.
+    # ou de la signification : le délai de 30 jours court à compter du LENDEMAIN.
     date_reception = Column(Date, nullable=True)
     reference = Column(String, default="")  # n° de LRE / AR / référence de l'acte
     montant = Column(Numeric(12, 2), default=0.0)  # frais : montant ; MD : principal réclamé

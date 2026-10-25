@@ -948,7 +948,7 @@ class RecouvrementActeOut(BaseModel):
 class RecouvrementActeIn(BaseModel):
     type: str
     date_envoi: Optional[date] = None
-    # Première présentation (LRAR) / avis électronique (LRE) / remise contre récépissé.
+    # Première présentation (LRAR) / avis électronique (LRE) / date de la signification.
     date_reception: Optional[date] = None
     mode_envoi: str = ""
     reference: str = ""
@@ -1004,6 +1004,10 @@ class Mise19_2Out(BaseModel):
 # ---------- Voie postale et notification du PV (loi 1965, art. 42 al. 2 et 42-1) ----------
 class VoiePostaleIn(BaseModel):
     postale: bool
+    # Syndic seulement : date de réception de la demande (défaut : aujourd'hui) et demande
+    # formulée en assemblée générale (effet immédiat). Décret n° 67-223, art. 64-4.
+    recue_le: Optional[date] = None
+    en_assemblee: bool = False
 
 
 class NotificationPVIn(BaseModel):
@@ -1025,7 +1029,8 @@ class NotificationPVOut(BaseModel):
     reference: str = ""
     fin_contestation: Optional[date] = None   # indicatif
     en_retard: bool = False
-    voie_postale_demandee: bool = False       # art. 42-1 : LRAR obligatoire
+    voie_postale_demandee: bool = False       # art. 42-1
+    modes_admis: list[str] = []               # décret, art. 64, 64-1 et 64-4, à la date du jour
 
 
 class NotificationsPVOut(BaseModel):

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.models.lot import Lot
 from app.models.notification import NotificationPV
 from app.models.user import User
+from app.services import voie_postale
 
 
 def ajouter_mois(d: date, n: int) -> date:
@@ -100,5 +101,6 @@ def etat(db: Session, ag) -> dict:
             "fin_contestation": ajouter_mois(n.date_presentation, 2) if n.date_presentation else None,
             "en_retard": n.date_envoi is None and date.today() > limite,
             "voie_postale_demandee": bool(user and user.notification_postale),
+            "modes_admis": list(voie_postale.modes_admis(user, date.today())) if user else ["lre", "lrar"],
         })
     return {"limite_envoi": limite, "sans_proprietaire": sans_proprietaire, "items": items}

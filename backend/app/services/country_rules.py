@@ -4,7 +4,8 @@ Références :
 - Loi n° 65-557 du 10 juillet 1965 (statut de la copropriété)
 - Ordonnance n° 2019-1101 (régime des petites copropriétés, art. 41-8 et suiv.)
 - Loi ALUR / ELAN : fonds de travaux obligatoire (plus d'exemption < 10 lots),
-  taux minimum 5 % du budget prévisionnel (ou 2,5 % du PPT + 5 % budget avec PPT).
+  taux minimum 5 % du budget prévisionnel ; avec PPT, au moins 2,5 % du PPT ET au moins 5 % du
+  budget (art. 14-2-1) : le plus élevé des deux, pas leur somme.
 
 Majorités (art. 24, 25, 26) :
 - art24 : majorité des voix exprimées des copropriétaires présents, représentés
@@ -227,7 +228,9 @@ def regles_fonds_travaux(copro) -> dict:
             "Fonds de travaux obligatoire (loi ALUR, modifiée) dès 10 ans après "
             "réception des travaux, quel que soit le nombre de lots. "
             "Cotisation annuelle minimale : 5 % du budget prévisionnel "
-            "(ou 2,5 % du plan pluriannuel de travaux + 5 % du budget si PPT voté). "
+            "Si un plan pluriannuel de travaux (PPT) est adopté : au moins 2,5 % du montant des "
+            "travaux du plan et au moins 5 % du budget, soit le plus élevé des deux montants "
+            "(art. 14-2-1 ; les deux taux ne s'additionnent pas). "
             "Versement sur compte bancaire séparé, montant voté chaque année en AG "
             "(art. 25, repli art. 24 si 1/3 des voix au premier vote)."
         ),
