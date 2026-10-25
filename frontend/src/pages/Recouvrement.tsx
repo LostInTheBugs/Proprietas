@@ -26,9 +26,9 @@ const COULEUR_STATUT: Record<string, "green" | "red" | "amber" | "slate" | "indi
 
 const AIDE_STATUT: Record<string, string> = {
   en_retard:
-    "Impayé constaté. Envoyez une relance (e-mail, simple rappel) ; si elle reste sans effet, passez à la mise en demeure, notifiée par LRE, LRAR ou remise contre récépissé — c'est elle qui déclenche la suite (intérêts au taux légal, délai de 30 jours de l'article 19-2).",
+    "Impayé constaté. Envoyez une relance (e-mail, simple rappel) ; si elle reste sans effet, passez à la mise en demeure, notifiée par LRE (LRAR si le copropriétaire a demandé la voie postale) ou par commissaire de justice — c'est elle qui déclenche la suite (intérêts au taux légal, délai de 30 jours de l'article 19-2).",
   mise_en_demeure_attente:
-    "Mise en demeure envoyée, mais sa date de première présentation (LRAR), d'avis électronique (LRE) ou de remise n'est pas encore saisie : le délai de 30 jours ne court qu'à compter du lendemain de cette date. Renseignez-la dès que vous la connaissez (avis du prestataire, suivi La Poste).",
+    "Mise en demeure envoyée, mais sa date de première présentation (LRAR), d'avis électronique (LRE) ou de signification n'est pas encore saisie : le délai de 30 jours ne court qu'à compter du lendemain de cette date. Renseignez-la dès que vous la connaissez (avis du prestataire, suivi La Poste).",
   mise_en_demeure:
     "Mise en demeure présentée : le délai de 30 jours court depuis le lendemain de la présentation. Des intérêts de retard courent au taux légal à compter de cette date. Le délai expiré, les provisions futures pourront être rendues exigibles (article 19-2).",
   delai_19_2_depasse:
@@ -43,13 +43,14 @@ const AIDE_STATUT: Record<string, string> = {
 
 const MODES_ENVOI = [
   { value: "lre", label: "Lettre recommandée électronique (LRE)" },
-  { value: "lrar", label: "LRAR papier (si demandée par le copropriétaire)" },
-  { value: "remise", label: "Remise en main propre contre récépissé" },
+  { value: "lrar", label: "LRAR papier (si le copropriétaire a demandé la voie postale)" },
+  { value: "signification", label: "Signification par commissaire de justice" },
 ];
 
 const LIBELLE_MODE: Record<string, string> = {
   ...Object.fromEntries(MODES_ENVOI.map((m) => [m.value, m.label])),
   email: "E-mail (ancien enregistrement, sans valeur de mise en demeure)",
+  remise: "Remise contre récépissé (ancien enregistrement, sans valeur de mise en demeure)",
 };
 
 const TYPES_PROCEDURE = [
@@ -377,7 +378,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
     }
   }
 
-  const md = d ? [...d.actes].filter((a) => a.type === "mise_en_demeure" && a.mode_envoi !== "email").pop() : undefined;
+  const md = d ? [...d.actes].filter((a) => a.type === "mise_en_demeure" && !["email", "remise"].includes(a.mode_envoi)).pop() : undefined;
   const actesFrais = d ? d.actes.filter((a) => a.type === "frais") : [];
   const timeline = d
     ? [
@@ -487,7 +488,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                 {!md.date_reception && (
                   <div className="flex flex-wrap items-end gap-2 rounded-lg bg-amber-50 p-2">
                     <Input
-                      label="Date de première présentation / avis électronique / remise"
+                      label="Date de première présentation / avis électronique / signification"
                       type="date"
                       value={recepSaisie}
                       onChange={(e) => setRecepSaisie(e.target.value)}
@@ -527,10 +528,11 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
               <div className="space-y-2">
                 <p className="text-xs leading-relaxed text-slate-500">
                   1. Téléchargez le PDF (provisions échues impayées, décompte détaillé par provision).
-                  Notifiez-le par lettre recommandée électronique (LRE), par LRAR si le copropriétaire l'a
-                  demandé, ou par remise contre récépissé — un e-mail simple ne vaut pas mise en demeure.
+                  Notifiez-le par lettre recommandée électronique (LRE), par LRAR si le copropriétaire a
+                  demandé la voie postale, ou par signification d'un commissaire de justice — ni un e-mail
+                  simple ni une remise contre récépissé ne valent mise en demeure (décret, art. 64 à 64-3).
                   2. Enregistrez l'envoi. Le délai de 30 jours court à compter du <b>lendemain de la première
-                  présentation</b> (LRAR), de l'avis électronique (LRE) ou de la remise : saisissez cette date
+                  présentation</b> (LRAR), de l'avis électronique (LRE) ou de la signification : saisissez cette date
                   dès que vous la connaissez.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -543,12 +545,12 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <Input
-                    label={mdMode === "remise" ? "Référence du récépissé signé (obligatoire)" : "Référence (n° LRE / AR)"}
+                    label={mdMode === "signification" ? "Référence de l'acte (obligatoire)" : "Référence (n° LRE / AR)"}
                     value={mdRef}
                     onChange={(e) => setMdRef(e.target.value)}
                   />
                   <Input
-                    label={mdMode === "remise" ? "Date de remise (obligatoire)" : "Date de présentation / avis (si connue)"}
+                    label={mdMode === "signification" ? "Date de la signification (obligatoire)" : "Date de présentation / avis (si connue)"}
                     type="date"
                     value={mdRecep}
                     onChange={(e) => setMdRecep(e.target.value)}

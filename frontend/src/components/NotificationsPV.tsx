@@ -37,7 +37,8 @@ export default function NotificationsPVPanel({ agId, onError }: { agId: number; 
       </div>
       <p className="mb-2 text-xs text-slate-500">
         À notifier : les copropriétaires opposants ou défaillants (l'abstention n'est pas une opposition),
-        par lettre recommandée électronique, ou par LRAR s'ils ont demandé la voie postale. Le délai de
+        par lettre recommandée électronique, ou par LRAR s'ils ont demandé la voie postale (la demande prend
+        effet le 9e jour suivant sa réception, le jour même si elle est faite en assemblée). Le délai de
         contestation de deux mois court à compter du lendemain de la première présentation (LRAR) ou de
         l'avis électronique (LRE) — dates de fin indicatives.
       </p>
@@ -85,8 +86,8 @@ function LigneNotification({ n, onSaved, onError }: {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Select value={f.mode} disabled={envoyee} onChange={(e) => setF({ ...f, mode: e.target.value })}
           title={envoyee ? "Notification envoyée : mode figé (effacez la date d'envoi pour corriger)" : undefined}>
-          <option value="lre" disabled={!envoyee && n.voie_postale_demandee}>LRE (électronique)</option>
-          <option value="lrar">LRAR (papier)</option>
+          <option value="lre" disabled={!envoyee && !n.modes_admis.includes("lre")}>LRE (électronique)</option>
+          <option value="lrar" disabled={!envoyee && !n.modes_admis.includes("lrar")}>LRAR (papier, sur demande)</option>
         </Select>
         <Input type="date" value={f.date_envoi} onChange={(e) => setF({ ...f, date_envoi: e.target.value })} />
         <Input type="date" value={f.date_presentation} onChange={(e) => setF({ ...f, date_presentation: e.target.value })} />

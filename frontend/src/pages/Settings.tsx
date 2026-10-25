@@ -268,7 +268,10 @@ export default function Settings() {
               demeure) par <b>lettre recommandée papier</b> plutôt que par lettre recommandée électronique
               (loi du 10 juillet 1965, art. 42-1).
               {postale && me?.notification_postale_depuis && (
-                <span className="block text-xs text-slate-500">Demande enregistrée le {fmtDate(me.notification_postale_depuis)}.</span>
+                <span className="block text-xs text-slate-500">
+                  Prise en compte à partir du {fmtDate(me.notification_postale_depuis)} (le 9e jour suivant la
+                  demande, décret du 17 mars 1967, art. 64-4) ; d'ici là, la voie électronique reste valable.
+                </span>
               )}
             </span>
           </label>
@@ -589,6 +592,8 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
     password: "",
   });
   const [postale, setPostale] = useState(!!item?.notification_postale);
+  const [recueLe, setRecueLe] = useState(new Date().toISOString().slice(0, 10));
+  const [enAg, setEnAg] = useState(false);
   const set = (k: keyof typeof f, v: string) => setF((prev) => ({ ...prev, [k]: v }));
 
   async function save() {
@@ -609,7 +614,8 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
       if (item) {
         await api.put(`/auth/users/${item.id}`, payload);
         if (postale !== !!item.notification_postale) {
-          await api.put(`/auth/users/${item.id}/voie-postale`, { postale });
+          await api.put(`/auth/users/${item.id}/voie-postale`,
+            postale ? { postale, recue_le: recueLe, en_assemblee: enAg } : { postale });
         }
       } else await api.post("/auth/users", payload);
       onSaved();
@@ -645,6 +651,21 @@ function UserModal({ item, isSelf, onClose, onSaved, onError }: {
             <input type="checkbox" className="mt-1" checked={postale} onChange={(e) => setPostale(e.target.checked)} />
             <span>A demandé à recevoir les notifications par voie postale (LRAR) — art. 42-1</span>
           </label>
+        )}
+        {item && postale && !item.notification_postale && (
+          <div className="grid grid-cols-2 items-end gap-3 rounded-lg bg-slate-50 p-2">
+            <Input label="Demande reçue le" type="date" value={recueLe} onChange={(e) => setRecueLe(e.target.value)} />
+            <label className="flex items-center gap-2 text-xs text-slate-700">
+              <input type="checkbox" checked={enAg} onChange={(e) => setEnAg(e.target.checked)} />
+              Formulée en assemblée générale (effet immédiat)
+            </label>
+            <p className="col-span-2 text-xs text-slate-500">
+              Sinon, la demande prend effet le 9e jour suivant sa réception (décret, art. 64-4).
+            </p>
+          </div>
+        )}
+        {item?.notification_postale && item.notification_postale_depuis && (
+          <p className="text-xs text-slate-500">Voie postale en vigueur à partir du {fmtDate(item.notification_postale_depuis)}.</p>
         )}
         <p className="text-xs text-slate-500">
           Le copropriétaire peut modifier lui-même ces coordonnées (Réglages → Mes informations) ;

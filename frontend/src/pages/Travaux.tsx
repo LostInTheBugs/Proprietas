@@ -74,9 +74,9 @@ export default function TravauxPage() {
             </p>
           </Card>
           <Card title="Cotisation annuelle minimale (PPT voté)">
-            <p className="text-2xl font-bold text-indigo-700">{fmtEUR(cotisationPpt + cotisationBudget)}</p>
+            <p className="text-2xl font-bold text-indigo-700">{fmtEUR(Math.max(cotisationPpt, cotisationBudget))}</p>
             <p className="mt-1 text-xs text-slate-500">
-              2,5 % du plan ({fmtEUR(cotisationPpt)}) + 5 % du budget prévisionnel ({fmtEUR(cotisationBudget)})
+              Le plus élevé de : 2,5 % du plan ({fmtEUR(cotisationPpt)}) et 5 % du budget prévisionnel ({fmtEUR(cotisationBudget)})
             </p>
           </Card>
           <Card title="Sans PPT (règle par défaut)">
@@ -139,8 +139,9 @@ export default function TravauxPage() {
         )}
         <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
           <b>Règle légale (France)</b> : le plan pluriannuel de travaux (PPT) se vote en assemblée générale. S'il est
-          adopté, la cotisation annuelle minimale au fonds de travaux devient <b>2,5 % du montant du plan</b>{" "}
-          <i>en plus</i> des 5 % du budget prévisionnel (service-public.fr, F34026). Le fonds de travaux sert à financer
+          adopté, la cotisation annuelle au fonds de travaux doit atteindre <b>au moins 2,5 % du montant du plan
+          et au moins 5 % du budget prévisionnel</b> : le minimum est le plus élevé des deux, les taux ne
+          s'additionnent pas (loi du 10 juillet 1965, art. 14-2-1 ; service-public.fr, F34026). Le fonds de travaux sert à financer
           ces travaux ; pour les petites copropriétés (≤ 5 lots de logements, bureaux ou commerces, régime 41-8) le PPT reste facultatif mais recommandé.
         </p>
       </Card>
