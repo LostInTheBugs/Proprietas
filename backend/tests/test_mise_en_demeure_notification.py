@@ -1,12 +1,14 @@
 """Mise en demeure (art. 19-2 de la loi de 1965) : notification valable et point de départ.
 
-- Modes valables : lettre recommandée électronique (LRE), LRAR, remise contre récépissé.
+- Modes valables : lettre recommandée électronique (LRE), LRAR si le copropriétaire a demandé la
+  voie postale, signification par commissaire de justice. La remise contre récépissé ne vaut
+  pas pour une mise en demeure (décret, art. 64-3).
   Un e-mail simple ne vaut pas mise en demeure (décret 67-223, art. 64 et s., rédaction
   du décret n° 2025-1292).
 - Le délai de 30 jours court à compter du LENDEMAIN de la première présentation (LRAR), de
-  l'avis électronique du prestataire (LRE) ou de la remise : il faut saisir cette date.
+  l'avis électronique du prestataire (LRE) ou de la signification : il faut saisir cette date.
   Avant, il partait de la date d'ENVOI, donc trop tôt.
-- Remise en main propre : date de remise et référence du récépissé obligatoires.
+- Signification : date de l'acte et référence obligatoires.
 - Les intérêts au taux légal courent aussi à partir de cette date.
 - Le PDF mentionne les cotisations du fonds de travaux (art. 19-2, dernier alinéa).
 """
@@ -44,9 +46,9 @@ def test_email_ne_vaut_pas_mise_en_demeure(client, db, copro_a, syndic_a, token_
 
 
 @pytest.mark.parametrize("champs", [{"reference": ""}, {"date_reception": None}])
-def test_remise_exige_recepisse_et_date(client, db, copro_a, syndic_a, token_a, champs):
+def test_signification_exige_reference_et_date(client, db, copro_a, syndic_a, token_a, champs):
     lot, *_ = _campagne(db, copro_a)
-    corps = {"mode_envoi": "remise", "reference": "Récépissé signé", "date_reception": _jour(0)}
+    corps = {"mode_envoi": "signification", "reference": "Acte n° 12", "date_reception": _jour(0)}
     corps.update(champs)
     assert _md(client, token_a, lot.id, **corps).status_code == 422
 

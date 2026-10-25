@@ -95,7 +95,8 @@ def test_le_coproprietaire_demande_la_voie_postale(client, db, copro_a, seance):
     r = client.put("/api/auth/me/voie-postale", json={"postale": True}, headers=auth(tok))
     assert r.status_code == 200, r.text
     assert r.json()["notification_postale"] is True
-    assert r.json()["notification_postale_depuis"] == AUJOURDHUI.isoformat()
+    # Art. 64-4 du décret : la demande prend effet le 9e jour suivant sa réception.
+    assert r.json()["notification_postale_depuis"] == (AUJOURDHUI + timedelta(days=9)).isoformat()
     r = client.put("/api/auth/me/voie-postale", json={"postale": False}, headers=auth(tok))
     assert r.json()["notification_postale"] is False and r.json()["notification_postale_depuis"] is None
 
@@ -173,8 +174,9 @@ def test_ajouter_mois_fin_de_mois():
 
 
 # ---------------------------------------------------------------- mode : voie postale et envoi figé
-def _voie_postale(client, token_a, user, postale=True):
-    r = client.put(f"/api/auth/users/{user.id}/voie-postale", json={"postale": postale}, headers=auth(token_a))
+def _voie_postale(client, token_a, user, postale=True, recue_le=None):
+    corps = {"postale": postale, **({"recue_le": recue_le.isoformat()} if recue_le else {})}
+    r = client.put(f"/api/auth/users/{user.id}/voie-postale", json=corps, headers=auth(token_a))
     assert r.status_code == 200, r.text
 
 
@@ -184,7 +186,7 @@ def _item(d, nom):
 
 def test_lre_refusee_si_la_voie_postale_est_demandee(client, token_a, seance):
     """Art. 42-1 : le copropriétaire qui a demandé la voie postale ne peut pas être notifié par LRE."""
-    _voie_postale(client, token_a, seance["bernard"])
+    _voie_postale(client, token_a, seance["bernard"], recue_le=AUJOURDHUI - timedelta(days=10))  # en vigueur
     bernard = _item(_preparer(client, token_a, seance["ag"]), "Bernard Luc")
     assert bernard["voie_postale_demandee"] is True
     r = _saisir(client, token_a, bernard["id"], mode="lre", date_envoi=AUJOURDHUI.isoformat())
@@ -192,16 +194,18 @@ def test_lre_refusee_si_la_voie_postale_est_demandee(client, token_a, seance):
     assert "voie postale" in r.json()["detail"]
 
 
-def test_lrar_admise_sans_demande(client, token_a, seance):
-    """La LRAR reste un mode valable de notification (décret 1967, art. 64) : elle n'est pas refusée."""
+def test_lrar_refusee_sans_demande(client, token_a, seance):
+    """Décret, art. 64 et 64-1 (rédaction 2025-1292) : la LRAR n'est valable que « par exception »,
+    pour le copropriétaire qui a demandé la voie postale."""
     martin = _item(_preparer(client, token_a, seance["ag"]), "Martin Claire")
     assert martin["voie_postale_demandee"] is False
     r = _saisir(client, token_a, martin["id"], mode="lrar", date_envoi=AUJOURDHUI.isoformat())
-    assert r.status_code == 200, r.text
-    assert _item(r.json(), "Martin Claire")["mode"] == "lrar"
+    assert r.status_code == 422
 
 
 def test_mode_d_une_notification_envoyee_fige(client, token_a, seance):
+    # Demande de voie postale reçue aujourd'hui : pendant 9 jours, LRE et LRAR sont admises.
+    _voie_postale(client, token_a, seance["martin"])
     martin = _item(_preparer(client, token_a, seance["ag"]), "Martin Claire")
     assert _saisir(client, token_a, martin["id"], mode="lre", date_envoi=AUJOURDHUI.isoformat()).status_code == 200
     r = _saisir(client, token_a, martin["id"], mode="lrar", date_envoi=AUJOURDHUI.isoformat())
