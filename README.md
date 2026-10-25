@@ -257,6 +257,11 @@ en-têtes, rate-limit, couverture 2FA). La première requête vue depuis interne
 détectée automatiquement : un bandeau propose l'assistant — une exposition ne peut
 pas passer inaperçue.
 
+#### Déploiement chez [Clever-Cloud](https://console.clever-cloud.com/)
+
+Pour déployer chez Clever-Cloud, [Zorglube](https://github.com/zorglube) a rédigé un [petit manuel](https://blog.broncotoxique.com/2026/10/07/deploy-proprietas-on-clever-cloud/).
+Attention il s'agit d'un déploiement **Docker** simple, pas **Compose**. 
+
 ### Hébergement « maison » (sans ouvrir de ports)
 
 Depuis une connexion personnelle, préférez un tunnel à l'ouverture de ports :
