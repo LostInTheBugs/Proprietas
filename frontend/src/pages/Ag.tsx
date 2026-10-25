@@ -4,6 +4,7 @@ import { useUser } from "../auth";
 import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsResult, Recap, Exercice } from "../types";
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
+import NotificationsPVPanel from "../components/NotificationsPV";
 
 export default function Ag() {
   const { user } = useUser();
@@ -321,6 +322,8 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
           )}
         </div>
       )}
+
+      {isSyndic && ag.resolutions.length > 0 && <NotificationsPVPanel agId={agId} onError={onError} />}
 
       {creneauModal && (
         <CreneauModal onClose={() => setCreneauModal(false)} onSaved={() => { setCreneauModal(false); load(); }} onError={onError} agId={agId} />
