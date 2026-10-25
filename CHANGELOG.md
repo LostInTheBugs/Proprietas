@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.10.022 — 2026-10-25
+
+- Notifications (décret n° 67-223, art. 64 à 64-4, rédaction du décret n° 2025-1292) : la LRAR n'est admise que si le copropriétaire a demandé la voie postale, pour le PV comme pour la mise en demeure ; la demande prend effet le 9e jour suivant sa réception (le jour même si elle est faite en assemblée), date de réception saisie par le syndic.
+- Mise en demeure : la remise contre récépissé n'est plus acceptée (art. 64-3) ; la signification par commissaire de justice la remplace. Une ancienne saisie « remise » ne fait plus courir le délai de l'article 19-2.
+- Fonds de travaux avec PPT (art. 14-2-1) : la cotisation minimale est le plus élevé de 2,5 % du plan et de 5 % du budget, et non leur somme (écran Travaux corrigé).
+- Limiteur de connexion : mémoire bornée (pas d'entrée créée par une vérification, purge des entrées expirées).
+
 ## 2026.10.021 — 2026-10-25
 
 - Notification du PV : une lettre recommandée électronique est refusée pour un copropriétaire qui a demandé la voie postale (art. 42-1) ; badge et option grisée dans l'interface.
