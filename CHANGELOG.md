@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.023 — 2026-10-25
+
+- Délais (code de procédure civile, art. 642) : la fin du délai de contestation du PV et celle du délai de 30 jours de la mise en demeure (art. 19-2) sont reportées au premier jour ouvrable lorsqu'elles tombent un samedi, un dimanche ou un jour férié, y compris les jours fériés propres à l'Alsace-Moselle (selon le code postal de la copropriété).
+
 ## 2026.10.022 — 2026-10-25
 
 - Notifications (décret n° 67-223, art. 64 à 64-4, rédaction du décret n° 2025-1292) : la LRAR n'est admise que si le copropriétaire a demandé la voie postale, pour le PV comme pour la mise en demeure ; la demande prend effet le 9e jour suivant sa réception (le jour même si elle est faite en assemblée), date de réception saisie par le syndic.
