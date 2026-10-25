@@ -117,8 +117,10 @@ def test_mise_en_demeure_pdf_et_acte(client, db, copro_a, syndic_a, token_a):
 
     d = {e["lot_id"]: e for e in client.get("/api/recouvrement", headers=auth(token_a)).json()}[lot.id]
     assert d["statut"] == "mise_en_demeure"
-    # présentée aujourd'hui : le délai court du lendemain (J+1) à J+30 → exigible à J+31
-    assert d["jours_restants"] == 31
+    # présentée aujourd'hui : le délai court du lendemain (J+1) à J+30 → exigible à J+31,
+    # fin reportée au premier jour ouvrable si J+30 tombe un week-end ou un jour férié (CPC 642).
+    from app.services.delais import reporter
+    assert d["jours_restants"] == (reporter(AUJOURDHUI + timedelta(days=30)) - AUJOURDHUI).days + 1
 
 
 def test_md_sans_provision_echue_refusee(client, db, copro_a, syndic_a, token_a):
@@ -146,7 +148,7 @@ def test_19_2_exclut_un_exercice_precedent_non_approuve(client, db, copro_a, syn
     ex_prev = db.query(Exercice).filter(Exercice.annee == AUJOURDHUI.year - 1).one()
     ex_prev.comptes_approuves_le = None
     db.commit()
-    _md_enregistree(client, token_a, lot.id, jours_avant=31)
+    _md_enregistree(client, token_a, lot.id, jours_avant=45)
     b = client.get(f"/api/recouvrement/lot/{lot.id}/19-2", headers=auth(token_a)).json()
     assert b["total"] == 150.0                       # seule la provision à échoir de l'exercice en cours
     assert b["exercices_non_approuves"] == [AUJOURDHUI.year - 1]
@@ -155,7 +157,7 @@ def test_19_2_exclut_un_exercice_precedent_non_approuve(client, db, copro_a, syn
 
 def test_article_19_2_apres_30_jours(client, db, copro_a, syndic_a, token_a):
     lot, p, _, _ = _campagne(db, copro_a)
-    acte = _md_enregistree(client, token_a, lot.id, jours_avant=31)
+    acte = _md_enregistree(client, token_a, lot.id, jours_avant=45)
     # 19-2 : provisions non échues de l'exercice en cours (150) + restants des exercices
     # précédents (200) → 350 ; l'échu courant (200) est déjà exigible (hors 19-2).
     r = client.get(f"/api/recouvrement/lot/{lot.id}/19-2", headers=auth(token_a))
