@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -50,6 +50,10 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String, default="")
     last_login_ua = Column(String, default="")
+    # Notifications officielles par voie postale (LRAR) au lieu de la voie électronique, à la
+    # demande du copropriétaire (loi n° 65-557, art. 42-1 ; décret n° 67-223, art. 64-1).
+    notification_postale = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    notification_postale_depuis = Column(Date, nullable=True)
     copropriete = relationship("Copropriete", back_populates="users")
     coproprietes = relationship(
         "UserCopro", backref="user", cascade="all, delete-orphan",

@@ -85,6 +85,9 @@ class UserOut(BaseModel):
     telephone: str = ""
     two_factor_enabled: bool = False  # propriété du modèle User (totp_enabled)
     theme: str = "system"  # light | dark | system
+    # Notifications officielles par voie postale (LRAR), à la demande du copropriétaire (art. 42-1).
+    notification_postale: bool = False
+    notification_postale_depuis: Optional[date] = None
 
     @field_validator("prenom", "adresse", "telephone", mode="before")
     @classmethod
@@ -996,3 +999,35 @@ class Mise19_2Out(BaseModel):
     precedents_approuves: float = 0.0
     echu_courant: float = 0.0
     precedents_non_approuves: float = 0.0
+
+
+# ---------- Voie postale et notification du PV (loi 1965, art. 42 al. 2 et 42-1) ----------
+class VoiePostaleIn(BaseModel):
+    postale: bool
+
+
+class NotificationPVIn(BaseModel):
+    mode: str = "lre"                      # lre | lrar
+    date_envoi: Optional[date] = None
+    date_presentation: Optional[date] = None
+    reference: str = ""
+
+
+class NotificationPVOut(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    nom: str
+    qualite: str
+    resolutions: str
+    mode: str
+    date_envoi: Optional[date] = None
+    date_presentation: Optional[date] = None
+    reference: str = ""
+    fin_contestation: Optional[date] = None   # indicatif
+    en_retard: bool = False
+
+
+class NotificationsPVOut(BaseModel):
+    limite_envoi: date                        # AG + 1 mois (art. 42 al. 2)
+    sans_proprietaire: List[str] = []         # lots concernés sans propriétaire : non notifiables
+    items: List[NotificationPVOut] = []
