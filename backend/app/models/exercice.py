@@ -15,7 +15,8 @@ class Exercice(Base):
 
     copropriete = relationship("Copropriete", back_populates="exercices")
     budget_lines = relationship("BudgetLine", back_populates="exercice", cascade="all, delete-orphan")
-    appels = relationship("AppelFonds", back_populates="exercice", cascade="all, delete-orphan")
+    appels = relationship("AppelFonds", back_populates="exercice", cascade="all, delete-orphan",
+                          foreign_keys="AppelFonds.exercice_id")
     mouvements = relationship("Mouvement", back_populates="exercice")
 
 

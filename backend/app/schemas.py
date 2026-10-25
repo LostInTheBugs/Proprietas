@@ -452,6 +452,31 @@ class AppelOut(BaseModel):
     parts: List[AppelLotOut] = []
 
 
+# ---------- Régularisation des charges (décret n° 67-223, art. 6-2, 3°) ----------
+class RegularisationIn(BaseModel):
+    date_echeance: date
+
+
+class RegularisationLigne(BaseModel):
+    lot_id: int
+    lot_numero: str
+    provisions: float
+    charges_reelles: float
+    ecart: float          # > 0 : complément dû ; < 0 : trop-perçu crédité
+
+
+class RegularisationOut(BaseModel):
+    exercice_id: int
+    annee: int
+    approuve: bool
+    comptes_approuves_le: Optional[date] = None
+    appel_id: Optional[int] = None
+    lignes: List[RegularisationLigne] = []
+    total_provisions: float = 0.0
+    total_charges_reelles: float = 0.0
+    total_ecart: float = 0.0
+
+
 # ---------- Mouvements ----------
 class MouvementIn(BaseModel):
     date: date

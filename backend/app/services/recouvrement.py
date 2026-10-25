@@ -58,12 +58,20 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
     encaisse = arrondi(somme(D(m.montant or D(0)) for m in db.query(Mouvement).filter(
         Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()))
 
-    reste = encaisse
+    # Un montant négatif (trop-perçu d'une régularisation de charges) est un CRÉDIT : il s'ajoute
+    # aux sommes disponibles et vient en déduction des appels dus, même antérieurs.
+    credits = arrondi(somme(-((p.montant_charges or D(0)) + (p.montant_fonds_travaux or D(0)))
+                            for p, _, _ in paires
+                            if (p.montant_charges or D(0)) + (p.montant_fonds_travaux or D(0)) < 0))
+    reste = arrondi(encaisse + credits)
     lignes = []
     for part, appel, ex in paires:
         montant = arrondi((part.montant_charges or D(0)) + (part.montant_fonds_travaux or D(0)))
-        impute = min(reste, montant)
-        reste = arrondi(reste - impute)
+        if montant < 0:
+            impute = montant   # crédit déjà ajouté aux sommes disponibles : restant dû nul
+        else:
+            impute = min(reste, montant)
+            reste = arrondi(reste - impute)
         echeance = appel.date_echeance or appel.date_emission
         lignes.append({
             "appel_id": appel.id,
