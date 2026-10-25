@@ -14,8 +14,11 @@ class AppelFonds(Base):
     inclut_fonds_travaux = Column(Boolean, default=False)
     # Montant du fonds de travaux inclus (taux appliqué au montant total)
     fonds_travaux_montant = Column(Numeric(12, 2), default=0.0)
+    # Appel de régularisation des charges : exercice régularisé (décret n° 67-223, art. 6-2, 3°).
+    # Ses parts peuvent être négatives (trop-perçu crédité au copropriétaire).
+    regularisation_de_id = Column(Integer, ForeignKey("exercices.id", ondelete="SET NULL"), nullable=True)
 
-    exercice = relationship("Exercice", back_populates="appels")
+    exercice = relationship("Exercice", back_populates="appels", foreign_keys=[exercice_id])
     parts = relationship("AppelLot", back_populates="appel", cascade="all, delete-orphan")
 
 

@@ -1,5 +1,5 @@
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
@@ -16,7 +16,10 @@ from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
+    RegularisationIn, RegularisationOut,
 )
+from app.core import audit
+from app.services import regularisation
 
 router = APIRouter(prefix="/api", tags=["comptes"])
 
@@ -206,6 +209,28 @@ def delete_appel(appel_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 # ---------- Mouvements ----------
+# ---------- Régularisation des charges (loi art. 14-1 ; décret art. 6-2, 3°) ----------
+@router.get("/exercices/{exercice_id}/regularisation", response_model=RegularisationOut)
+def apercu_regularisation(exercice_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Écart par lot entre provisions appelées et charges réelles de l'exercice."""
+    ex = get_exercice(db, exercice_id, get_or_create_copro(db, user))
+    return regularisation.calcul(db, ex)
+
+
+@router.post("/exercices/{exercice_id}/regularisation", response_model=RegularisationOut)
+def creer_regularisation(exercice_id: int, data: RegularisationIn, request: Request,
+                         db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Appel de régularisation (complément ou crédit par lot), une fois les comptes approuvés."""
+    copro = get_or_create_copro(db, user)
+    ex = get_exercice(db, exercice_id, copro)
+    appel = regularisation.creer(db, ex, data.date_echeance)
+    audit.enregistrer(db, "regularisation_charges", user=user, copro_id=copro.id, request=request,
+                      detail=f"Exercice {ex.annee} — écart total {appel.montant_total:.2f} €, "
+                             f"échéance {data.date_echeance:%d/%m/%Y}")
+    db.commit()
+    return regularisation.calcul(db, ex)
+
+
 @router.get("/exercices/{exercice_id}/mouvements", response_model=list[MouvementOut])
 def list_mouvements(exercice_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
