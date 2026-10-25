@@ -17,8 +17,9 @@ from sqlalchemy.orm import Session
 
 from app.models.lot import Lot
 from app.models.notification import NotificationPV
+from app.models.copropriete import Copropriete
 from app.models.user import User
-from app.services import voie_postale
+from app.services import delais, voie_postale
 
 
 def ajouter_mois(d: date, n: int) -> date:
@@ -89,7 +90,10 @@ def preparer(db: Session, ag) -> None:
 
 def etat(db: Session, ag) -> dict:
     _, sans_proprietaire = destinataires(db, ag)
+    # Envoi dans le mois : obligation du syndic, NON reportée (prudence).
     limite = ajouter_mois(ag.date, 1)
+    copro = db.get(Copropriete, ag.copropriete_id)
+    am = delais.est_alsace_moselle(copro.code_postal if copro else "")
     items = []
     for n in (db.query(NotificationPV).filter(NotificationPV.ag_id == ag.id)
               .order_by(NotificationPV.nom).all()):
@@ -98,7 +102,9 @@ def etat(db: Session, ag) -> dict:
             "id": n.id, "user_id": n.user_id, "nom": n.nom, "qualite": n.qualite,
             "resolutions": n.resolutions, "mode": n.mode, "date_envoi": n.date_envoi,
             "date_presentation": n.date_presentation, "reference": n.reference,
-            "fin_contestation": ajouter_mois(n.date_presentation, 2) if n.date_presentation else None,
+            # Contestation (2 mois) : fin reportée au premier jour ouvrable (CPC, art. 642).
+            "fin_contestation": (delais.reporter(ajouter_mois(n.date_presentation, 2), am)
+                                 if n.date_presentation else None),
             "en_retard": n.date_envoi is None and date.today() > limite,
             "voie_postale_demandee": bool(user and user.notification_postale),
             "modes_admis": list(voie_postale.modes_admis(user, date.today())) if user else ["lre", "lrar"],
