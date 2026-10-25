@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -20,7 +21,8 @@ from app.models.invitation import Invitation
 from app.routes.copro import get_or_create_copro
 from app.core.scoping import get_owned
 from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResponse,
-                         UserOut, UserCreate, UserUpdate, CoproCreate, ThemeIn, ProfilIn)
+                         UserOut, UserCreate, UserUpdate, CoproCreate, ThemeIn, ProfilIn,
+                         VoiePostaleIn)
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
 from app.services import two_factor
@@ -167,6 +169,42 @@ def exporter_mes_donnees(request: Request, db: Session = Depends(get_db), user: 
     contenu = json.dumps(donnees, ensure_ascii=False, indent=2, default=str)
     return Response(content=contenu, media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="mes-donnees-proprietas.json"'})
+
+
+def _maj_voie_postale(db, cible: User, postale: bool, auteur: User, request: Request) -> None:
+    if bool(cible.notification_postale) == postale:
+        return
+    cible.notification_postale = postale
+    cible.notification_postale_depuis = date.today() if postale else None
+    copro = get_or_create_copro(db, auteur)
+    audit.enregistrer(db, "voie_postale_activee" if postale else "voie_postale_desactivee",
+                      user=auteur, copro_id=copro.id, detail=cible.email, request=request)
+
+
+@router.put("/me/voie-postale", response_model=UserOut)
+def ma_voie_postale(data: VoiePostaleIn, request: Request, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """Le copropriétaire demande (ou retire sa demande) à recevoir les notifications
+    officielles par lettre recommandée papier plutôt que par voie électronique (art. 42-1)."""
+    _maj_voie_postale(db, user, data.postale, user, request)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.put("/users/{user_id}/voie-postale", response_model=UserOut)
+def voie_postale_compte(user_id: int, data: VoiePostaleIn, request: Request, db: Session = Depends(get_db),
+                        current: User = Depends(require_syndic)):
+    """Le syndic enregistre une demande reçue par courrier (ou son retrait)."""
+    copro = get_or_create_copro(db, current)
+    cible = (db.query(User).join(UserCopro, UserCopro.user_id == User.id)
+             .filter(User.id == user_id, UserCopro.copropriete_id == copro.id).first())
+    if not cible:
+        raise HTTPException(404, "Utilisateur introuvable")
+    _maj_voie_postale(db, cible, data.postale, current, request)
+    db.commit()
+    db.refresh(cible)
+    return cible
 
 
 @router.post("/theme")

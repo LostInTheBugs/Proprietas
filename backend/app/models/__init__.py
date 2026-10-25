@@ -16,10 +16,12 @@ from app.models.contrat import Contrat
 from app.models.audit import AuditLog
 from app.models.instance import InstanceState
 from app.models.recouvrement import ActeRecouvrement
+from app.models.notification import NotificationPV
 
 __all__ = [
     "User", "UserCopro", "Copropriete", "Personne", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
+    "NotificationPV",
 ]
