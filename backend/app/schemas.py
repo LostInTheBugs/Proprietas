@@ -1025,6 +1025,7 @@ class NotificationPVOut(BaseModel):
     reference: str = ""
     fin_contestation: Optional[date] = None   # indicatif
     en_retard: bool = False
+    voie_postale_demandee: bool = False       # art. 42-1 : LRAR obligatoire
 
 
 class NotificationsPVOut(BaseModel):

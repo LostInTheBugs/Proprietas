@@ -62,6 +62,7 @@ function LigneNotification({ n, onSaved, onError }: {
     mode: n.mode, date_envoi: n.date_envoi ?? "", date_presentation: n.date_presentation ?? "",
     reference: n.reference,
   });
+  const envoyee = n.date_envoi !== null;
   async function save() {
     try {
       onSaved(await api.put<NotificationsPV>(`/notifications-pv/${n.id}`, {
@@ -75,15 +76,17 @@ function LigneNotification({ n, onSaved, onError }: {
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="font-medium text-slate-800">{n.nom}</span>
         <span className="text-slate-500">{n.resolutions}</span>
+        {n.voie_postale_demandee && <Badge color="amber">voie postale demandée</Badge>}
         {n.en_retard && <Badge color="red">hors délai d'un mois</Badge>}
         {n.fin_contestation && (
           <span className="ml-auto text-slate-500">Contestation possible jusqu'au {fmtDate(n.fin_contestation)} (indicatif)</span>
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <Select value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })}>
-          <option value="lre">LRE (électronique)</option>
-          <option value="lrar">LRAR (voie postale demandée)</option>
+        <Select value={f.mode} disabled={envoyee} onChange={(e) => setF({ ...f, mode: e.target.value })}
+          title={envoyee ? "Notification envoyée : mode figé (effacez la date d'envoi pour corriger)" : undefined}>
+          <option value="lre" disabled={!envoyee && n.voie_postale_demandee}>LRE (électronique)</option>
+          <option value="lrar">LRAR (papier)</option>
         </Select>
         <Input type="date" value={f.date_envoi} onChange={(e) => setF({ ...f, date_envoi: e.target.value })} />
         <Input type="date" value={f.date_presentation} onChange={(e) => setF({ ...f, date_presentation: e.target.value })} />

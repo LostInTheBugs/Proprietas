@@ -475,6 +475,7 @@ export interface NotificationPV {
   reference: string;
   fin_contestation: string | null; // indicatif
   en_retard: boolean;
+  voie_postale_demandee: boolean; // art. 42-1 : LRAR obligatoire
 }
 
 export interface NotificationsPV {
