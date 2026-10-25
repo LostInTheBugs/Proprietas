@@ -484,3 +484,24 @@ export interface NotificationsPV {
   sans_proprietaire: string[];
   items: NotificationPV[];
 }
+
+// Régularisation des charges après approbation des comptes (décret n° 67-223, art. 6-2, 3°)
+export interface RegularisationLigne {
+  lot_id: number;
+  lot_numero: string;
+  provisions: number;
+  charges_reelles: number;
+  ecart: number; // > 0 : complément dû ; < 0 : trop-perçu crédité
+}
+
+export interface Regularisation {
+  exercice_id: number;
+  annee: number;
+  approuve: boolean;
+  comptes_approuves_le: string | null;
+  appel_id: number | null;
+  lignes: RegularisationLigne[];
+  total_provisions: number;
+  total_charges_reelles: number;
+  total_ecart: number;
+}

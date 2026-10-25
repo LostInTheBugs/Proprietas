@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot } from "../types";
+import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -120,8 +120,14 @@ export default function Comptes() {
       {exId && (() => {
         const ex = exercices.find((e) => e.id === exId);
         return ex ? (
-          <ExerciceStatut key={ex.id} ex={ex} isSyndic={isSyndic} onError={setError}
-            onSaved={(maj) => setExercices((l) => l.map((e) => (e.id === maj.id ? maj : e)))} />
+          <>
+            <ExerciceStatut key={ex.id} ex={ex} isSyndic={isSyndic} onError={setError}
+              onSaved={(maj) => setExercices((l) => l.map((e) => (e.id === maj.id ? maj : e)))} />
+            {isSyndic && ex.comptes_approuves_le && (
+              <RegularisationPanel key={`reg-${ex.id}-${ex.comptes_approuves_le}`} exId={ex.id} onError={setError}
+                onCreated={() => api.get<Appel[]>(`/exercices/${ex.id}/appels`).then(setAppels).catch(() => {})} />
+            )}
+          </>
         ) : null;
       })()}
 
@@ -343,6 +349,77 @@ function ExerciceStatut({ ex, isSyndic, onSaved, onError }: {
         </>
       )}
     </div>
+  );
+}
+
+/** Régularisation des charges : écart par lot entre provisions et charges réelles, une fois
+ *  les comptes approuvés (loi art. 14-1 ; décret art. 6-2, 3° : porté au compte du
+ *  copropriétaire à la date de l'approbation). */
+function RegularisationPanel({ exId, onError, onCreated }: {
+  exId: number; onError: (e: string) => void; onCreated: () => void;
+}) {
+  const [reg, setReg] = useState<Regularisation | null>(null);
+  const [echeance, setEcheance] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10);
+  });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get<Regularisation>(`/exercices/${exId}/regularisation`).then(setReg).catch(() => {});
+  }, [exId]);
+  async function creer() {
+    setBusy(true);
+    try {
+      setReg(await api.post<Regularisation>(`/exercices/${exId}/regularisation`, { date_echeance: echeance }));
+      onCreated();
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+    finally { setBusy(false); }
+  }
+  if (!reg) return null;
+  return (
+    <Card title={`Régularisation des charges ${reg.annee}`}>
+      <p className="mb-2 text-xs text-slate-500">
+        Charges réelles (dépenses hors fonds de travaux et hors travaux, réparties aux tantièmes ; une dépense
+        rattachée à un lot reste à ce lot) comparées aux provisions appelées. Le complément est appelé, le
+        trop-perçu est crédité au copropriétaire actuel (décret du 17 mars 1967, art. 6-2). Le fonds de travaux
+        n'est pas régularisé.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-slate-500">
+              <th className="py-1">Lot</th><th className="py-1 text-right">Provisions</th>
+              <th className="py-1 text-right">Charges réelles</th><th className="py-1 text-right">Écart</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reg.lignes.map((l) => (
+              <tr key={l.lot_id} className="border-t border-slate-100">
+                <td className="py-1">Lot {l.lot_numero}</td>
+                <td className="py-1 text-right tabular-nums">{fmtEUR(l.provisions)}</td>
+                <td className="py-1 text-right tabular-nums">{fmtEUR(l.charges_reelles)}</td>
+                <td className={`py-1 text-right tabular-nums ${l.ecart > 0 ? "text-red-700" : l.ecart < 0 ? "text-emerald-700" : ""}`}>
+                  {l.ecart > 0 ? `+${fmtEUR(l.ecart)} à appeler` : l.ecart < 0 ? `${fmtEUR(l.ecart)} crédité` : "—"}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t border-slate-200 font-medium">
+              <td className="py-1">Total</td>
+              <td className="py-1 text-right tabular-nums">{fmtEUR(reg.total_provisions)}</td>
+              <td className="py-1 text-right tabular-nums">{fmtEUR(reg.total_charges_reelles)}</td>
+              <td className="py-1 text-right tabular-nums">{fmtEUR(reg.total_ecart)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {reg.appel_id ? (
+        <p className="mt-2 text-xs text-emerald-700">Régularisation enregistrée (appel « Régularisation des charges {reg.annee} »).</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <Input label="Échéance du complément" type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+          <Button disabled={busy || !echeance} onClick={creer}>Enregistrer la régularisation</Button>
+        </div>
+      )}
+    </Card>
   );
 }
 
