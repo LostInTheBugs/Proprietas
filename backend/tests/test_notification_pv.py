@@ -170,3 +170,55 @@ def test_reserve_au_syndic(client, db, copro_a, seance):
 def test_ajouter_mois_fin_de_mois():
     assert ajouter_mois(date(2026, 1, 31), 1) == date(2026, 2, 28)
     assert ajouter_mois(date(2026, 11, 30), 2) == date(2027, 1, 30)
+
+
+# ---------------------------------------------------------------- mode : voie postale et envoi figé
+def _voie_postale(client, token_a, user, postale=True):
+    r = client.put(f"/api/auth/users/{user.id}/voie-postale", json={"postale": postale}, headers=auth(token_a))
+    assert r.status_code == 200, r.text
+
+
+def _item(d, nom):
+    return next(i for i in d["items"] if i["nom"] == nom)
+
+
+def test_lre_refusee_si_la_voie_postale_est_demandee(client, token_a, seance):
+    """Art. 42-1 : le copropriétaire qui a demandé la voie postale ne peut pas être notifié par LRE."""
+    _voie_postale(client, token_a, seance["bernard"])
+    bernard = _item(_preparer(client, token_a, seance["ag"]), "Bernard Luc")
+    assert bernard["voie_postale_demandee"] is True
+    r = _saisir(client, token_a, bernard["id"], mode="lre", date_envoi=AUJOURDHUI.isoformat())
+    assert r.status_code == 422
+    assert "voie postale" in r.json()["detail"]
+
+
+def test_lrar_admise_sans_demande(client, token_a, seance):
+    """La LRAR reste un mode valable de notification (décret 1967, art. 64) : elle n'est pas refusée."""
+    martin = _item(_preparer(client, token_a, seance["ag"]), "Martin Claire")
+    assert martin["voie_postale_demandee"] is False
+    r = _saisir(client, token_a, martin["id"], mode="lrar", date_envoi=AUJOURDHUI.isoformat())
+    assert r.status_code == 200, r.text
+    assert _item(r.json(), "Martin Claire")["mode"] == "lrar"
+
+
+def test_mode_d_une_notification_envoyee_fige(client, token_a, seance):
+    martin = _item(_preparer(client, token_a, seance["ag"]), "Martin Claire")
+    assert _saisir(client, token_a, martin["id"], mode="lre", date_envoi=AUJOURDHUI.isoformat()).status_code == 200
+    r = _saisir(client, token_a, martin["id"], mode="lrar", date_envoi=AUJOURDHUI.isoformat())
+    assert r.status_code == 422
+    assert "envoyée" in r.json()["detail"]
+    # Correction volontaire en deux temps : effacer la date d'envoi, puis changer le mode.
+    assert _saisir(client, token_a, martin["id"], mode="lre").status_code == 200
+    assert _saisir(client, token_a, martin["id"], mode="lrar").status_code == 200
+
+
+def test_envoi_lre_anterieur_a_la_demande_reste_saisissable(client, token_a, seance):
+    """Envoyée par LRE avant que le copropriétaire demande la voie postale : on peut encore saisir
+    la première présentation, sans changer le mode."""
+    bernard = _item(_preparer(client, token_a, seance["ag"]), "Bernard Luc")
+    envoi = AUJOURDHUI - timedelta(days=2)
+    assert _saisir(client, token_a, bernard["id"], mode="lre", date_envoi=envoi.isoformat()).status_code == 200
+    _voie_postale(client, token_a, seance["bernard"])
+    r = _saisir(client, token_a, bernard["id"], mode="lre", date_envoi=envoi.isoformat(),
+                date_presentation=AUJOURDHUI.isoformat())
+    assert r.status_code == 200, r.text
