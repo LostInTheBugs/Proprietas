@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.021 — 2026-10-25
+
+- Notification du PV : une lettre recommandée électronique est refusée pour un copropriétaire qui a demandé la voie postale (art. 42-1) ; badge et option grisée dans l'interface.
+- Notification du PV : le mode d'une lettre dont l'envoi est saisi ne peut plus être changé (correction en deux temps : effacer la date d'envoi, puis changer le mode).
+
 ## 2026.10.020 — 2026-10-25
 
 - Voie postale : chaque copropriétaire (ou le syndic pour lui) peut demander à recevoir ses notifications par lettre recommandée papier ; la lettre recommandée électronique reste la règle (art. 42-1). Demande datée et tracée (migration c0d1e2f3a4b5).
