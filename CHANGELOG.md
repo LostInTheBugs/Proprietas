@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.10.024 — 2026-10-25
+
+- Régularisation des charges (loi du 10 juillet 1965, art. 14-1 ; décret du 17 mars 1967, art. 6-2, 3°) : une fois les comptes d'un exercice approuvés, la page Comptes compare par lot les provisions appelées aux charges réelles et enregistre un appel de régularisation (complément à payer ou trop-perçu crédité au copropriétaire actuel). Le fonds de travaux n'est pas régularisé. Migration d1e2f3a4b5c6.
+
 ## 2026.10.023 — 2026-10-25
 
 - Délais (code de procédure civile, art. 642) : la fin du délai de contestation du PV et celle du délai de 30 jours de la mise en demeure (art. 19-2) sont reportées au premier jour ouvrable lorsqu'elles tombent un samedi, un dimanche ou un jour férié, y compris les jours fériés propres à l'Alsace-Moselle (selon le code postal de la copropriété).
