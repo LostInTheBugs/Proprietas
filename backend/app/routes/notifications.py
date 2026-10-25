@@ -52,6 +52,14 @@ def saisir(notif_id: int, data: NotificationPVIn, request: Request,
             raise HTTPException(422, "Saisissez d'abord la date d'envoi.")
         if data.date_presentation < data.date_envoi:
             raise HTTPException(422, "La présentation ne peut pas précéder l'envoi.")
+    if n.date_envoi is not None and data.mode != n.mode:
+        raise HTTPException(422, "Notification envoyée : son mode ne peut pas être changé. "
+                                 "Effacez d'abord la date d'envoi si elle a été saisie par erreur.")
+    destinataire = db.get(User, n.user_id) if n.user_id else None
+    if (n.date_envoi is None and data.mode == "lre"
+            and destinataire is not None and destinataire.notification_postale):
+        raise HTTPException(422, f"{n.nom} a demandé la voie postale : notification par LRAR "
+                                 "obligatoire (art. 42-1).")
     n.mode, n.date_envoi, n.date_presentation = data.mode, data.date_envoi, data.date_presentation
     n.reference = (data.reference or "").strip()[:120]
     audit.enregistrer(db, "notification_pv_saisie", user=user, copro_id=copro.id,

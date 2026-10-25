@@ -92,11 +92,13 @@ def etat(db: Session, ag) -> dict:
     items = []
     for n in (db.query(NotificationPV).filter(NotificationPV.ag_id == ag.id)
               .order_by(NotificationPV.nom).all()):
+        user = db.get(User, n.user_id) if n.user_id else None
         items.append({
             "id": n.id, "user_id": n.user_id, "nom": n.nom, "qualite": n.qualite,
             "resolutions": n.resolutions, "mode": n.mode, "date_envoi": n.date_envoi,
             "date_presentation": n.date_presentation, "reference": n.reference,
             "fin_contestation": ajouter_mois(n.date_presentation, 2) if n.date_presentation else None,
             "en_retard": n.date_envoi is None and date.today() > limite,
+            "voie_postale_demandee": bool(user and user.notification_postale),
         })
     return {"limite_envoi": limite, "sans_proprietaire": sans_proprietaire, "items": items}
