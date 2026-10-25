@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.10.019 — 2026-10-25
+
+- Consultation écrite : procès-verbal dédié, signé par le syndic, indiquant le sens du vote de chaque copropriétaire, avec mention des écrits de vote annexés.
+- Recouvrement : l'aperçu de l'article 19-2 est ventilé en parts distinctes (provisions à échoir, restes des exercices précédents approuvés, arriéré échu de l'exercice, exercices non approuvés) dont la somme est le solde du lot : plus de double compte.
+
 ## 2026.10.018 — 2026-10-25
 
 - Applicateur de mises à jour : vérifie l'espace disque avant toute modification (1,5 Go en build, 0,5 Go en pull, réglable par PROPRIETAS_MIN_FREE_GB) et refuse avec un message clair s'il manque de la place.
