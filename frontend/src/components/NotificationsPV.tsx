@@ -40,7 +40,8 @@ export default function NotificationsPVPanel({ agId, onError }: { agId: number; 
         par lettre recommandée électronique, ou par LRAR s'ils ont demandé la voie postale (la demande prend
         effet le 9e jour suivant sa réception, le jour même si elle est faite en assemblée). Le délai de
         contestation de deux mois court à compter du lendemain de la première présentation (LRAR) ou de
-        l'avis électronique (LRE) — dates de fin indicatives.
+        l'avis électronique (LRE) ; une fin de délai tombant un samedi, un dimanche ou un jour férié est
+        reportée au premier jour ouvrable (code de procédure civile, art. 642) — dates de fin indicatives.
       </p>
       {etat.sans_proprietaire.length > 0 && (
         <p className="mb-2 text-xs text-amber-700">
@@ -80,7 +81,7 @@ function LigneNotification({ n, onSaved, onError }: {
         {n.voie_postale_demandee && <Badge color="amber">voie postale demandée</Badge>}
         {n.en_retard && <Badge color="red">hors délai d'un mois</Badge>}
         {n.fin_contestation && (
-          <span className="ml-auto text-slate-500">Contestation possible jusqu'au {fmtDate(n.fin_contestation)} (indicatif)</span>
+          <span className="ml-auto text-slate-500">Contestation possible jusqu'au {fmtDate(n.fin_contestation)} (indicatif, reporté au jour ouvrable)</span>
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">

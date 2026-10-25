@@ -509,7 +509,8 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                 {d.statut === "mise_en_demeure" && d.jours_restants !== null && (
                   <p className="text-amber-700">
                     Délai en cours — reste {d.jours_restants} jour(s) avant l'exigibilité des provisions futures (19-2)
-                    {d.activable_le && <>, soit à partir du {fmtDate(d.activable_le)}</>}.
+                    {d.activable_le && <>, soit à partir du {fmtDate(d.activable_le)}</>} (fin du délai reportée au premier
+                    jour ouvrable si elle tombe un week-end ou un jour férié).
                   </p>
                 )}
                 <div className="flex flex-wrap gap-2">

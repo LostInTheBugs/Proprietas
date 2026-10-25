@@ -21,6 +21,7 @@ from app.models.copropriete import Copropriete
 from app.models.exercice import Exercice
 from app.models.mouvement import Mouvement
 from app.models.recouvrement import ActeRecouvrement
+from app.services import delais
 
 # Types d'actes créables via l'API (l'activation 19-2 a sa route dédiée).
 TYPES_ACTE = ("mise_en_demeure", "frais", "conciliation", "commissaire_justice", "tribunal", "note")
@@ -148,9 +149,12 @@ def statut_dossier(db: Session, copro: Copropriete, lot, lignes=None, actes=None
         elif md is not None and md.date_reception is None:
             statut = "mise_en_demeure_attente"
         elif md is not None:
-            # Délai de 30 jours du LENDEMAIN de la présentation (J+1) à J+30 : exigible à J+31.
+            # Délai de 30 jours du LENDEMAIN de la présentation (J+1) à J+30, fin reportée au
+            # premier jour ouvrable (CPC, art. 642) : exigible le lendemain de cette fin.
             md_jours = (date.today() - md.date_reception).days
-            activable_le = md.date_reception + timedelta(days=DELAI_19_2_JOURS + 1)
+            fin = delais.reporter(md.date_reception + timedelta(days=DELAI_19_2_JOURS),
+                                  delais.est_alsace_moselle(copro.code_postal))
+            activable_le = fin + timedelta(days=1)
             if date.today() >= activable_le:
                 statut = "delai_19_2_depasse"
             else:
