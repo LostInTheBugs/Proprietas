@@ -26,7 +26,7 @@ Le syndic qui installe Proprietas pour sa propre copropriété n'a pas de sous-t
 | Sécurité du compte | mot de passe haché (bcrypt), secret 2FA et codes de secours hachés, dernière connexion (date, IP, navigateur) (`users`) | tous les comptes |
 | Journal d'audit | action, date, e-mail et nom de l'auteur, IP, navigateur (`audit_logs`) | tous les comptes |
 | Prestataires | nom, téléphone, e-mail, adresse des contacts (`contacts`) | entreprises, artisans (souvent personnes morales) |
-| Documents | fichiers déposés par le syndic (`uploads/`) | selon le contenu |
+| Documents | fichiers déposés par le syndic (`uploads/`, ou bucket S3 si `COPRO_STOCKAGE=s3` : choisir un hébergeur dans l'UE) | selon le contenu |
 
 **Volontairement absent** :
 
