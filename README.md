@@ -268,6 +268,45 @@ Depuis une connexion personnelle, préférez un tunnel à l'ouverture de ports :
 Activez ensuite le durcissement dans 🔐 Sécurité → « Accès depuis internet » et
 vérifiez avec le diagnostic.
 
+### Stockage des documents (dossier local ou S3)
+
+Par défaut, les documents déposés vont dans le dossier `COPRO_UPLOAD_DIR` (volume
+`uploads` en Docker). Ils peuvent aussi aller dans un **bucket compatible S3** : AWS,
+Clever Cloud Cellar, OVH Object Storage, Scaleway, MinIO… — utile quand le disque du
+conteneur n'est pas persistant (PaaS) ou pour séparer les fichiers du serveur.
+
+| Variable | Rôle |
+|---|---|
+| `COPRO_STOCKAGE` | `local` (défaut) ou `s3` |
+| `COPRO_S3_BUCKET` | nom du bucket (obligatoire en `s3`) |
+| `COPRO_S3_ENDPOINT_URL` | URL du service, vide pour AWS (ex. `https://cellar-c2.services.clever-cloud.com`) |
+| `COPRO_S3_REGION` | région, si le service l'exige |
+| `COPRO_S3_ACCESS_KEY_ID`, `COPRO_S3_SECRET_ACCESS_KEY` | identifiants ; vides = variables `AWS_*` standard |
+| `COPRO_S3_PREFIX` | préfixe des objets (défaut `documents/`) |
+
+Clever Cloud (add-on Cellar) : `COPRO_S3_ENDPOINT_URL=https://<CELLAR_ADDON_HOST>`,
+`COPRO_S3_ACCESS_KEY_ID=<CELLAR_ADDON_KEY_ID>`, `COPRO_S3_SECRET_ACCESS_KEY=<CELLAR_ADDON_KEY_SECRET>` ;
+créez le bucket avant le premier démarrage.
+
+Le stockage est **vérifié au démarrage** (écriture, relecture et suppression d'un fichier
+témoin) : un bucket absent, de mauvais identifiants ou un dossier en lecture seule
+empêchent de démarrer, avec un message explicite dans les logs.
+
+**Passer des documents existants vers S3**, sans interruption :
+
+```bash
+# 1. Ajouter les variables COPRO_S3_* en laissant COPRO_STOCKAGE=local, redémarrer, puis :
+docker compose exec backend python -m app.cli.migrer_stockage --simulation
+docker compose exec backend python -m app.cli.migrer_stockage
+# 2. Passer COPRO_STOCKAGE=s3, redémarrer, puis relancer pour rattraper les dépôts
+#    faits entre-temps (les fichiers déjà copiés, de même taille, sont ignorés) :
+docker compose exec backend python -m app.cli.migrer_stockage
+```
+
+La commande ne copie que les fichiers référencés en base, ne supprime jamais la source
+(gardez le volume `uploads` jusqu'à vérification) et sort en erreur si une copie échoue.
+Sens inverse : `--sens s3-vers-local`.
+
 ### Migrations Alembic
 
 Le schéma est géré par **Alembic** (`backend/alembic/`, URL lue depuis `COPRO_DATABASE_URL` —
