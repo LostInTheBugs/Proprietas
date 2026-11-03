@@ -10,6 +10,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 * 30
     upload_dir: str = "./uploads"
     upload_max_mb: float = 25.0
+    # Stockage des documents : « local » (dossier upload_dir) ou « s3 » (bucket compatible S3 :
+    # AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…). Voir app/core/stockage.py.
+    stockage: str = "local"
+    s3_bucket: str = ""
+    s3_endpoint_url: str = ""          # vide = AWS ; sinon https://cellar-c2.services.clever-cloud.com, etc.
+    s3_region: str = ""
+    s3_access_key_id: str = ""         # vides : variables AWS_* / rôle (chaîne standard boto3)
+    s3_secret_access_key: str = ""
+    s3_prefix: str = "documents/"
     # RGPD : durée de conservation du journal d'audit et des infos de dernière connexion
     # (IP, navigateur), en mois. 0 = jamais purgé. CNIL : 6 mois à 1 an pour la journalisation.
     retention_journal_mois: int = 12
@@ -47,4 +56,8 @@ def get_settings() -> Settings:
             "Définissez la variable d'environnement COPRO_SECRET_KEY avec une clé "
             "aléatoire avant de démarrer sur une base non-SQLite."
         )
+    if s.stockage not in ("local", "s3"):
+        raise RuntimeError(f"COPRO_STOCKAGE invalide : « {s.stockage} » (attendu : local ou s3).")
+    if s.stockage == "s3" and not s.s3_bucket:
+        raise RuntimeError("COPRO_STOCKAGE=s3 exige COPRO_S3_BUCKET (nom du bucket).")
     return s

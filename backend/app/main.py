@@ -36,7 +36,11 @@ def _rechiffrer_smtp() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    os.makedirs(settings.upload_dir, exist_ok=True)
+    # Stockage des documents vérifié AU DÉMARRAGE (écriture, relecture, suppression d'un
+    # fichier témoin) : une mauvaise configuration S3 ou un dossier en lecture seule empêche
+    # de démarrer, avec un message clair, au lieu d'échouer au premier document déposé.
+    from app.core.stockage import stockage_depuis
+    stockage_depuis(documents.settings).verifier_ecriture()
     # Les migrations sont gérées par Alembic (`alembic upgrade head`),
     # étape explicite au démarrage du conteneur / en dev — pas ici :
     # un démarrage qui migre est dangereux quand plusieurs conteneurs

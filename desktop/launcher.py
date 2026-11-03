@@ -205,6 +205,7 @@ def prepare_env(base: Path, res: Path) -> None:
         "COPRO_DATABASE_URL", "sqlite:///" + (data / "proprietas.db").as_posix()
     )
     os.environ.setdefault("COPRO_UPLOAD_DIR", str(data / "uploads"))
+    os.environ["COPRO_STOCKAGE"] = "local"          # boto3 absent du paquet de bureau
     os.environ.setdefault("COPRO_FRONTEND_DIST", str(res / "frontend_dist"))
     # Instance mono-poste (pas d'accès internet) : pas de 2FA obligatoire — elle
     # reste activable à la main dans la page Sécurité.

@@ -70,7 +70,8 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'psycopg2'],
+    # boto3 : stockage S3 réservé au serveur ; l'app de bureau garde ses documents en local.
+    excludes=['tkinter', 'psycopg2', 'boto3', 'botocore', 's3transfer'],
     noarchive=False,
 )
 

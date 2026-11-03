@@ -288,9 +288,8 @@ def main():
 
     # --- Documents (vrais petits PDF de démonstration)
     from app.core.config import get_settings
-    import os
-    upload_dir = get_settings().upload_dir
-    os.makedirs(upload_dir, exist_ok=True)
+    from app.core.stockage import stockage_depuis
+    stockage = stockage_depuis(get_settings())      # dossier local ou S3, selon COPRO_STOCKAGE
     for libelle, categorie, titre, corps in [
         ("Règlement de copropriété — extrait", "autre",
          "Règlement de copropriété",
@@ -311,8 +310,7 @@ def main():
          "Prochain repérage recommandé avant travaux de ravalement. (Document de démonstration.)"),
     ]:
         nom_stocke = f"demo_{categorie}_{libelle[:20]}.pdf".replace(" ", "_").replace("/", "_")
-        with open(os.path.join(upload_dir, nom_stocke), "wb") as f:
-            f.write(petit_pdf(titre, corps))
+        stockage.enregistrer(nom_stocke, BytesIO(petit_pdf(titre, corps)))
         db.add(Document(copropriete_id=t.id, categorie=categorie, libelle=libelle,
                         fichier=nom_stocke, date_ajout=date(2026, 6, 1)))
 

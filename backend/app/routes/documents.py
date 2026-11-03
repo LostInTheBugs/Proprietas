@@ -1,8 +1,12 @@
+import logging
+import mimetypes
 import os
+import tempfile
 import uuid
 from datetime import date
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -10,6 +14,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.document import Document
 from app.core.scoping import get_owned
+from app.core.stockage import NomInvalide, StockageIndisponible, StockageLocal, stockage_depuis
 from app.routes.copro import get_or_create_copro
 from app.schemas import DocumentOut
 
@@ -31,13 +36,20 @@ def _safe_download_name(libelle: str) -> str:
     return safe.strip() or "document"
 
 
-def _fichier_path(doc: Document) -> str:
-    """Chemin absolu du fichier stocké, garanti sous upload_dir."""
-    base = os.path.abspath(settings.upload_dir)
-    path = os.path.abspath(os.path.join(base, doc.fichier))
-    if not path.startswith(base + os.sep):
-        raise HTTPException(404, "Fichier manquant sur le serveur")
-    return path
+def _stockage():
+    """Stockage configuré (local ou S3). Lu à chaque appel : les tests le remplacent."""
+    return stockage_depuis(settings)
+
+
+def _indisponible(e: StockageIndisponible) -> HTTPException:
+    logging.getLogger("uvicorn.error").error("%s", e)
+    return HTTPException(503, "Stockage des documents indisponible, réessayez plus tard")
+
+
+def _content_disposition(nom: str) -> str:
+    """Même forme que FileResponse : filename="…" en ASCII, filename*=utf-8'' sinon."""
+    q = quote(nom)
+    return f"attachment; filename*=utf-8''{q}" if q != nom else f'attachment; filename="{nom}"'
 
 
 @router.get("", response_model=list[DocumentOut])
@@ -63,25 +75,23 @@ async def upload_document(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Type de fichier refusé (autorisé : {', '.join(sorted(ALLOWED_EXTENSIONS))})")
     copro = get_or_create_copro(db, user)
-    os.makedirs(settings.upload_dir, exist_ok=True)
     nom_stocke = f"{uuid.uuid4().hex}{ext}"
-    path = os.path.join(settings.upload_dir, nom_stocke)
-    # Copie PAR BLOCS avec arrêt dès que la limite est franchie : jamais le fichier entier
-    # en mémoire (un gros envoi saturait la RAM d'un petit serveur avant d'être refusé).
+    # Réception PAR BLOCS dans un fichier temporaire, avec arrêt dès que la limite est
+    # franchie : jamais le fichier entier en mémoire (un gros envoi saturait la RAM d'un
+    # petit serveur avant d'être refusé), et rien n'atteint le stockage avant d'être accepté.
     max_bytes = int(settings.upload_max_mb * 1024 * 1024)
     taille = 0
-    try:
-        with open(path, "wb") as f:
-            while bloc := await fichier.read(BLOC_UPLOAD):
-                taille += len(bloc)
-                if taille > max_bytes:
-                    raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
-                f.write(bloc)
-    except BaseException:
-        # Refus, erreur disque ou client parti : pas de fichier partiel sur le disque.
-        if os.path.exists(path):
-            os.remove(path)
-        raise
+    with tempfile.SpooledTemporaryFile(max_size=BLOC_UPLOAD) as tmp:
+        while bloc := await fichier.read(BLOC_UPLOAD):
+            taille += len(bloc)
+            if taille > max_bytes:
+                raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
+            tmp.write(bloc)
+        tmp.seek(0)
+        try:
+            _stockage().enregistrer(nom_stocke, tmp)
+        except StockageIndisponible as e:
+            raise _indisponible(e) from e
     doc = Document(
         copropriete_id=copro.id,
         categorie=categorie,
@@ -99,19 +109,40 @@ async def upload_document(
 def download_document(doc_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
-    path = _fichier_path(doc)
-    if not os.path.exists(path):
+    stockage = _stockage()
+    nom_affiche = _safe_download_name(doc.libelle)
+    try:
+        if isinstance(stockage, StockageLocal):
+            path = stockage.chemin(doc.fichier)
+            if not os.path.isfile(path):
+                raise HTTPException(404, "Fichier manquant sur le serveur")
+            return FileResponse(path, filename=nom_affiche)
+        taille = stockage.taille(doc.fichier)
+        if taille is None:
+            raise HTTPException(404, "Fichier manquant sur le serveur")
+        blocs = stockage.lire_par_blocs(doc.fichier)
+    except NomInvalide:
         raise HTTPException(404, "Fichier manquant sur le serveur")
-    return FileResponse(path, filename=_safe_download_name(doc.libelle))
+    except StockageIndisponible as e:
+        raise _indisponible(e) from e
+    return StreamingResponse(
+        blocs,
+        media_type=mimetypes.guess_type(doc.fichier)[0] or "application/octet-stream",
+        headers={"Content-Disposition": _content_disposition(nom_affiche),
+                 "Content-Length": str(taille)},
+    )
 
 
 @router.delete("/{doc_id}")
 def delete_document(doc_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
-    path = _fichier_path(doc)
-    if os.path.exists(path):
-        os.remove(path)
+    try:
+        _stockage().supprimer(doc.fichier)
+    except NomInvalide:
+        pass                    # nom forgé : aucun fichier légitime à supprimer, la fiche part
+    except StockageIndisponible as e:
+        raise _indisponible(e) from e
     db.delete(doc)
     db.commit()
     return {"ok": True}
