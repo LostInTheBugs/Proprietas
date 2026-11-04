@@ -255,3 +255,30 @@ def test_commande_migration_sans_bucket(monkeypatch, capsys):
                         lambda: docs.settings.model_copy(update={"s3_bucket": ""}))
     assert mig.main(["--simulation"]) == 2
     assert "COPRO_S3_BUCKET" in capsys.readouterr().err
+
+
+def test_s3_envoi_avec_content_length_sans_aws_chunked(s3):
+    """Issue #42 : Clever Cloud Cellar refusait l'écriture (MissingContentLength).
+
+    Depuis botocore 1.36, PutObject et UploadPart partent par défaut en « aws-chunked »
+    (CRC32 en fin de flux, sans Content-Length), que les services compatibles S3 hors AWS
+    refusent. moto l'accepte : on vérifie donc les EN-TÊTES envoyés, pas seulement le résultat.
+    """
+    envois = []
+
+    def espion(request, event_name, **kwargs):
+        envois.append((event_name.split(".")[-1], dict(request.headers)))
+    s3.client.meta.events.register("before-send.s3.PutObject", espion)
+    s3.client.meta.events.register("before-send.s3.UploadPart", espion)
+
+    s3.verifier_ecriture()                                   # put_object (témoin)
+    s3.enregistrer("petit.pdf", io.BytesIO(b"x" * 100))      # upload_fileobj, envoi simple
+    s3.enregistrer("gros.pdf", io.BytesIO(os.urandom(9 * 1024 * 1024)))   # multipart
+
+    operations = [op for op, _ in envois]
+    assert operations.count("PutObject") == 2 and operations.count("UploadPart") == 2
+    for op, entetes in envois:
+        noms = {k.lower(): v for k, v in entetes.items()}
+        assert "content-length" in noms, (op, noms)
+        assert b"aws-chunked" not in noms.get("content-encoding", b""), (op, noms)
+        assert "transfer-encoding" not in noms, (op, noms)
