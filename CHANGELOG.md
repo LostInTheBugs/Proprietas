@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.001 — 2026-11-04
+
+- Stockage des documents sur S3 (issue #11) : COPRO_STOCKAGE=s3 envoie les documents dans un bucket compatible S3 (AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…), configuré par les variables COPRO_S3_*. Le mode local reste le défaut : rien à faire sur les serveurs existants.
+- Stockage vérifié au démarrage : un bucket absent, de mauvais identifiants ou un dossier en lecture seule empêchent de démarrer, avec un message explicite.
+- Commande python -m app.cli.migrer_stockage pour copier les documents existants (local vers S3 ou inverse, --simulation ; la source n'est jamais supprimée). Procédure dans le README, section « Stockage des documents ».
+
 ## 2026.10.024 — 2026-10-25
 
 - Régularisation des charges (loi du 10 juillet 1965, art. 14-1 ; décret du 17 mars 1967, art. 6-2, 3°) : une fois les comptes d'un exercice approuvés, la page Comptes compare par lot les provisions appelées aux charges réelles et enregistre un appel de régularisation (complément à payer ou trop-perçu crédité au copropriétaire actuel). Le fonds de travaux n'est pas régularisé. Migration d1e2f3a4b5c6.
