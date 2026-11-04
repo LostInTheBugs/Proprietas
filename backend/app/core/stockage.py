@@ -223,7 +223,13 @@ def client_s3(endpoint_url: str = "", region: str = "", access_key_id: str = "",
         aws_access_key_id=access_key_id or None,
         aws_secret_access_key=secret_access_key or None,
         # Adressage « path » : accepté partout (MinIO, Cellar…), sans DNS par bucket.
-        config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 3}),
+        # Sommes de contrôle seulement quand l'API l'exige : depuis botocore 1.36, l'envoi
+        # se fait par défaut en « aws-chunked » (CRC32 en fin de flux, SANS Content-Length),
+        # ce que refusent les services compatibles S3 hors AWS (Clever Cloud Cellar :
+        # MissingContentLength, issue #42). Réglage recommandé pour ces services.
+        config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 3},
+                      request_checksum_calculation="when_required",
+                      response_checksum_validation="when_required"),
     )
 
 
