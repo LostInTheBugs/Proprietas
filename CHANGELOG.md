@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.002 — 2026-11-05
+
+- Stockage S3 : compatibilité Clever Cloud Cellar et autres services compatibles S3 hors AWS (issue #42). L'application refusait de démarrer avec l'erreur MissingContentLength : les fichiers partent désormais avec un Content-Length, sans encodage aws-chunked.
+
 ## 2026.11.001 — 2026-11-04
 
 - Stockage des documents sur S3 (issue #11) : COPRO_STOCKAGE=s3 envoie les documents dans un bucket compatible S3 (AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…), configuré par les variables COPRO_S3_*. Le mode local reste le défaut : rien à faire sur les serveurs existants.
