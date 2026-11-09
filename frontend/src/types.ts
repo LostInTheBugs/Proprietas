@@ -556,6 +556,8 @@ export interface EtatRepriseLigne {
 export interface ControleLigne {
   lot_id: number;
   lot_numero: string;
+  libelle?: string;     // « Lot 1 (avec lot 12) » : lots non séparables contrôlés ensemble
+  annexes?: string[];
   attendu: number;
   calcule: number;
   ecart: number;

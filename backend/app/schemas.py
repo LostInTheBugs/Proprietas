@@ -505,8 +505,11 @@ class EtatRepriseLigneOut(BaseModel):
 
 
 class ControleLigne(BaseModel):
+    """Une ligne par ensemble (lot principal + annexes non séparables), ou par lot seul."""
     lot_id: int
     lot_numero: str
+    libelle: str = ""                  # « Lot 1 » ou « Lot 1 (avec lot 12) »
+    annexes: List[str] = []            # numéros des lots annexes rattachés
     attendu: float
     calcule: float
     ecart: float
