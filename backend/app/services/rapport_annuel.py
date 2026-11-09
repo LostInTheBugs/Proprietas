@@ -13,6 +13,7 @@ from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 from app.services.compte_gestion import story_compte_gestion
 from app.core.money import D, arrondi, somme
+from app.services.soldes import totaux_lot
 
 INDIGO = colors.HexColor("#4f46e5")
 ROSE = colors.HexColor("#f43f5e")
@@ -125,13 +126,10 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
 
     total_impayes = D(0)
-    from app.models.appel import AppelLot
     for lot in lots:
-        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc_lot = somme(m.montant for m in db.query(Mouvement).filter(Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
-        if appels_c + appels_f - enc_lot > D("0.005"):
-            total_impayes += appels_c + appels_f - enc_lot
+        solde_lot = totaux_lot(db, lot)["solde"]
+        if solde_lot > D("0.005"):
+            total_impayes += solde_lot
 
     # ===== Page de garde =====
     el.append(Spacer(1, 60))

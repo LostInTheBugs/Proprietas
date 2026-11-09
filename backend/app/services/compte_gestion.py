@@ -9,6 +9,7 @@ from reportlab.platypus import (
 )
 
 from app.core.money import D, somme
+from app.services.soldes import totaux_lot
 from app.services.emailer import _date_fr
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 
@@ -16,7 +17,6 @@ from app.services.pdf_base import register_fonts, style, table_style, page_margi
 def story_compte_gestion(copro, exercice, db, el) -> None:
     """Ajoute le compte de gestion annuel (synthèse, dépenses, annexe, impayés) à un story existant."""
     from app.models.mouvement import Mouvement
-    from app.models.appel import AppelLot
     from app.models.lot import Lot
     from app.models.user import User
 
@@ -81,10 +81,8 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
              Paragraph("<b>Appels charges</b>", style("th")), Paragraph("<b>Appels fonds travaux</b>", style("th")),
              Paragraph("<b>Encaissé</b>", style("th")), Paragraph("<b>Solde</b>", style("th"))]]
     for lot in lots:
-        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = somme(m.montant for m in db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
+        t = totaux_lot(db, lot)
+        appels_c, appels_f, enc = t["appels_charges"], t["appels_fonds"], t["encaisse"]
         p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         solde = appels_c + appels_f - enc
         couleur = "#dc2626" if solde > D("0.005") else "#059669"
@@ -104,10 +102,8 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     # 4. Impayés
     impayes = []
     for lot in lots:
-        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = somme(m.montant for m in db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
+        t = totaux_lot(db, lot)
+        appels_c, appels_f, enc = t["appels_charges"], t["appels_fonds"], t["encaisse"]
         solde = appels_c + appels_f - enc
         if solde > D("0.005"):
             impayes.append((lot, solde))
