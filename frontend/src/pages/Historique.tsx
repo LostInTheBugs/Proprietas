@@ -549,6 +549,75 @@ function TableControle({ c }: { c: Controle }) {
   );
 }
 
+/** Soldes bancaires de l'état : modifiables même après validation (ils ne touchent pas aux soldes des lots). */
+function SoldesBanque({ etat, onMaj, onError }: {
+  etat: EtatRepriseDetail; onMaj: (d: EtatRepriseDetail) => void; onError: (e: string) => void;
+}) {
+  const [edition, setEdition] = useState(false);
+  const [syndicat, setSyndicat] = useState("");
+  const [fonds, setFonds] = useState("");
+  const [busy, setBusy] = useState(false);
+  const saisi = etat.solde_banque !== null || etat.solde_banque_fonds !== null;
+
+  function ouvrir() {
+    setSyndicat(etat.solde_banque !== null ? String(etat.solde_banque).replace(".", ",") : "");
+    setFonds(etat.solde_banque_fonds !== null ? String(etat.solde_banque_fonds).replace(".", ",") : "");
+    setEdition(true);
+  }
+
+  async function enregistrer() {
+    setBusy(true);
+    onError("");
+    try {
+      onMaj(await api.put<EtatRepriseDetail>(`/reprise/etats/${etat.id}/banque`, {
+        solde_banque: syndicat.trim() === "" ? null : montantSaisi(syndicat),
+        solde_banque_fonds: fonds.trim() === "" ? null : montantSaisi(fonds),
+      }));
+      setEdition(false);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+      {!edition ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-slate-600">
+            À la banque ce jour-là :{" "}
+            {!saisi && <span className="text-slate-400">soldes non saisis</span>}
+            {etat.solde_banque !== null && <>compte du syndicat <b>{fmtEUR(etat.solde_banque)}</b></>}
+            {etat.solde_banque !== null && etat.solde_banque_fonds !== null && " · "}
+            {etat.solde_banque_fonds !== null && <>fonds de travaux <b>{fmtEUR(etat.solde_banque_fonds)}</b></>}
+          </p>
+          <Button variant="secondary" className="px-2 py-1 text-xs" onClick={ouvrir}>
+            {saisi ? "Modifier les soldes bancaires" : "Saisir les soldes bancaires"}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input label="Solde du compte du syndicat" inputMode="decimal" placeholder="relevé bancaire"
+              value={syndicat} onChange={(e) => setSyndicat(e.target.value)} />
+            <Input label="Solde du compte du fonds de travaux" inputMode="decimal" placeholder="vide si même compte"
+              value={fonds} onChange={(e) => setFonds(e.target.value)} />
+          </div>
+          <p className="text-xs text-slate-500">
+            Modifiable même sur un état validé : seuls le contrôle bancaire et la trésorerie en dépendent (les soldes des
+            copropriétaires ne bougent pas). La modification est inscrite au journal d'audit.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setEdition(false)}>Annuler</Button>
+            <Button disabled={busy} onClick={enregistrer}>Enregistrer</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TableBanque({ c }: { c: ControleBanque }) {
   return (
     <div className={`rounded-lg border p-3 text-sm ${c.ok ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
@@ -639,14 +708,7 @@ function DetailEtat({ etat, lots, onMaj, onFermer, onError }: {
         </table>
       )}
 
-      {(etat.solde_banque !== null || etat.solde_banque_fonds !== null) && (
-        <p className="mb-3 text-sm text-slate-600">
-          À la banque ce jour-là :{" "}
-          {etat.solde_banque !== null && <>compte du syndicat <b>{fmtEUR(etat.solde_banque)}</b></>}
-          {etat.solde_banque !== null && etat.solde_banque_fonds !== null && " · "}
-          {etat.solde_banque_fonds !== null && <>fonds de travaux <b>{fmtEUR(etat.solde_banque_fonds)}</b></>}
-        </p>
-      )}
+      <SoldesBanque etat={etat} onMaj={onMaj} onError={onError} />
 
       {etat.controles_banque.length > 0 && (
         <div className="mb-4 space-y-2">

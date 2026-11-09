@@ -16,7 +16,7 @@ from app.models.reprise import EtatReprise, EtatRepriseLigne
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
 from app.schemas import (EtatRepriseDetail, EtatRepriseIn, EtatRepriseOut, ImportRepriseIn,
-                         ImportRepriseOut)
+                         ImportRepriseOut, SoldesBanqueIn)
 from app.services import reprise as svc
 from app.services import reprise_import
 
@@ -116,6 +116,28 @@ def modifier(etat_id: int, data: EtatRepriseIn, request: Request, db: Session = 
     _remplir(db, etat, data)
     audit.enregistrer(db, "reprise_etat_modifie", user=user, copro_id=copro.id, request=request,
                       detail=f"État au {data.date:%d/%m/%Y}, {len(data.lignes)} ligne(s)")
+    db.commit()
+    db.refresh(etat)
+    return _out(db, copro.id, etat, svc.base(db, copro.id), detail=True)
+
+
+def _eur(v) -> str:
+    return "non saisi" if v is None else f"{v:.2f} €".replace(".", ",")
+
+
+@router.put("/etats/{etat_id}/banque", response_model=EtatRepriseDetail)
+def modifier_banque(etat_id: int, data: SoldesBanqueIn, request: Request, db: Session = Depends(get_db),
+                    user: User = Depends(require_syndic)):
+    """Saisir ou corriger les soldes bancaires d'un état, même validé : ils ne changent ni les soldes
+    des copropriétaires ni les appels de reprise (seulement le contrôle bancaire et la trésorerie)."""
+    copro = get_or_create_copro(db, user)
+    etat = _etat(db, etat_id, copro)
+    avant = (etat.solde_banque, etat.solde_banque_fonds)
+    etat.solde_banque = data.solde_banque
+    etat.solde_banque_fonds = data.solde_banque_fonds
+    audit.enregistrer(db, "reprise_banque_modifiee", user=user, copro_id=copro.id, request=request,
+                      detail=(f"État au {etat.date:%d/%m/%Y} : syndicat {_eur(avant[0])} → {_eur(data.solde_banque)}, "
+                              f"fonds de travaux {_eur(avant[1])} → {_eur(data.solde_banque_fonds)}"))
     db.commit()
     db.refresh(etat)
     return _out(db, copro.id, etat, svc.base(db, copro.id), detail=True)

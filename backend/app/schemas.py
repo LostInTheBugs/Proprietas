@@ -526,6 +526,12 @@ class ControleOut(BaseModel):
     lignes: List[ControleLigne] = []
 
 
+class SoldesBanqueIn(BaseModel):
+    """Soldes bancaires d'un état, modifiables même validé (ils ne touchent pas aux soldes des lots)."""
+    solde_banque: Optional[Montant] = None
+    solde_banque_fonds: Optional[Montant] = None
+
+
 class ControleBanque(BaseModel):
     """Solde de départ + encaissements − dépenses saisis entre deux états, comparé à la banque."""
     compte: str                     # syndicat | fonds_travaux
