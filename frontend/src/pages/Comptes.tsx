@@ -582,6 +582,12 @@ function MouvementModal({ exId, lots, initial, onClose, onSaved, onError }: {
             <option value="autre">Autre</option>
           </Select>
         </div>
+        {type === "encaissement" && (
+          <p className="text-xs text-slate-500">
+            Catégorie « Fonds de travaux » ou « Travaux » : le versement ne paie que la part fonds de travaux des
+            appels, et un excédent reste une avance travaux. Toute autre catégorie paie d'abord les charges.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
           <Select label="Lot (paiement ou dépense d'un seul lot)" value={lotId} onChange={(e) => setLotId(e.target.value)}>
@@ -611,7 +617,7 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
   const [montant, setMontant] = useState("");
   const [libelle, setLibelle] = useState("Virement");
   const [rep, setRep] = useState<Repartition | null>(null);
-  const [parts, setParts] = useState<Record<number, string>>({});
+  const [parts, setParts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const montantNum = Number(montant.replace(",", "."));
@@ -622,15 +628,19 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
       api.get<Repartition>(`/paiements/repartition?proprietaire_id=${proprietaireId}&montant=${montantNum}`)
         .then((r) => {
           setRep(r);
-          setParts(Object.fromEntries(r.lots.map((l) => [l.lot_id, String(l.propose)])));
+          setParts(Object.fromEntries(r.lots.flatMap((l) => [
+            [`${l.lot_id}-c`, String(l.propose_charges)], [`${l.lot_id}-t`, String(l.propose_travaux)],
+          ])));
         })
         .catch((e) => onError(e instanceof Error ? e.message : "Erreur"));
     }, 300);
     return () => clearTimeout(t);
   }, [proprietaireId, montantNum]);
 
-  const valeur = (id: number) => Number((parts[id] ?? "0").replace(",", ".")) || 0;
-  const total = rep ? Math.round(rep.lots.reduce((s, l) => s + valeur(l.lot_id), 0) * 100) / 100 : 0;
+  const valeur = (cle: string) => Number((parts[cle] ?? "0").replace(",", ".")) || 0;
+  const total = rep
+    ? Math.round(rep.lots.reduce((s, l) => s + valeur(`${l.lot_id}-c`) + valeur(`${l.lot_id}-t`), 0) * 100) / 100
+    : 0;
   const juste = rep !== null && Math.abs(total - montantNum) < 0.005;
 
   async function save() {
@@ -639,7 +649,9 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
     try {
       await api.post("/paiements", {
         proprietaire_id: Number(proprietaireId), date, montant: montantNum, libelle,
-        repartition: rep.lots.map((l) => ({ lot_id: l.lot_id, montant: valeur(l.lot_id) })),
+        repartition: rep.lots.map((l) => ({
+          lot_id: l.lot_id, montant: valeur(`${l.lot_id}-c`), montant_travaux: valeur(`${l.lot_id}-t`),
+        })),
       });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); } finally { setBusy(false); }
@@ -667,30 +679,36 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
           <div className="rounded-lg border border-slate-200 p-3">
             <p className="mb-2 text-xs text-slate-500">
               Répartition proposée : les sommes dues sont soldées de la plus ancienne échéance à la plus récente
-              {rep.excedent > 0 ? `, et l'excédent de ${fmtEUR(rep.excedent)} est porté en avance sur le lot principal` : ""}.
-              Vous pouvez la corriger.
+              {rep.excedent > 0 ? `, et l'excédent de ${fmtEUR(rep.excedent)} est porté en avance sur charges du lot principal` : ""}.
+              Vous pouvez la corriger : la colonne « Travaux » est réservée au fonds de travaux (une avance travaux
+              ne paiera jamais des charges).
             </p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-slate-500">
-                  <th className="py-1">Lot</th><th className="py-1 text-right">Dû</th><th className="py-1 text-right">Part du paiement</th>
+                  <th className="py-1">Lot</th><th className="py-1 text-right">Dû charges</th>
+                  <th className="py-1 text-right">Dû travaux</th><th className="py-1 text-right">Charges</th>
+                  <th className="py-1 text-right">Travaux</th>
                 </tr>
               </thead>
               <tbody>
                 {rep.lots.map((l) => (
                   <tr key={l.lot_id}>
                     <td className="py-1">Lot {l.lot_numero}</td>
-                    <td className="py-1 text-right tabular-nums text-slate-600">{fmtEUR(l.du)}</td>
-                    <td className="py-1 text-right">
-                      <input inputMode="decimal"
-                        className="w-28 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
-                        value={parts[l.lot_id] ?? ""}
-                        onChange={(e) => setParts((p) => ({ ...p, [l.lot_id]: e.target.value }))} />
-                    </td>
+                    <td className="py-1 text-right tabular-nums text-slate-600">{fmtEUR(l.du_charges)}</td>
+                    <td className="py-1 text-right tabular-nums text-slate-600">{fmtEUR(l.du_travaux)}</td>
+                    {(["c", "t"] as const).map((n) => (
+                      <td key={n} className="py-1 pl-2 text-right">
+                        <input inputMode="decimal"
+                          className="w-24 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
+                          value={parts[`${l.lot_id}-${n}`] ?? ""}
+                          onChange={(e) => setParts((p) => ({ ...p, [`${l.lot_id}-${n}`]: e.target.value }))} />
+                      </td>
+                    ))}
                   </tr>
                 ))}
                 <tr>
-                  <td className="py-1 font-semibold" colSpan={2}>Total</td>
+                  <td className="py-1 font-semibold" colSpan={4}>Total</td>
                   <td className={`py-1 text-right font-semibold tabular-nums ${juste ? "text-slate-800" : "text-red-700"}`}>
                     {fmtEUR(total)}
                   </td>
@@ -702,7 +720,10 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
             )}
           </div>
         )}
-        <p className="text-xs text-slate-500">Un encaissement est enregistré pour chaque lot, dans l'exercice de l'année de la date.</p>
+        <p className="text-xs text-slate-500">
+          Un encaissement est enregistré par lot et par nature (charges, fonds de travaux), dans l'exercice de
+          l'année de la date.
+        </p>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save} disabled={!juste || busy}>Enregistrer le paiement</Button>

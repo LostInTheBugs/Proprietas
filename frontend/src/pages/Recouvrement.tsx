@@ -443,6 +443,13 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
               sub={d.taux_legal > 0 ? `taux ${String(d.taux_legal).replace(".", ",")} %` : "taux non renseigné"}
             />
           </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Chiffre label="Dû — charges" value={fmtEUR(d.du_charges)} />
+            <Chiffre label="Dû — fonds de travaux" value={fmtEUR(d.du_travaux)} />
+            <Chiffre label="Avance sur charges" value={fmtEUR(d.avance_charges)} />
+            <Chiffre label="Avance travaux" value={fmtEUR(d.avance_travaux)}
+              sub={d.avance_travaux > 0 ? "réservée au fonds de travaux" : undefined} />
+          </div>
 
           <section>
             <p className="mb-1.5 font-medium text-slate-700">Décompte</p>
@@ -454,6 +461,8 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                     <th className="px-2 py-1.5 font-medium">Libellé</th>
                     <th className="px-2 py-1.5 font-medium">Échéance</th>
                     <th className="px-2 py-1.5 text-right font-medium">Montant</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Reste charges</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Reste travaux</th>
                     <th className="px-2 py-1.5 text-right font-medium">Restant dû</th>
                   </tr>
                 </thead>
@@ -466,6 +475,8 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
                       </td>
                       <td className="px-2 py-1.5">{l.echeance ? fmtDate(l.echeance) : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{fmtEUR(l.montant)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtEUR(l.restant_du_charges ?? 0)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtEUR(l.restant_du_fonds ?? 0)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums font-medium">{fmtEUR(l.restant_du)}</td>
                     </tr>
                   ))}
