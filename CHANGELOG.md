@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.007 — 2026-11-09
+
+- Avances sur charges et sur travaux : un encaissement de catégorie « Fonds de travaux » (ou « Travaux ») ne paie que la part fonds de travaux des appels, et son excédent reste une avance travaux, jamais utilisée pour des charges. Les autres encaissements paient d'abord les charges. Le dossier de recouvrement affiche le dû et l'avance pour chaque nature. Dans « Paiement copropriétaire », chaque lot reçoit une part charges et une part travaux. Rien ne change pour les paiements déjà saisis en « Charges ».
+
 ## 2026.11.006 — 2026-11-09
 
 - Comptes : bouton « Paiement copropriétaire » pour un virement qui couvre tous les lots d'un copropriétaire. L'application propose la répartition (les sommes dues les plus anciennes d'abord, l'excédent en avance sur le lot principal), le syndic peut la corriger, puis un encaissement est enregistré pour chaque lot. Chaque paiement est inscrit au journal d'audit.
