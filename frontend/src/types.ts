@@ -550,3 +550,11 @@ export interface EtatRepriseDetail extends EtatReprise {
   lignes: EtatRepriseLigne[];
   controles: Controle[];
 }
+
+export interface ImportReprise {
+  simulation: boolean;
+  type: "etat" | "appels" | "paiements";
+  resume: { lignes: number; total: number; appels?: number; paiements?: number; couverts_par_la_base?: number };
+  erreurs: { ligne: number; message: string }[];
+  etat_id: number | null;
+}
