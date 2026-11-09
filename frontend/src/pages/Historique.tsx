@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { Controle, EtatReprise, EtatRepriseDetail, Lot } from "../types";
+import type { Controle, EtatReprise, EtatRepriseDetail, ImportReprise, Lot } from "../types";
 import { fmtDate, fmtEUR } from "../types";
-import { Badge, Button, Card, Empty, Input } from "../components/ui";
+import { Badge, Button, Card, Empty, Input, Select } from "../components/ui";
 
 /**
  * Reprise de l'historique (tâche 32) : ce que chaque copropriétaire devait au 31 décembre d'une
@@ -184,7 +184,154 @@ export default function Historique() {
           )}
         </Card>
       )}
+
+      {!creation && !ouvert && (
+        <ImportCsv
+          anneeDefaut={base ? Number(base.date.slice(0, 4)) - 1 : new Date().getFullYear() - 1}
+          onImporte={(etatId) => { charger(); if (etatId) ouvrir(etatId); }}
+          onError={setError}
+        />
+      )}
     </div>
+  );
+}
+
+const FORMATS: Record<ImportReprise["type"], { label: string; entete: string; exemple: string; aide: string }> = {
+  etat: {
+    label: "État au 31 décembre (brouillon)",
+    entete: "lot;exercice;charges;fonds_travaux",
+    exemple: "1;2024;120,50;15\n3;2023;-30;0",
+    aide: "Une ligne par lot et par exercice d'origine : le restant dû (négatif = crédit). Crée un brouillon, à vérifier puis valider.",
+  },
+  appels: {
+    label: "Appels de fonds",
+    entete: "date;lot;libelle;charges;fonds_travaux",
+    exemple: "01/03/2025;1;Provisions T1;450,00;22,50\n01/03/2025;2;Provisions T1;350,00;17,50",
+    aide: "Une ligne par lot ; les lignes de même date et même libellé forment un seul appel.",
+  },
+  paiements: {
+    label: "Paiements (encaissements)",
+    entete: "date;lot;montant;libelle",
+    exemple: "10/03/2025;1;472,50;Virement\n12/03/2025;2;367,50;",
+    aide: "Une ligne par paiement reçu ; le libellé est facultatif.",
+  },
+};
+
+/** Lit le fichier en UTF-8, ou en Windows-1252 (export Excel) si l'UTF-8 est invalide. */
+async function lireFichier(f: File): Promise<string> {
+  const octets = await f.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(octets);
+  } catch {
+    return new TextDecoder("windows-1252").decode(octets);
+  }
+}
+
+function ImportCsv({ anneeDefaut, onImporte, onError }: {
+  anneeDefaut: number;
+  onImporte: (etatId: number | null) => void;
+  onError: (e: string) => void;
+}) {
+  const [type, setType] = useState<ImportReprise["type"]>("etat");
+  const [annee, setAnnee] = useState(String(anneeDefaut));
+  const [fichier, setFichier] = useState<{ nom: string; contenu: string } | null>(null);
+  const [verif, setVerif] = useState<ImportReprise | null>(null);
+  const [fait, setFait] = useState("");
+  const [busy, setBusy] = useState(false);
+  const format = FORMATS[type];
+
+  function corps(simuler: boolean) {
+    return { type, contenu: fichier?.contenu ?? "", simuler, ...(type === "etat" ? { date: `${annee}-12-31` } : {}) };
+  }
+
+  async function envoyer(simuler: boolean) {
+    setBusy(true);
+    onError("");
+    setFait("");
+    try {
+      const r = await api.post<ImportReprise>("/reprise/import", corps(simuler));
+      if (simuler) {
+        setVerif(r);
+      } else {
+        setVerif(null);
+        setFichier(null);
+        setFait(`Import terminé : ${r.resume.lignes} ligne(s).`);
+        onImporte(r.etat_id);
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const r = verif?.resume;
+  return (
+    <Card title="Importer un fichier CSV">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Select label="Contenu du fichier" value={type}
+          onChange={(e) => { setType(e.target.value as ImportReprise["type"]); setVerif(null); }}>
+          {(Object.keys(FORMATS) as ImportReprise["type"][]).map((t) => (
+            <option key={t} value={t}>{FORMATS[t].label}</option>
+          ))}
+        </Select>
+        {type === "etat" && (
+          <Input label="État au 31 décembre de l'année" type="number" min={1900} value={annee}
+            onChange={(e) => { setAnnee(e.target.value); setVerif(null); }} />
+        )}
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-slate-600">Fichier (.csv)</span>
+          <input type="file" accept=".csv,text/csv,text/plain" className="block w-full text-sm text-slate-600"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              setVerif(null);
+              setFait("");
+              setFichier(f ? { nom: f.name, contenu: await lireFichier(f) } : null);
+            }} />
+        </label>
+      </div>
+      <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+        <p className="mb-1">{format.aide}</p>
+        <p>
+          Première ligne : <code className="font-mono">{format.entete}</code>. Séparateur « ; » ou « , », montants
+          « 1 234,50 », dates JJ/MM/AAAA, lot = son numéro.
+        </p>
+        <pre className="mt-1 font-mono text-slate-500">{format.entete + "\n" + format.exemple}</pre>
+      </div>
+
+      {verif && r && (
+        <div className="mt-3 space-y-2 text-sm">
+          {verif.erreurs.length === 0 ? (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
+              {r.lignes} ligne(s) valide(s)
+              {r.appels !== undefined && `, ${r.appels} appel(s)`}
+              {r.paiements !== undefined && `, ${r.paiements} paiement(s)`}
+              {` pour ${fmtEUR(r.total)}.`}
+              {r.couverts_par_la_base ? ` ${r.couverts_par_la_base} opération(s) datée(s) avant la base : sans effet sur les soldes, elles servent à remonter d'une année.` : ""}
+            </p>
+          ) : (
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-red-800">
+              <p className="mb-1 font-medium">
+                {verif.erreurs.length} erreur(s) : rien ne sera importé tant qu'elles ne sont pas corrigées.
+              </p>
+              <ul className="list-disc pl-5">
+                {verif.erreurs.slice(0, 50).map((e, i) => (
+                  <li key={i}>Ligne {e.ligne} : {e.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+      {fait && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{fait}</p>}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button variant="secondary" disabled={!fichier || busy} onClick={() => envoyer(true)}>
+          Vérifier{fichier ? ` « ${fichier.nom} »` : ""}
+        </Button>
+        <Button disabled={!verif || verif.erreurs.length > 0 || busy} onClick={() => envoyer(false)}>Importer</Button>
+      </div>
+    </Card>
   );
 }
 
