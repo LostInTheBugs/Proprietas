@@ -5,6 +5,7 @@ import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation
   Document as DocumentFichier } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
+import { TableMouvements } from "../components/TableMouvements";
 
 export default function Comptes() {
   const { user } = useUser();
@@ -275,75 +276,10 @@ export default function Comptes() {
                 </div>
               );
             })()}
-            {mouvements.length === 0 ? (
-              <Empty text="Aucun mouvement. Enregistrez les virements reçus des copropriétaires et les factures payées." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 font-medium">Libellé</th>
-                      <th className="pb-2 font-medium">Lot</th>
-                      <th className="pb-2 font-medium">Catégorie</th>
-                      <th className="pb-2 text-right font-medium">Montant</th>
-                      <th className="pb-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mouvements.map((m) => {
-                      const lot = lots.find((l) => l.id === m.lot_id);
-                      return (
-                        <tr key={m.id} className="border-b border-slate-50 last:border-0">
-                          <td className="py-2 whitespace-nowrap text-slate-600">
-                            {fmtDate(m.date)}{" "}
-                            {Number(m.date.slice(0, 4)) !== exercices.find((e) => e.id === exId)?.annee && (
-                              <Badge color="amber">autre année</Badge>
-                            )}
-                          </td>
-                          <td className="py-2 text-slate-700">
-                            {m.libelle}
-                            {(m.contrat_id || m.document_id) && (
-                              <span className="block text-xs text-slate-500">
-                                {m.contrat_id && <>Contrat : {contrats.find((c) => c.id === m.contrat_id)?.libelle ?? `#${m.contrat_id}`}</>}
-                                {m.contrat_id && m.document_id && " · "}
-                                {m.document_id && (
-                                  <a href={`/api/documents/${m.document_id}/download`} className="text-indigo-600 hover:underline">
-                                    📎 {documents.find((d) => d.id === m.document_id)?.libelle ?? "facture"}
-                                  </a>
-                                )}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2 text-slate-600">{lot ? `Lot ${lot.numero}` : "—"}</td>
-                          <td className="py-2"><Badge>{m.categorie}</Badge></td>
-                          <td className={`py-2 text-right font-semibold tabular-nums ${m.type === "encaissement" ? "text-emerald-600" : "text-slate-700"}`}>
-                            {m.type === "encaissement" ? "+" : "−"}{fmtEUR(m.montant)}
-                          </td>
-                          <td className="py-2.5 text-right">
-                            {isSyndic && (
-                              <span className="whitespace-nowrap">
-                                <Button variant="ghost" className="px-2 py-1 text-xs"
-                                  onClick={() => setMouvementEdite(m)}>
-                                  Modifier
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  className="px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                                  onClick={async () => { await api.del(`/mouvements/${m.id}`); refresh(); }}
-                                >
-                                  Suppr.
-                                </Button>
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <TableMouvements mouvements={mouvements} exercices={exercices} exId={exId} lots={lots} contrats={contrats}
+              documents={documents} isSyndic={isSyndic} onEdit={setMouvementEdite}
+              onDelete={async (m) => { await api.del(`/mouvements/${m.id}`); refresh(); }}
+              onChanged={refresh} onError={setError} />
           </Card>
         </>
       )}
