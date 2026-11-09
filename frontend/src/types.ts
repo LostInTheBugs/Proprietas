@@ -163,6 +163,7 @@ export interface Mouvement {
   lot_id: number | null;
   appel_id: number | null;
   piece_path: string;
+  exercice_id?: number;
 }
 
 export interface EtatDateLot {
