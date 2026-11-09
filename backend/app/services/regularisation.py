@@ -13,6 +13,8 @@ copropriétaire lors de l'approbation des comptes » (Cass. 3e civ., 14 avr. 201
   cotisations au fonds de travaux ne sont jamais régularisées (art. 14-2-1 : acquises au syndicat).
 - Écart = réel − provisions : complément (> 0) ou crédit (< 0), dans un appel « Régularisation
   des charges » rattaché à l'exercice approuvé. Le lot est celui du propriétaire ACTUEL.
+- Lots non séparables (lot principal + annexes) : une ligne et une part d'appel par ensemble, sur
+  le lot principal, pour l'écart cumulé de l'ensemble (le calcul par lot ne change pas).
 """
 from datetime import date
 from decimal import Decimal
@@ -24,6 +26,7 @@ from app.core.money import D, arrondi, somme
 from app.models.appel import AppelFonds, AppelLot
 from app.models.lot import Lot
 from app.models.mouvement import Mouvement
+from app.services import ensembles
 from app.services.country_rules import repartir_par_tantiemes
 
 CATEGORIES_HORS_CHARGES = ("fonds_travaux", "travaux")
@@ -56,11 +59,14 @@ def calcul(db: Session, ex) -> dict:
         if p.lot_id in provisions:
             provisions[p.lot_id] += D(p.montant_charges or 0)
 
+    # Lots non séparables : une ligne (et une part d'appel) par ensemble, au nom du lot principal.
     lignes = []
-    for lot in lots:
-        r, pr = arrondi(reel[lot.id]), arrondi(provisions[lot.id])
-        lignes.append({"lot_id": lot.id, "lot_numero": lot.numero, "provisions": pr,
-                       "charges_reelles": r, "ecart": arrondi(r - pr)})
+    for groupe in ensembles.ensembles(db, ex.copropriete_id, lots):
+        r = arrondi(somme(reel[l.id] for l in groupe))
+        pr = arrondi(somme(provisions[l.id] for l in groupe))
+        lignes.append({"lot_id": groupe[0].id, "lot_numero": groupe[0].numero,
+                       "libelle": ensembles.libelle(groupe), "annexes": [l.numero for l in groupe[1:]],
+                       "provisions": pr, "charges_reelles": r, "ecart": arrondi(r - pr)})
     existant = appel_existant(db, ex)
     return {
         "exercice_id": ex.id, "annee": ex.annee,

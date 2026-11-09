@@ -527,6 +527,8 @@ export interface NotificationsPV {
 export interface RegularisationLigne {
   lot_id: number;
   lot_numero: string;
+  libelle?: string;     // « Lot 1 (avec lot 12) » : lots non séparables regroupés
+  annexes?: string[];
   provisions: number;
   charges_reelles: number;
   ecart: number; // > 0 : complément dû ; < 0 : trop-perçu crédité
