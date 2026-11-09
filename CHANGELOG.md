@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.019 — 2026-11-09
+
+- Régularisation des charges : les lots non séparables (cave, garage rattachés) sont régularisés ensemble, sur une seule ligne et une seule part d'appel au nom du lot principal.
+
 ## 2026.11.018 — 2026-11-09
 
 - Historique : les soldes bancaires d'un état se saisissent ou se corrigent même après sa validation (ils ne changent pas les soldes des copropriétaires) ; la modification est inscrite au journal d'audit.
