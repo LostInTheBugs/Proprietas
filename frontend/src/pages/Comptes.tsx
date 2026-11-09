@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation } from "../types";
+import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation, Repartition } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -15,7 +15,7 @@ export default function Comptes() {
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
   const [recap, setRecap] = useState<Recap | null>(null);
-  const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement">(null);
+  const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement" | "paiement">(null);
   const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
   const [budgetEdite, setBudgetEdite] = useState<BudgetLine | null>(null);
   const [error, setError] = useState("");
@@ -111,6 +111,9 @@ export default function Comptes() {
               <Button onClick={() => setModal("appel")} disabled={!exId}>+ Appel de fonds</Button>
               <Button variant="secondary" onClick={() => setModal("mouvement")} disabled={!exId}>
                 + Mouvement
+              </Button>
+              <Button variant="secondary" onClick={() => setModal("paiement")} disabled={lots.length === 0}>
+                + Paiement copropriétaire
               </Button>
             </>
           )}
@@ -317,6 +320,10 @@ export default function Comptes() {
       )}
       {modal === "mouvement" && exId && (
         <MouvementModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+      )}
+      {modal === "paiement" && (
+        <PaiementModal lots={lots} onClose={() => setModal(null)}
+          onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {mouvementEdite && exId && (
         <MouvementModal exId={exId} lots={lots} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
@@ -585,6 +592,120 @@ function MouvementModal({ exId, lots, initial, onClose, onSaved, onError }: {
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Enregistrer</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Un virement d'un copropriétaire réparti entre tous ses lots (plus ancienne échéance d'abord). */
+function PaiementModal({ lots, onClose, onSaved, onError }: {
+  lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+}) {
+  const proprietaires = Array.from(
+    new Map(lots.filter((l) => l.proprietaire_id != null)
+      .map((l) => [l.proprietaire_id as number, l.proprietaire_nom || `Compte #${l.proprietaire_id}`])).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+  const [proprietaireId, setProprietaireId] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [montant, setMontant] = useState("");
+  const [libelle, setLibelle] = useState("Virement");
+  const [rep, setRep] = useState<Repartition | null>(null);
+  const [parts, setParts] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const montantNum = Number(montant.replace(",", "."));
+  useEffect(() => {
+    setRep(null);
+    if (!proprietaireId || !(montantNum > 0)) return;
+    const t = setTimeout(() => {
+      api.get<Repartition>(`/paiements/repartition?proprietaire_id=${proprietaireId}&montant=${montantNum}`)
+        .then((r) => {
+          setRep(r);
+          setParts(Object.fromEntries(r.lots.map((l) => [l.lot_id, String(l.propose)])));
+        })
+        .catch((e) => onError(e instanceof Error ? e.message : "Erreur"));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [proprietaireId, montantNum]);
+
+  const valeur = (id: number) => Number((parts[id] ?? "0").replace(",", ".")) || 0;
+  const total = rep ? Math.round(rep.lots.reduce((s, l) => s + valeur(l.lot_id), 0) * 100) / 100 : 0;
+  const juste = rep !== null && Math.abs(total - montantNum) < 0.005;
+
+  async function save() {
+    if (!rep) return;
+    setBusy(true);
+    try {
+      await api.post("/paiements", {
+        proprietaire_id: Number(proprietaireId), date, montant: montantNum, libelle,
+        repartition: rep.lots.map((l) => ({ lot_id: l.lot_id, montant: valeur(l.lot_id) })),
+      });
+      onSaved();
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); } finally { setBusy(false); }
+  }
+
+  return (
+    <Modal open title="Paiement d'un copropriétaire (tous ses lots)" onClose={onClose}>
+      <div className="space-y-3">
+        <Select label="Copropriétaire" value={proprietaireId} onChange={(e) => setProprietaireId(e.target.value)}>
+          <option value="">— Choisir —</option>
+          {proprietaires.map(([id, nom]) => (
+            <option key={id} value={id}>
+              {nom} (lots {lots.filter((l) => l.proprietaire_id === id).map((l) => l.numero).join(", ")})
+            </option>
+          ))}
+        </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Date de réception" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input label="Montant reçu (€)" inputMode="decimal" value={montant} placeholder="0,00"
+            onChange={(e) => setMontant(e.target.value)} />
+        </div>
+        <Input label="Libellé" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Virement" />
+
+        {rep && (
+          <div className="rounded-lg border border-slate-200 p-3">
+            <p className="mb-2 text-xs text-slate-500">
+              Répartition proposée : les sommes dues sont soldées de la plus ancienne échéance à la plus récente
+              {rep.excedent > 0 ? `, et l'excédent de ${fmtEUR(rep.excedent)} est porté en avance sur le lot principal` : ""}.
+              Vous pouvez la corriger.
+            </p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500">
+                  <th className="py-1">Lot</th><th className="py-1 text-right">Dû</th><th className="py-1 text-right">Part du paiement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rep.lots.map((l) => (
+                  <tr key={l.lot_id}>
+                    <td className="py-1">Lot {l.lot_numero}</td>
+                    <td className="py-1 text-right tabular-nums text-slate-600">{fmtEUR(l.du)}</td>
+                    <td className="py-1 text-right">
+                      <input inputMode="decimal"
+                        className="w-28 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
+                        value={parts[l.lot_id] ?? ""}
+                        onChange={(e) => setParts((p) => ({ ...p, [l.lot_id]: e.target.value }))} />
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="py-1 font-semibold" colSpan={2}>Total</td>
+                  <td className={`py-1 text-right font-semibold tabular-nums ${juste ? "text-slate-800" : "text-red-700"}`}>
+                    {fmtEUR(total)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            {!juste && (
+              <p className="mt-1 text-xs text-red-700">Le total des parts doit être égal au montant reçu ({fmtEUR(montantNum || 0)}).</p>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-slate-500">Un encaissement est enregistré pour chaque lot, dans l'exercice de l'année de la date.</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button onClick={save} disabled={!juste || busy}>Enregistrer le paiement</Button>
         </div>
       </div>
     </Modal>
