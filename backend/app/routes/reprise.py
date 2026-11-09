@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/reprise", tags=["reprise"])
 
 def _out(db: Session, copro_id: int, etat: EtatReprise, b, detail: bool = False):
     ctrls = svc.controles(db, copro_id, etat)
+    banque = svc.controles_banque(db, copro_id, etat)
     champs = dict(
         id=etat.id, date=etat.date, valide=bool(etat.valide), valide_le=etat.valide_le,
         role=svc.role(etat, b), commentaire=etat.commentaire or "",
@@ -32,6 +33,8 @@ def _out(db: Session, copro_id: int, etat: EtatReprise, b, detail: bool = False)
         total_fonds_travaux=arrondi(somme(D(l.montant_fonds_travaux or 0) for l in etat.lignes)),
         nb_lignes=len(etat.lignes),
         controle_ok=all(c["ok"] for c in ctrls) if ctrls else None,
+        solde_banque=etat.solde_banque, solde_banque_fonds=etat.solde_banque_fonds,
+        banque_ok=all(c["ok"] for c in banque) if banque else None,
     )
     if not detail:
         return EtatRepriseOut(**champs)
@@ -39,7 +42,7 @@ def _out(db: Session, copro_id: int, etat: EtatReprise, b, detail: bool = False)
                    proprietaire_id=l.proprietaire_id, exercice_origine=l.exercice_origine,
                    montant_charges=l.montant_charges, montant_fonds_travaux=l.montant_fonds_travaux)
               for l in etat.lignes]
-    return EtatRepriseDetail(**champs, lignes=lignes, controles=ctrls)
+    return EtatRepriseDetail(**champs, lignes=lignes, controles=ctrls, controles_banque=banque)
 
 
 def _etat(db: Session, etat_id: int, copro) -> EtatReprise:
@@ -47,6 +50,8 @@ def _etat(db: Session, etat_id: int, copro) -> EtatReprise:
 
 
 def _remplir(db: Session, etat: EtatReprise, data: EtatRepriseIn) -> None:
+    etat.solde_banque = data.solde_banque
+    etat.solde_banque_fonds = data.solde_banque_fonds
     proprietaires = {l.id: l.proprietaire_id for l in db.query(Lot).filter(Lot.copropriete_id == etat.copropriete_id)}
     etat.lignes = [EtatRepriseLigne(
         lot_id=l.lot_id, exercice_origine=l.exercice_origine,

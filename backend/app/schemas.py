@@ -492,6 +492,9 @@ class EtatRepriseIn(BaseModel):
     date: date
     commentaire: str = ""
     lignes: List[EtatRepriseLigneIn] = []
+    # Soldes bancaires à cette date (facultatifs) : compte du syndicat, compte du fonds de travaux.
+    solde_banque: Optional[Montant] = None
+    solde_banque_fonds: Optional[Montant] = None
 
 
 class EtatRepriseLigneOut(BaseModel):
@@ -523,6 +526,20 @@ class ControleOut(BaseModel):
     lignes: List[ControleLigne] = []
 
 
+class ControleBanque(BaseModel):
+    """Solde de départ + encaissements − dépenses saisis entre deux états, comparé à la banque."""
+    compte: str                     # syndicat | fonds_travaux
+    depart: date
+    date: date
+    solde_depart: float
+    encaissements: float
+    depenses: float
+    calcule: float
+    saisi: float
+    ecart: float                    # saisi − calculé (négatif : opération de sortie oubliée ?)
+    ok: bool
+
+
 class EtatRepriseOut(BaseModel):
     id: int
     date: date
@@ -534,11 +551,15 @@ class EtatRepriseOut(BaseModel):
     total_fonds_travaux: float = 0.0
     nb_lignes: int = 0
     controle_ok: Optional[bool] = None   # None : aucun contrôle (base seule, ou premier état)
+    solde_banque: Optional[float] = None
+    solde_banque_fonds: Optional[float] = None
+    banque_ok: Optional[bool] = None     # écart bancaire : avertissement, ne bloque pas la validation
 
 
 class EtatRepriseDetail(EtatRepriseOut):
     lignes: List[EtatRepriseLigneOut] = []
     controles: List[ControleOut] = []
+    controles_banque: List[ControleBanque] = []
 
 
 _Date = date   # le champ « date » ci-dessous masquerait le type dans la classe
@@ -702,6 +723,9 @@ class RecapOut(BaseModel):
     encaisse: float = 0.0
     depense: float = 0.0
     solde_caisse: float = 0.0
+    # Trésorerie actuelle (solde de la base de l'historique + mouvements depuis), par compte.
+    tresorerie_syndicat: float = 0.0
+    tresorerie_fonds_travaux: float = 0.0
     fonds_travaux_encaisse: float = 0.0
     appels_en_cours: int = 0
     lots: List[EtatDateLot] = []

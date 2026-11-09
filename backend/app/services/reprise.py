@@ -100,19 +100,80 @@ def controle(db: Session, copro_id: int, depart: EtatReprise, cible: EtatReprise
             "ecart_total": arrondi(somme(l["ecart"] for l in lignes)), "lignes": lignes}
 
 
-def controles(db: Session, copro_id: int, etat: EtatReprise) -> list[dict]:
-    """Contrôles qui conditionnent (ou ont conditionné) la validation de `etat`."""
+def paires(db: Session, copro_id: int, etat: EtatReprise) -> list[tuple[EtatReprise, EtatReprise]]:
+    """(départ, arrivée) des contrôles qui concernent `etat`."""
     b, etats = roles(db, copro_id)
     if b is not None and etat.date > b.date:
-        return [controle(db, copro_id, b, etat)]
+        return [(b, etat)]
     if b is not None and etat.id == b.id:
         depart = etat
     elif b is None or etat.date < b.date:
         depart = etat            # candidat à devenir la base
     else:
         return []
-    return [controle(db, copro_id, depart, e) for e in etats
-            if e.valide and e.date > depart.date and e.id != etat.id]
+    return [(depart, e) for e in etats if e.valide and e.date > depart.date and e.id != etat.id]
+
+
+def controles(db: Session, copro_id: int, etat: EtatReprise) -> list[dict]:
+    """Contrôles qui conditionnent (ou ont conditionné) la validation de `etat`."""
+    return [controle(db, copro_id, d, c) for d, c in paires(db, copro_id, etat)]
+
+
+# ---------------------------------------------------------------- banque
+COMPTES = (("syndicat", "solde_banque"), ("fonds_travaux", "solde_banque_fonds"))
+
+
+def _compte(m: Mouvement) -> str:
+    """Le fonds de travaux a son compte dédié ; tout le reste passe par le compte du syndicat."""
+    return "fonds_travaux" if m.categorie == "fonds_travaux" else "syndicat"
+
+
+def _flux(db: Session, copro_id: int, apres: date | None, jusqu_a: date | None) -> dict:
+    """Encaissements et dépenses par compte, datés après `apres` (exclu) et jusqu'à `jusqu_a` (inclus)."""
+    q = db.query(Mouvement).filter(Mouvement.copropriete_id == copro_id)
+    if apres is not None:
+        q = q.filter(Mouvement.date > apres)
+    if jusqu_a is not None:
+        q = q.filter(Mouvement.date <= jusqu_a)
+    flux = {c: {"encaissement": D(0), "depense": D(0)} for c, _ in COMPTES}
+    for m in q:
+        if m.type in ("encaissement", "depense"):
+            flux[_compte(m)][m.type] += D(m.montant or 0)
+    return flux
+
+
+def controle_banque(db: Session, copro_id: int, depart: EtatReprise, cible: EtatReprise) -> list[dict]:
+    """Pour chaque compte dont le solde est saisi aux deux dates : départ + encaissements − dépenses
+    de la période, comparé au solde saisi. Un écart avertit, il ne bloque pas la validation."""
+    flux = _flux(db, copro_id, depart.date, cible.date)
+    out = []
+    for compte, champ in COMPTES:
+        d, saisi = getattr(depart, champ), getattr(cible, champ)
+        if d is None or saisi is None:
+            continue
+        f = flux[compte]
+        calcule = arrondi(D(d) + f["encaissement"] - f["depense"])
+        ecart = arrondi(D(saisi) - calcule)
+        out.append({"compte": compte, "depart": depart.date, "date": cible.date, "solde_depart": arrondi(D(d)),
+                    "encaissements": arrondi(f["encaissement"]), "depenses": arrondi(f["depense"]),
+                    "calcule": calcule, "saisi": arrondi(D(saisi)), "ecart": ecart, "ok": ecart == 0})
+    return out
+
+
+def controles_banque(db: Session, copro_id: int, etat: EtatReprise) -> list[dict]:
+    return [c for d, e in paires(db, copro_id, etat) for c in controle_banque(db, copro_id, d, e)]
+
+
+def tresorerie(db: Session, copro_id: int) -> dict:
+    """Solde actuel de chaque compte : solde saisi dans la base + mouvements datés après elle ; sans
+    solde de base pour ce compte, somme de tous ses mouvements (comme avant la reprise)."""
+    b = base(db, copro_id)
+    out = {}
+    for compte, champ in COMPTES:
+        depart = getattr(b, champ) if b is not None else None
+        f = _flux(db, copro_id, b.date if depart is not None else None, None)[compte]
+        out[compte] = arrondi(D(depart or 0) + f["encaissement"] - f["depense"])
+    return out
 
 
 def _message_ecarts(ctrls: list[dict]) -> str:
