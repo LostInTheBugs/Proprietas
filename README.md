@@ -307,6 +307,27 @@ La commande ne copie que les fichiers référencés en base, ne supprime jamais 
 (gardez le volume `uploads` jusqu'à vérification) et sort en erreur si une copie échoue.
 Sens inverse : `--sens s3-vers-local`.
 
+### Sauvegarde d'une copropriété (changement de serveur, panne)
+
+**Réglages → Sauvegarde et stockage** (syndic) : archive `.zip` de la copropriété active (lots, comptes,
+exercices, appels, mouvements, AG, recouvrement, historique, contrats, fiches des documents). Options
+choisies à chaque sauvegarde :
+
+- **mot de passe** (facultatif, 10 caractères minimum) : archive chiffrée AES-256 (WinZip AES), qui s'ouvre
+  aussi avec 7-Zip ou WinRAR ;
+- **données personnelles** : non par défaut. Sans elles, les comptes deviennent « Compte 1 », « Compte 2 »…
+  (adresse `@anonyme.invalid`, ni mot de passe, ni téléphone, ni adresse) et les champs qui décrivent des
+  personnes sont vidés (notes des lots, messages des relances et invitations, libellé et référence des
+  actes de recouvrement, destinataires des PV, identifiant SMTP). Les textes libres (libellés des mouvements,
+  notes des AG, contrats, travaux) sont gardés tels quels ;
+- **fichiers des documents** : non par défaut.
+
+Données personnelles et fichiers ne s'exportent **qu'avec un mot de passe**. Le mot de passe SMTP n'est
+jamais exporté. L'import crée toujours une **nouvelle** copropriété (`COPRO_IMPORT_MAX_MB`, 500 Mo par
+défaut). Après l'import d'une sauvegarde sans données personnelles, **Réglages → Utilisateurs → Comptes à
+compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
+sur le serveur y rattache le compte anonyme.
+
 ### Migrations Alembic
 
 Le schéma est géré par **Alembic** (`backend/alembic/`, URL lue depuis `COPRO_DATABASE_URL` —

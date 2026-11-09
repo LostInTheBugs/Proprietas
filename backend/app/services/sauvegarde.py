@@ -10,6 +10,16 @@ Sont exclus : le journal d'audit (propre à l'instance), l'ancienne table `perso
 SMTP (chiffré avec la clé du serveur : à ressaisir), et pour les comptes ce qui est propre à
 l'instance (administrateur de l'instance, dernières connexions, version des jetons).
 
+Options d'export (choisies à chaque sauvegarde) :
+- mot de passe : archive ZIP chiffrée en AES-256 (WinZip AES), lisible aussi avec 7-Zip / WinRAR ;
+- données personnelles : NON par défaut. Sans elles, les comptes deviennent « Compte 1 », « Compte 2 »…
+  (e-mail @anonyme.invalid, ni mot de passe, ni téléphone, ni adresse, ni 2FA), et les champs qui
+  décrivent des personnes sont vidés (notes des lots, messages des relances et invitations, libellé et
+  référence des actes de recouvrement, nom des destinataires des PV, identifiant SMTP) ;
+- fichiers des documents : NON par défaut (ils contiennent souvent des noms et adresses) ; les fiches
+  des documents restent, sans fichier.
+Données personnelles ou fichiers exigent un mot de passe (10 caractères minimum).
+
 Import : crée TOUJOURS une nouvelle copropriété (jamais d'écrasement), avec de nouveaux
 identifiants ; chaque référence est renumérotée. Un compte dont l'e-mail existe déjà sur
 l'instance est réutilisé tel quel (il est seulement rattaché) ; sinon il est créé avec son mot de
@@ -30,6 +40,7 @@ import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 
+import pyzipper
 from fastapi import HTTPException
 from sqlalchemy import Boolean, Date, DateTime, Numeric, select
 from sqlalchemy.orm import Session
@@ -71,6 +82,38 @@ EXCLUES = {
 }
 TABLES_IGNOREES = {"personnes"}   # clés étrangères vers ces tables : mises à NULL à l'import
 
+MDP_MIN = 10
+DOMAINE_ANONYME = "anonyme.invalid"   # comptes « Compte N » d'une sauvegarde sans données personnelles
+# Sans données personnelles : champs vidés (ils décrivent des personnes).
+VIDES_SANS_DONNEES_PERSONNELLES = {
+    "coproprietes": ("smtp_user", "email_expediteur"),
+    "lots": ("notes",),
+    "relances": ("message",),
+    "invitations": ("message",),
+    "actes_recouvrement": ("libelle", "reference"),
+    "notifications_pv": ("reference",),
+}
+
+
+def est_a_completer(email: str | None) -> bool:
+    """Compte issu d'une sauvegarde sans données personnelles, pas encore complété."""
+    return (email or "").lower().endswith("@" + DOMAINE_ANONYME)
+
+
+def _anonymiser(donnees: dict) -> None:
+    noms = {}
+    for n, u in enumerate(sorted(donnees["users"], key=lambda u: u["id"]), 1):
+        noms[u["id"]] = f"Compte {n}"
+        u.update(email=f"compte-{n}@{DOMAINE_ANONYME}", prenom="", nom=f"Compte {n}", adresse="",
+                 telephone="", password_hash="", totp_secret="", totp_enabled=False, recovery_hashes="[]")
+    for table, champs in VIDES_SANS_DONNEES_PERSONNELLES.items():
+        for ligne in donnees.get(table) or []:
+            for champ in champs:
+                if champ in ligne:
+                    ligne[champ] = ""
+    for ligne in donnees.get("notifications_pv") or []:
+        ligne["nom"] = noms.get(ligne.get("user_id"), "")
+
 
 def _table(nom):
     return Base.metadata.tables[nom]
@@ -105,8 +148,14 @@ def _cles(table) -> dict[str, str]:
 
 
 # ---------------------------------------------------------------- export
-def exporter(db: Session, copro, stockage, sortie) -> dict:
+def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
+             donnees_personnelles: bool = False, fichiers: bool = False) -> dict:
     """Écrit l'archive dans `sortie` (fichier ouvert en écriture binaire) ; renvoie le manifeste."""
+    if (donnees_personnelles or fichiers) and not mot_de_passe:
+        raise HTTPException(422, "Les données personnelles et les fichiers des documents ne s'exportent "
+                                 "qu'avec un mot de passe.")
+    if mot_de_passe and len(mot_de_passe) < MDP_MIN:
+        raise HTTPException(422, f"Mot de passe trop court ({MDP_MIN} caractères minimum).")
     cid = copro.id
     lignes: dict[str, list[dict]] = {}
     ids: dict[str, set] = {}
@@ -137,14 +186,24 @@ def exporter(db: Session, copro, stockage, sortie) -> dict:
     for nom in TABLES:
         exclues = EXCLUES.get(nom, set())
         donnees[nom] = [{k: _vers_json(v) for k, v in r.items() if k not in exclues} for r in lignes[nom]]
+    if not donnees_personnelles:
+        _anonymiser(donnees)
+    if not fichiers:
+        for d in donnees["documents"]:
+            d["fichier"] = ""
 
     manifest = {
         "format": FORMAT, "version_format": VERSION_FORMAT, "version_application": VERSION,
         "exporte_le": datetime.now().isoformat(timespec="seconds"),
         "copropriete": copro.nom, "nb_comptes": len(donnees["users"]),
         "nb_documents": len(donnees["documents"]),
+        "donnees_personnelles": donnees_personnelles, "fichiers_documents": fichiers,
+        "protegee": bool(mot_de_passe),
     }
-    with zipfile.ZipFile(sortie, "w", zipfile.ZIP_DEFLATED) as z:
+    options = {"encryption": pyzipper.WZ_AES} if mot_de_passe else {}
+    with pyzipper.AESZipFile(sortie, "w", compression=pyzipper.ZIP_DEFLATED, **options) as z:
+        if mot_de_passe:
+            z.setpassword(mot_de_passe.encode("utf-8"))
         z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1))
         z.writestr("donnees.json", json.dumps(donnees, ensure_ascii=False))
         for d in donnees["documents"]:
@@ -161,12 +220,19 @@ def exporter(db: Session, copro, stockage, sortie) -> dict:
 
 
 # ---------------------------------------------------------------- import
-def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage) -> dict:
+def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_de_passe: str = "") -> dict:
     try:
-        z = zipfile.ZipFile(contenu)
+        z = pyzipper.AESZipFile(contenu)
+        protegee = any(i.flag_bits & 0x1 for i in z.infolist())
+        if protegee and not mot_de_passe:
+            raise HTTPException(422, "Cette sauvegarde est protégée par un mot de passe : saisissez-le.")
+        if mot_de_passe:
+            z.setpassword(mot_de_passe.encode("utf-8"))
         manifest = json.loads(z.read("manifest.json"))
         donnees = json.loads(z.read("donnees.json"))
-    except (zipfile.BadZipFile, KeyError, ValueError):
+    except RuntimeError:             # pyzipper : mot de passe incorrect
+        raise HTTPException(422, "Mot de passe incorrect.")
+    except (zipfile.BadZipFile, pyzipper.BadZipFile, KeyError, ValueError):
         raise HTTPException(422, "Ce fichier n'est pas une sauvegarde Proprietas (archive .zip attendue).")
     if manifest.get("format") != FORMAT:
         raise HTTPException(422, "Ce fichier n'est pas une sauvegarde de copropriété Proprietas.")
@@ -187,7 +253,10 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage) -> di
     remap: dict[str, dict[int, int]] = {nom: {} for nom in TABLES}
     differes: list[tuple] = []          # références vers la même table : complétées après coup
     fichiers_ecrits: list[str] = []
-    stats = {"comptes_crees": 0, "comptes_existants": 0, "documents": 0, "deuxfa_desactivee": 0}
+    stats = {"comptes_crees": 0, "comptes_existants": 0, "documents": 0, "deuxfa_desactivee": 0,
+             "comptes_a_completer": 0}
+    # Comptes anonymes : adresse propre à cet import (deux imports de la même sauvegarde ne se mélangent pas).
+    jeton = uuid.uuid4().hex[:8]
     colonnes_ignorees = set()
     tu = _table("users")
     try:
@@ -196,6 +265,10 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage) -> di
             cles = _cles(t)
             for ligne in donnees.get(nom) or []:
                 ancien_id = ligne.get("id")
+                if nom == "users" and est_a_completer(ligne.get("email")):
+                    local = ligne["email"].split("@")[0]
+                    ligne = {**ligne, "email": f"{local}.{jeton}@{DOMAINE_ANONYME}"}
+                    stats["comptes_a_completer"] += 1
                 if nom == "users":
                     existant = db.execute(select(tu.c.id).where(tu.c.email == ligne.get("email"))).first()
                     if existant:
@@ -287,3 +360,23 @@ def _copier_fichier(z: zipfile.ZipFile, ancien: str, stockage, ecrits: list[str]
         raise HTTPException(503, f"Stockage des documents indisponible : {e}") from e
     ecrits.append(nouveau)
     return nouveau
+
+
+# ---------------------------------------------------------------- comptes à compléter
+def fusionner_compte(db: Session, ancien_id: int, nouveau_id: int, copro_id: int) -> None:
+    """Le compte anonyme `ancien_id` est en fait le compte existant `nouveau_id` : toutes ses
+    références passent au compte existant (lots, PV, actes…), puis le compte anonyme est supprimé."""
+    tuc = _table("user_coproprietes")
+    for t in Base.metadata.sorted_tables:
+        if t.name in ("users", "user_coproprietes"):
+            continue
+        for fk in t.foreign_keys:
+            if fk.column.table.name == "users":
+                col = fk.parent.name
+                db.execute(t.update().where(t.c[col] == ancien_id).values(**{col: nouveau_id}))
+    deja = db.execute(select(tuc.c.id).where(tuc.c.user_id == nouveau_id, tuc.c.copropriete_id == copro_id)).first()
+    if not deja:
+        db.execute(tuc.insert().values(user_id=nouveau_id, copropriete_id=copro_id, principale=False))
+    db.execute(tuc.delete().where(tuc.c.user_id == ancien_id))
+    tu = _table("users")
+    db.execute(tu.delete().where(tu.c.id == ancien_id))

@@ -620,6 +620,52 @@ class ReclasserIn(BaseModel):
     simuler: bool = True
 
 
+class SauvegardeExportIn(BaseModel):
+    """Options de la sauvegarde. Données personnelles et fichiers : seulement avec un mot de passe."""
+    mot_de_passe: str = ""
+    donnees_personnelles: bool = False
+    fichiers: bool = False
+
+
+class CompteACompleterIn(BaseModel):
+    """Informations personnelles d'un compte « Compte N » (sauvegarde importée sans elles)."""
+    email: str
+    nom: str
+    prenom: str = ""
+    telephone: str = ""
+    adresse: str = ""
+    password: Optional[str] = None      # facultatif : sinon à définir plus tard (Utilisateurs)
+
+    @field_validator("email")
+    @classmethod
+    def _email_ok(cls, v):
+        return _valider_email(v)
+
+    @field_validator("nom")
+    @classmethod
+    def _nom_ok(cls, v):
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("le nom est requis")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _mdp_ok(cls, v):
+        if v and len(v) < 6:
+            raise ValueError("mot de passe trop court (6 caractères minimum)")
+        return v or None
+
+
+class MouvementsGroupeIn(BaseModel):
+    """Modification groupée : seuls les champs présents dans la requête changent (contrat_id null = délier)."""
+    ids: List[int]
+    exercice_id: Optional[int] = None
+    type: Optional[str] = None
+    categorie: Optional[str] = None
+    contrat_id: Optional[int] = None
+
+
 class MouvementOut(MouvementIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
