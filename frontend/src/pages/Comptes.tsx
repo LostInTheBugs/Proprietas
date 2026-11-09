@@ -16,6 +16,8 @@ export default function Comptes() {
   const [lots, setLots] = useState<Lot[]>([]);
   const [recap, setRecap] = useState<Recap | null>(null);
   const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement">(null);
+  const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
+  const [budgetEdite, setBudgetEdite] = useState<BudgetLine | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -174,13 +176,19 @@ export default function Comptes() {
                         <td className="py-2.5 text-right tabular-nums text-slate-700">{fmtEUR(b.montant)}</td>
                         <td className="py-2.5 text-right">
                           {isSyndic && (
-                            <Button
-                              variant="ghost"
-                              className="px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                              onClick={async () => { await api.del(`/budget/${b.id}`); refresh(); }}
-                            >
-                              Suppr.
-                            </Button>
+                            <>
+                              <Button variant="ghost" className="px-2 py-1 text-xs"
+                                onClick={() => setBudgetEdite(b)}>
+                                Modifier
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                className="px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                                onClick={async () => { await api.del(`/budget/${b.id}`); refresh(); }}
+                              >
+                                Suppr.
+                              </Button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -272,13 +280,19 @@ export default function Comptes() {
                           </td>
                           <td className="py-2.5 text-right">
                             {isSyndic && (
-                              <Button
-                                variant="ghost"
-                                className="px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                                onClick={async () => { await api.del(`/mouvements/${m.id}`); refresh(); }}
-                              >
-                                Suppr.
-                              </Button>
+                              <span className="whitespace-nowrap">
+                                <Button variant="ghost" className="px-2 py-1 text-xs"
+                                  onClick={() => setMouvementEdite(m)}>
+                                  Modifier
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  className="px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                                  onClick={async () => { await api.del(`/mouvements/${m.id}`); refresh(); }}
+                                >
+                                  Suppr.
+                                </Button>
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -303,6 +317,14 @@ export default function Comptes() {
       )}
       {modal === "mouvement" && exId && (
         <MouvementModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+      )}
+      {mouvementEdite && exId && (
+        <MouvementModal exId={exId} lots={lots} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
+          onSaved={() => { setMouvementEdite(null); refresh(); }} onError={setError} />
+      )}
+      {budgetEdite && exId && (
+        <BudgetModal exId={exId} initial={budgetEdite} onClose={() => setBudgetEdite(null)}
+          onSaved={() => { setBudgetEdite(null); refresh(); }} onError={setError} />
       )}
     </div>
   );
@@ -444,23 +466,27 @@ function ExerciceModal({ onClose, onSaved, onError }: { onClose: () => void; onS
   );
 }
 
-function BudgetModal({ exId, onClose, onSaved, onError }: { exId: number; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
-  const [libelle, setLibelle] = useState("");
-  const [montant, setMontant] = useState("");
+function BudgetModal({ exId, initial, onClose, onSaved, onError }: {
+  exId: number; initial?: BudgetLine; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+}) {
+  const [libelle, setLibelle] = useState(initial?.libelle ?? "");
+  const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
   async function save() {
     try {
-      await api.post(`/exercices/${exId}/budget`, { libelle, montant: Number(montant) });
+      const corps = { libelle, montant: Number(montant), type_repartition: initial?.type_repartition ?? "generale" };
+      if (initial) await api.put(`/budget/${initial.id}`, corps);
+      else await api.post(`/exercices/${exId}/budget`, corps);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
   return (
-    <Modal open title="Ligne de budget" onClose={onClose}>
+    <Modal open title={initial ? "Modifier la ligne de budget" : "Ligne de budget"} onClose={onClose}>
       <div className="space-y-3">
         <Input label="Poste" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Entretien courant" />
         <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Ajouter</Button>
+          <Button onClick={save}>{initial ? "Enregistrer" : "Ajouter"}</Button>
         </div>
       </div>
     </Modal>
@@ -507,31 +533,37 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
-function MouvementModal({ exId, lots, onClose, onSaved, onError }: { exId: number; lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [libelle, setLibelle] = useState("");
-  const [type, setType] = useState("encaissement");
-  const [categorie, setCategorie] = useState("charges");
-  const [montant, setMontant] = useState("");
-  const [lotId, setLotId] = useState("");
+function MouvementModal({ exId, lots, initial, onClose, onSaved, onError }: {
+  exId: number; lots: Lot[]; initial?: Mouvement; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+}) {
+  const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10));
+  const [libelle, setLibelle] = useState(initial?.libelle ?? "");
+  // Par défaut une dépense (facture) : c'est la saisie la plus courante.
+  const [type, setType] = useState(initial?.type ?? "depense");
+  const [categorie, setCategorie] = useState(initial?.categorie ?? "charges");
+  const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
+  const [lotId, setLotId] = useState(initial?.lot_id != null ? String(initial.lot_id) : "");
   async function save() {
     try {
-      await api.post(`/exercices/${exId}/mouvements`, {
+      const corps = {
         date, libelle, type, categorie, montant: Number(montant),
         lot_id: lotId === "" ? null : Number(lotId),
-      });
+        appel_id: initial?.appel_id ?? null,
+      };
+      if (initial) await api.put(`/mouvements/${initial.id}`, corps);
+      else await api.post(`/exercices/${exId}/mouvements`, corps);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
   return (
-    <Modal open title="Nouveau mouvement" onClose={onClose}>
+    <Modal open title={initial ? "Modifier le mouvement" : "Nouveau mouvement"} onClose={onClose}>
       <div className="space-y-3">
         <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         <Input label="Libellé" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Virement lot 2 / Facture EDF" />
         <div className="grid grid-cols-2 gap-3">
           <Select label="Type" value={type} onChange={(e) => setType(e.target.value)}>
-            <option value="encaissement">Encaissement</option>
             <option value="depense">Dépense</option>
+            <option value="encaissement">Encaissement</option>
           </Select>
           <Select label="Catégorie" value={categorie} onChange={(e) => setCategorie(e.target.value)}>
             <option value="charges">Charges</option>
@@ -545,7 +577,7 @@ function MouvementModal({ exId, lots, onClose, onSaved, onError }: { exId: numbe
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
-          <Select label="Lot (si paiement individuel)" value={lotId} onChange={(e) => setLotId(e.target.value)}>
+          <Select label="Lot (paiement ou dépense d'un seul lot)" value={lotId} onChange={(e) => setLotId(e.target.value)}>
             <option value="">Copro entière</option>
             {lots.map((l) => <option key={l.id} value={l.id}>Lot {l.numero}</option>)}
           </Select>
