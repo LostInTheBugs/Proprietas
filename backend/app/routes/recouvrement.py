@@ -21,6 +21,7 @@ from app.models.relance import Relance
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
 from app.schemas import (
+    AnnexeOut,
     DecompteLigne,
     Mise19_2Out,
     ReceptionIn,
@@ -30,6 +31,7 @@ from app.schemas import (
     RecouvrementLotOut,
     RelanceOut,
 )
+from app.services import ensembles
 from app.services import recouvrement as svc
 from app.services import voie_postale
 from app.services.md_pdf import generer_mise_en_demeure_pdf
@@ -49,10 +51,17 @@ LIBELLES_TYPE = {
 
 
 def _lot_ou_404(db: Session, copro: Copropriete, lot_id: int) -> Lot:
+    """Lot de la copropriété ; pour une annexe (lot non séparable), son lot principal : le dossier
+    de recouvrement est celui de l'ensemble."""
     lot = db.query(Lot).filter(Lot.id == lot_id, Lot.copropriete_id == copro.id).first()
     if not lot:
         raise HTTPException(404, "Lot introuvable")
-    return lot
+    return ensembles.principal(db, lot)
+
+
+def _annexes(db: Session, lot: Lot) -> list[AnnexeOut]:
+    return [AnnexeOut(lot_id=a.id, numero=a.numero, designation=a.designation or "")
+            for a in ensembles.annexes(db, lot)]
 
 
 def _proprio(db: Session, lot: Lot) -> User | None:
@@ -81,7 +90,7 @@ def _acte_out(db: Session, a: ActeRecouvrement) -> RecouvrementActeOut:
 
 def _ligne_out(l: dict) -> DecompteLigne:
     return DecompteLigne(
-        exercice=l.get("exercice"), libelle=l.get("libelle") or "", echeance=l.get("echeance"),
+        lot_numero=l.get("lot_numero") or "", exercice=l.get("exercice"), libelle=l.get("libelle") or "", echeance=l.get("echeance"),
         charges=l.get("charges") or D(0), fonds=l.get("fonds") or D(0),
         montant=l.get("montant") or D(0), restant_du=l.get("restant_du") or D(0),
         restant_du_charges=l.get("restant_du_charges") or D(0),
@@ -117,11 +126,14 @@ def liste(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """État des dossiers de recouvrement, par lot."""
     copro = get_or_create_copro(db, user)
     out = []
-    for lot in db.query(Lot).filter(Lot.copropriete_id == copro.id).order_by(Lot.numero).all():
+    # Une ligne par ensemble : les annexes (lots non séparables) sont suivies avec leur lot principal.
+    for groupe in ensembles.ensembles(db, copro.id):
+        lot = groupe[0]
         d = svc.statut_dossier(db, copro, lot)
         p = _proprio(db, lot)
         out.append(RecouvrementLotOut(
             lot_id=lot.id, lot_numero=lot.numero,
+            annexes=[AnnexeOut(lot_id=a.id, numero=a.numero, designation=a.designation or "") for a in groupe[1:]],
             personne_id=p.id if p else None, personne_nom=_nom(p),
             personne_email=p.email if p else "",
             solde=d["solde"], retard_depuis=d["retard_depuis"], statut=d["statut"],
@@ -147,7 +159,7 @@ def dossier(lot_id: int, db: Session = Depends(get_db), user: User = Depends(req
     relances = (db.query(Relance).filter(Relance.lot_id == lot.id)
                 .order_by(Relance.date_envoi.desc()).limit(30).all())
     return RecouvrementDossierOut(
-        lot_id=lot.id, lot_numero=lot.numero,
+        lot_id=lot.id, lot_numero=lot.numero, annexes=_annexes(db, lot),
         personne_nom=_nom(p), personne_email=p.email if p else "",
         personne_adresse=(getattr(p, "adresse", "") or "") if p else "",
         solde=d["solde"], arriere_echu=d["arriere_echu"], retard_depuis=d["retard_depuis"],
@@ -178,7 +190,8 @@ def mise_en_demeure_pdf(lot_id: int, db: Session = Depends(get_db), user: User =
     lignes = [l for l in svc.appels_lot(db, copro, lot) if l["restant_du"] > svc.D("0.005") and l["echu"]]
     if not lignes:
         raise HTTPException(400, "Aucune provision échue impayée : la mise en demeure n'est pas justifiée.")
-    buf = generer_mise_en_demeure_pdf(copro, lot, _proprio(db, lot), lignes, user.nom or "")
+    buf = generer_mise_en_demeure_pdf(copro, lot, _proprio(db, lot), lignes, user.nom or "",
+                                      annexes=ensembles.annexes(db, lot))
     return StreamingResponse(
         buf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="mise-en-demeure-lot-{lot.numero}.pdf"'},

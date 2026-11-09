@@ -19,7 +19,7 @@ from app.core.money import D, arrondi, somme
 from app.models.exercice import Exercice
 from app.models.lot import Lot
 from app.models.mouvement import Mouvement
-from app.services import recouvrement
+from app.services import ensembles, recouvrement
 
 
 def lots_du_proprietaire(db: Session, copro, proprietaire_id: int) -> list[Lot]:
@@ -33,7 +33,11 @@ def lots_du_proprietaire(db: Session, copro, proprietaire_id: int) -> list[Lot]:
 def repartition(db: Session, copro, proprietaire_id: int, montant: Decimal) -> dict:
     if montant <= 0:
         raise HTTPException(422, "Le montant reçu doit être positif.")
-    lots = lots_du_proprietaire(db, copro, proprietaire_id)
+    # Lots non séparables : une seule ligne par ensemble, portée par le lot principal (le décompte
+    # de l'ensemble met en commun les paiements de tous ses lots).
+    groupes = ensembles.ensembles(db, copro.id, lots_du_proprietaire(db, copro, proprietaire_id))
+    lots = [g[0] for g in groupes]
+    etiquette = {g[0].id: ensembles.libelle(g).removeprefix("Lot ") for g in groupes}
     dus = []
     ventil = {}
     for lot in lots:
@@ -59,7 +63,7 @@ def repartition(db: Session, copro, proprietaire_id: int, montant: Decimal) -> d
     for lot in lots:
         v, pr = ventil[lot.id], propose[lot.id]
         sortie.append({
-            "lot_id": lot.id, "lot_numero": lot.numero,
+            "lot_id": lot.id, "lot_numero": etiquette[lot.id],
             "du": arrondi(v["du_charges"] + v["du_travaux"]),
             "du_charges": v["du_charges"], "du_travaux": v["du_travaux"],
             "propose": arrondi(pr["charges"] + pr["travaux"]),

@@ -16,11 +16,12 @@ from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
-    RegularisationIn, RegularisationOut, ReclasserIn,
+    RegularisationIn, RegularisationOut, ReclasserIn, EnsembleSolde,
 )
 from app.core import audit
 from app.services import regularisation
 from app.services.soldes import totaux_lot
+from app.services import ensembles
 
 router = APIRouter(prefix="/api", tags=["comptes"])
 
@@ -400,11 +401,21 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     ).count()
 
     lots_out = []
+    par_lot = {}
     for lot in lots:
         t = totaux_lot(db, lot)
+        par_lot[lot.id] = t
         lots_out.append(EtatDateLot(
             lot=lot, appels_charges=t["appels_charges"], appels_fonds=t["appels_fonds"],
             encaisse=t["encaisse"], solde=t["solde"],
+        ))
+    # Lots non séparables : une entrée par ensemble (lot principal + annexes).
+    ens_out = []
+    for groupe in ensembles.ensembles(db, copro.id, lots):
+        ens_out.append(EnsembleSolde(
+            lot=groupe[0], annexes=groupe[1:],
+            **{k: arrondi(somme(par_lot[l.id][k] for l in groupe))
+               for k in ("appels_charges", "appels_fonds", "encaisse", "solde")},
         ))
 
     return RecapOut(
@@ -415,6 +426,7 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
         fonds_travaux_encaisse=arrondi(ft_encaisse),
         appels_en_cours=appels_en_cours,
         lots=lots_out,
+        ensembles=ens_out,
         nb_lots=len(lots),
         **regime_out,
     )

@@ -7,6 +7,7 @@ from app.models.user import User, UserCopro
 from app.models.lot import Lot
 from app.models.appel import AppelFonds
 from app.services.soldes import totaux_lot
+from app.services import ensembles
 from app.core.scoping import get_owned
 from app.schemas import LotIn, LotOut, LotSolde, OccupationIn
 from app.routes.copro import get_or_create_copro
@@ -42,6 +43,26 @@ def _lots_out(db: Session, copro, lots: list[Lot]) -> list[LotOut]:
     return resultat
 
 
+def _controler_rattachement(db: Session, copro, lot: Lot | None, data: LotIn) -> None:
+    """Annexe d'un lot principal de la copropriété, sans chaîne ; même propriétaire que lui."""
+    pid = data.lot_principal_id
+    if pid is None:
+        return
+    if lot is not None and pid == lot.id:
+        raise HTTPException(422, "Un lot ne peut pas être rattaché à lui-même.")
+    p = db.query(Lot).filter(Lot.id == pid, Lot.copropriete_id == copro.id).first()
+    if p is None:
+        raise HTTPException(422, "Lot principal introuvable dans cette copropriété.")
+    if p.lot_principal_id:
+        raise HTTPException(422, f"Le lot {p.numero} est lui-même rattaché à un autre lot : "
+                                 "choisissez le lot principal.")
+    if lot is not None and ensembles.annexes(db, lot):
+        raise HTTPException(422, f"Le lot {lot.numero} a des annexes : il ne peut pas être rattaché à un autre lot.")
+    if data.proprietaire_id is not None and data.proprietaire_id != p.proprietaire_id:
+        raise HTTPException(422, f"Un lot rattaché a le même propriétaire que son lot principal (lot {p.numero}).")
+    data.proprietaire_id = p.proprietaire_id
+
+
 @router.get("/lots", response_model=list[LotOut])
 def list_lots(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
@@ -54,6 +75,7 @@ def create_lot(data: LotIn, db: Session = Depends(get_db), user: User = Depends(
     copro = get_or_create_copro(db, user)
     if data.proprietaire_id is not None and not _utilisateur_de_la_copro(db, copro, data.proprietaire_id):
         raise HTTPException(400, "Propriétaire introuvable dans cette copropriété")
+    _controler_rattachement(db, copro, None, data)
     lot = Lot(copropriete_id=copro.id, **data.model_dump())
     db.add(lot)
     db.commit()
@@ -67,8 +89,14 @@ def update_lot(lot_id: int, data: LotIn, db: Session = Depends(get_db), user: Us
     lot = get_owned(db, Lot, lot_id, copro, label="Lot")
     if data.proprietaire_id is not None and not _utilisateur_de_la_copro(db, copro, data.proprietaire_id):
         raise HTTPException(400, "Propriétaire introuvable dans cette copropriété")
+    if "lot_principal_id" not in data.model_fields_set:
+        data.lot_principal_id = lot.lot_principal_id   # champ absent : rattachement inchangé
+    _controler_rattachement(db, copro, lot, data)
     for field, value in data.model_dump().items():
         setattr(lot, field, value)
+    # Ensemble non séparable : les annexes suivent le propriétaire du lot principal.
+    for annexe in ensembles.annexes(db, lot):
+        annexe.proprietaire_id = lot.proprietaire_id
     db.commit()
     db.refresh(lot)
     return _lots_out(db, copro, [lot])[0]
@@ -78,6 +106,8 @@ def update_lot(lot_id: int, data: LotIn, db: Session = Depends(get_db), user: Us
 def delete_lot(lot_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     lot = get_owned(db, Lot, lot_id, copro, label="Lot")
+    for annexe in ensembles.annexes(db, lot):
+        annexe.lot_principal_id = None
     db.delete(lot)
     db.commit()
     return {"ok": True}
