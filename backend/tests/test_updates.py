@@ -141,3 +141,39 @@ def test_tick_sans_auto_apply_ne_demande_rien(monkeypatch):
 def test_bureau_le_syndic_local_est_admin(client, token_a, token_b, monkeypatch):
     monkeypatch.setattr(get_settings(), "update_mode", "desktop")
     assert client.get("/api/updates/me", headers=auth(token_b)).json() == {"instance_admin": True}
+
+
+# ---------------------------------------------------------------- tâche 42 : deux versions
+def _precedente(version="2026.09.010", **autres):
+    import json
+    from pathlib import Path
+    d = Path(get_settings().update_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "update-applier.json").write_text(json.dumps(
+        {"seen_at": 1, "result": "ok", "precedente": {"version": version, "image": True, "octets": 304000000, **autres}}))
+
+
+def test_etat_indique_la_version_precedente(client, token_a):
+    assert client.get("/api/admin/updates", headers=auth(token_a)).json()["applier"]["precedente"] is None
+    _precedente()
+    p = client.get("/api/admin/updates", headers=auth(token_a)).json()["applier"]["precedente"]
+    assert p == {"version": "2026.09.010", "image": True, "octets": 304000000}
+    _precedente("2026.10.001")                          # = version installée : rien à proposer
+    assert client.get("/api/admin/updates", headers=auth(token_a)).json()["applier"]["precedente"] is None
+
+
+@pytest.mark.parametrize("route, action", [("rollback", "rollback"), ("oublier-precedente", "oublier_precedente")])
+def test_demandes_sur_la_version_precedente(client, token_a, token_b, route, action):
+    url = f"/api/admin/updates/{route}"
+    assert client.post(url, headers=auth(token_a)).status_code == 400        # rien de conservé
+    _precedente()
+    assert client.post(url, headers=auth(token_b)).status_code == 403        # pas administrateur
+    r = client.post(url, headers=auth(token_a))
+    assert r.status_code == 200, r.text
+    assert r.json()["request"] == {**r.json()["request"], "version": "2026.09.010", "action": action}
+    assert client.post(url, headers=auth(token_a)).status_code == 409        # une demande à la fois
+
+
+def test_action_de_demande_validee():
+    with pytest.raises(ValueError):
+        updates.write_request("2026.10.002", "x", "rm -rf")
