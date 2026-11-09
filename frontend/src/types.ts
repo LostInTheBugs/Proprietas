@@ -505,3 +505,48 @@ export interface Regularisation {
   total_charges_reelles: number;
   total_ecart: number;
 }
+
+// Reprise de l'historique : états de fin d'exercice (31/12), base et points de contrôle
+export interface EtatRepriseLigne {
+  id: number;
+  lot_id: number;
+  lot_numero: string;
+  proprietaire_id: number | null;
+  exercice_origine: number;
+  montant_charges: number; // négatif = crédit
+  montant_fonds_travaux: number;
+}
+
+export interface ControleLigne {
+  lot_id: number;
+  lot_numero: string;
+  attendu: number;
+  calcule: number;
+  ecart: number;
+}
+
+export interface Controle {
+  date: string;
+  depart: string;
+  ok: boolean;
+  ecart_total: number;
+  lignes: ControleLigne[];
+}
+
+export interface EtatReprise {
+  id: number;
+  date: string;
+  valide: boolean;
+  valide_le: string | null;
+  role: "brouillon" | "base" | "point_de_controle";
+  commentaire: string;
+  total_charges: number;
+  total_fonds_travaux: number;
+  nb_lignes: number;
+  controle_ok: boolean | null;
+}
+
+export interface EtatRepriseDetail extends EtatReprise {
+  lignes: EtatRepriseLigne[];
+  controles: Controle[];
+}
