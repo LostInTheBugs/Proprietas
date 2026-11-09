@@ -106,3 +106,47 @@ def test_brouillon_sans_effet_sur_la_tresorerie(client, db, copro_a, syndic_a, t
     _etat(client, token_a, B0, [_ligne(l1, Y - 1, 100)], syndicat=1000, fonds=200)   # non validé
     t = client.get("/api/copro/tresorerie", headers=auth(token_a)).json()
     assert t["solde_compte"] == 1169
+
+
+# ---------------------------------------------------------------- tâche 46 : état déjà validé
+# Cas réel : la base de Fred était validée avant l'arrivée des soldes bancaires ; il ne pouvait plus
+# rien saisir (« je ne peux pas éditer la ligne dans historique »).
+
+def _banque(client, token, etat_id, syndicat, fonds=None):
+    return client.put(f"{URL}/{etat_id}/banque", json={"solde_banque": syndicat, "solde_banque_fonds": fonds},
+                      headers=auth(token))
+
+
+def test_soldes_bancaires_d_un_etat_valide(client, db, copro_a, syndic_a, token_a):
+    from app.models.audit import AuditLog
+    l1, _ = _lots(db, copro_a)
+    base = _etat(client, token_a, B0, [_ligne(l1, Y - 1, 100)])
+    _valider(client, token_a, base["id"])
+    _mouvements(db, copro_a, l1)
+    r = _banque(client, token_a, base["id"], "1000", "200")
+    assert r.status_code == 200, r.text
+    assert (r.json()["solde_banque"], r.json()["solde_banque_fonds"], r.json()["valide"]) == (1000, 200, True)
+    # Le reste de l'état ne bouge pas, et la trésorerie part désormais de ces soldes.
+    assert r.json()["total_charges"] == 100
+    t = client.get("/api/copro/tresorerie", headers=auth(token_a)).json()
+    assert (t["solde_compte"], t["fonds_travaux_solde"]) == (2249, 250)
+    detail = db.query(AuditLog).filter(AuditLog.action == "reprise_banque_modifiee").one().detail
+    assert "31/12" in detail and "1000" in detail.replace(" ", "").replace(",00", "")
+    # Effacer (null) est permis : retour au calcul sans solde de départ.
+    assert _banque(client, token_a, base["id"], None).json()["solde_banque"] is None
+
+
+def test_soldes_bancaires_d_un_brouillon_aussi(client, db, copro_a, syndic_a, token_a):
+    l1, _ = _lots(db, copro_a)
+    e = _etat(client, token_a, B0, [_ligne(l1, Y - 1, 100)])
+    assert _banque(client, token_a, e["id"], "50.5").json()["solde_banque"] == 50.5
+
+
+def test_soldes_bancaires_reserves_et_isoles(client, db, copro_a, copro_b, syndic_a, syndic_b, token_a, token_b):
+    from app.core.security import create_access_token
+    from tests.conftest import _make_membre
+    l1, _ = _lots(db, copro_a)
+    e = _etat(client, token_a, B0, [_ligne(l1, Y - 1, 100)])
+    assert _banque(client, token_b, e["id"], "1").status_code == 404
+    tok = create_access_token(_make_membre(db, "m@test.fr", copro_a).id, copro_a.id)
+    assert _banque(client, tok, e["id"], "1").status_code == 403
