@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.009 — 2026-11-09
+
+- Lots non séparables : dans « Lots & occupants », une cave ou un garage peut être rattaché à son lot principal. L'ensemble a le même propriétaire et se suit comme une seule unité : tableau de bord, recouvrement (un dossier, une mise en demeure), relances, paiements et quittances. Un lot sans rattachement reste séparé. Migration f4a5b6c7d8e9.
+- Quittances : seuls les paiements de l'exercice y figurent.
+
 ## 2026.11.008 — 2026-11-09
 
 - Comptes : l'exercice d'un mouvement se choisit dans le formulaire (en création, il suit l'année de la date) et se corrige en modification. Les mouvements datés d'une autre année que l'exercice affiché sont signalés, et un bouton les déplace vers l'exercice de leur année. Chaque changement est inscrit au journal d'audit. Une dépense ne peut pas quitter ni rejoindre un exercice dont les charges sont déjà régularisées.
