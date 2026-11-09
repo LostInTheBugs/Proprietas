@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.012 — 2026-11-09
+
+- Réglages : carte « Espace de stockage ». Le syndic voit la place prise par les documents de la copropriété ; l'administrateur de l'instance voit aussi le disque du serveur (utilisé, libre), la taille de la base et les documents de toute l'instance (stockage S3 : espace utilisé seulement).
+- Publication : seule la dernière release et la dernière image restent sur GitHub (les tags git sont conservés). Les notes de release reprennent les 10 versions précédentes.
+
 ## 2026.11.011 — 2026-11-09
 
 - Sauvegarde d'une copropriété (Réglages, syndic) : téléchargement d'une archive ZIP contenant toutes les données de la copropriété, ses comptes et les fichiers des documents ; import de cette archive, sur ce serveur ou un autre, en nouvelle copropriété (comptes existants réutilisés, sinon recréés avec leur mot de passe ; 2FA à réactiver si la clé du serveur diffère). Limite COPRO_IMPORT_MAX_MB (500 Mo par défaut).
