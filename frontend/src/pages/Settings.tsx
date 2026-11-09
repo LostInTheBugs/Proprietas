@@ -7,6 +7,7 @@ import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
 import { SauvegardeCard } from "../components/Sauvegarde";
+import { EspaceStockageCard } from "../components/EspaceStockage";
 
 export default function Settings() {
   const { user: me, refresh } = useUser();
@@ -511,6 +512,8 @@ export default function Settings() {
       </Card>)}
 
       {isSyndic && <SauvegardeCard />}
+
+      {isSyndic && <EspaceStockageCard />}
 
       {!isSyndic && (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
