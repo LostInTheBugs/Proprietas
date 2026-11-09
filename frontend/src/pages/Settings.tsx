@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useUser } from "../auth";
 import type { Copro, Lot, Tresorerie, User } from "../types";
@@ -6,7 +7,7 @@ import { fmtDate, fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
-import { SauvegardeCard } from "../components/Sauvegarde";
+import { ComptesACompleterCard, SauvegardeCard } from "../components/Sauvegarde";
 import { EspaceStockageCard } from "../components/EspaceStockage";
 
 export default function Settings() {
@@ -23,6 +24,8 @@ export default function Settings() {
   const [tresorerie, setTresorerie] = useState<Tresorerie | null>(null);
   // null = fermé ; { } = création ; { user } = édition de la fiche
   const [modal, setModal] = useState<null | { user?: User }>(null);
+  const [params, setParams] = useSearchParams();
+  const [adminInstance, setAdminInstance] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [smtpTest, setSmtpTest] = useState<{ ok: boolean; detail: string } | null>(null);
@@ -44,6 +47,10 @@ export default function Settings() {
   // Voie postale (art. 42-1) : enregistrée à chaque clic, indépendamment des coordonnées.
   const [postale, setPostale] = useState(false);
   useEffect(() => { setPostale(!!me?.notification_postale); }, [me?.notification_postale]);
+  // Onglet « Serveur » (mises à jour, administrateurs) : administrateurs de l'instance seulement.
+  useEffect(() => {
+    api.get<{ instance_admin: boolean }>("/updates/me").then((r) => setAdminInstance(r.instance_admin)).catch(() => {});
+  }, []);
   async function changerVoiePostale(v: boolean) {
     setError("");
     try {
@@ -212,6 +219,16 @@ export default function Settings() {
 
   if (!copro) return null;
 
+  // Onglets : la page devenait trop longue. L'onglet choisi est dans l'adresse (?onglet=…).
+  const onglets: [string, string][] = [
+    ["compte", "Mon compte"],
+    ...(isSyndic ? [["copropriete", "Copropriété"], ["utilisateurs", "Utilisateurs"],
+      ["emails", "E-mails et relances"], ["sauvegarde", "Sauvegarde et stockage"]] as [string, string][] : []),
+    ...(adminInstance ? [["serveur", "Serveur"]] as [string, string][] : []),
+  ];
+  const onglet = onglets.some(([k]) => k === params.get("onglet")) ? params.get("onglet")! : "compte";
+  const choisir = (k: string) => setParams(k === "compte" ? {} : { onglet: k }, { replace: true });
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -222,6 +239,20 @@ export default function Settings() {
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {saved && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Modifications enregistrées ✓</p>}
 
+      {onglets.length > 1 && (
+        <div role="tablist" aria-label="Rubriques des réglages"
+          className="flex flex-wrap gap-x-1 border-b border-slate-200">
+          {onglets.map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={onglet === k} onClick={() => choisir(k)}
+              className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${onglet === k
+                ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {onglet === "compte" && (<>
       <Card title="Apparence">
         <div className="flex flex-wrap gap-2">
           {[
@@ -354,6 +385,9 @@ export default function Settings() {
         </Card>
       )}
 
+      </>)}
+
+      {onglet === "copropriete" && (<>
       {isSyndic && (<Card title="Copropriété">
         <div className="space-y-3">
           <Input label="Nom" value={copro.nom} onChange={(e) => setCopro({ ...copro, nom: e.target.value })} />
@@ -403,6 +437,9 @@ export default function Settings() {
         </div>
       </Card>)}
 
+      </>)}
+
+      {onglet === "emails" && (<>
       {isSyndic && (<Card title="Envoi des emails (convocations AG)">
         <div className="space-y-3">
           <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
@@ -511,18 +548,24 @@ export default function Settings() {
         </div>
       </Card>)}
 
+      </>)}
+
+      {onglet === "sauvegarde" && (<>
       {isSyndic && <SauvegardeCard />}
 
       {isSyndic && <EspaceStockageCard />}
+      </>)}
 
-      {!isSyndic && (
+      {!isSyndic && onglet === "compte" && (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
           Les réglages de la copropriété (fonds de travaux, envoi des emails, relances automatiques,
           comptes utilisateurs) sont réservés au syndic.
         </p>
       )}
 
-      {me?.role === "syndic" && (
+      {onglet === "utilisateurs" && isSyndic && <ComptesACompleterCard onChanged={loadComptes} />}
+
+      {onglet === "utilisateurs" && me?.role === "syndic" && (
         <Card
           title="Comptes utilisateurs"
           action={<Button onClick={() => setModal({})}>+ Ajouter</Button>}
@@ -568,8 +611,10 @@ export default function Settings() {
         </Card>
       )}
 
+      {onglet === "serveur" && (<>
       <UpdatesCard />
       <InstanceAdminsCard myId={me?.id} />
+      </>)}
 
       {modal && (
         <UserModal
