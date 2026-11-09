@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.004 — 2026-11-09
+
+- Historique : import CSV d'un état au 31 décembre (créé en brouillon), d'appels de fonds ou de paiements. Vérification préalable avec les erreurs par numéro de ligne, refus en bloc à la moindre erreur, et un fichier importé deux fois ne compte jamais double. Séparateur « ; » ou « , », montants à la française, fichiers UTF-8 ou Excel (Windows-1252).
+
 ## 2026.11.003 — 2026-11-09
 
 - Reprise de l'historique (menu Historique, syndic) : saisie de ce que chaque copropriétaire devait au 
