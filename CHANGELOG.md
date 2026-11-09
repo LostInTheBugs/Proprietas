@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.018 — 2026-11-09
+
+- Historique : les soldes bancaires d'un état se saisissent ou se corrigent même après sa validation (ils ne changent pas les soldes des copropriétaires) ; la modification est inscrite au journal d'audit.
+
 ## 2026.11.017 — 2026-11-09
 
 - Historique : chaque état peut porter le solde bancaire du compte du syndicat et celui du compte du fonds de travaux au 31 décembre. Entre deux états, solde de départ + encaissements − dépenses saisis est comparé à la banque (avertissement en cas d'écart, sans bloquer). La trésorerie affichée part du solde de la base. Migration b6c7d8e9f0a1.
