@@ -566,6 +566,34 @@ class ImportRepriseOut(BaseModel):
     etat_id: Optional[int] = None
 
 
+# ---------- Paiement d'un copropriétaire pour tous ses lots ----------
+class PaiementPart(BaseModel):
+    lot_id: int
+    montant: Montant = Decimal("0.00")
+
+
+class PaiementIn(BaseModel):
+    proprietaire_id: int
+    date: _Date
+    montant: Montant
+    libelle: str = "Virement"
+    repartition: List[PaiementPart]
+
+
+class RepartitionLot(BaseModel):
+    lot_id: int
+    lot_numero: str
+    du: float
+    propose: float
+
+
+class RepartitionOut(BaseModel):
+    proprietaire_id: int
+    montant: float
+    excedent: float
+    lots: List[RepartitionLot]
+
+
 # ---------- Mouvements ----------
 class MouvementIn(BaseModel):
     date: date
