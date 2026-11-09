@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.016 — 2026-11-09
+
+- Historique : les lots non séparables (cave, garage rattachés) sont contrôlés par ensemble ; un copropriétaire qui paie tout sur son appartement ne crée plus d'écart entre l'appartement et la cave. « Une ligne par lot » ne prépare qu'une ligne par ensemble.
+
 ## 2026.11.015 — 2026-11-09
 
 - Mises à jour : après un retour arrière, l'application automatique ne réinstalle plus la version quittée (elle reprend avec la version suivante, ou dès une mise à jour manuelle). Si une mise à jour a été faite par un ancien applicateur, la version précédente proposée est corrigée.
