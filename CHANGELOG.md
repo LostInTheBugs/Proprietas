@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.013 — 2026-11-09
+
+- Comptes : filtres (libellé, type, lot, catégorie, contrat, montant), colonnes Type et Contrat, tri sur chaque colonne ; sélection de plusieurs mouvements pour changer d'un coup l'exercice, le type, la catégorie ou le contrat.
+- Sauvegarde : mot de passe facultatif (archive chiffrée AES-256, lisible avec 7-Zip) ; par défaut sans données personnelles (comptes « Compte 1 », « Compte 2 »… à compléter après l'import) ni fichiers ; données personnelles et fichiers seulement avec un mot de passe.
+- Réglages : la page est découpée en onglets.
+
 ## 2026.11.012 — 2026-11-09
 
 - Réglages : carte « Espace de stockage ». Le syndic voit la place prise par les documents de la copropriété ; l'administrateur de l'instance voit aussi le disque du serveur (utilisé, libre), la taille de la base et les documents de toute l'instance (stockage S3 : espace utilisé seulement).
