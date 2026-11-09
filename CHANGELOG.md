@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.11.003 — 2026-11-09
+
+- Reprise de l'historique (menu Historique, syndic) : saisie de ce que chaque copropriétaire devait au 
+  31 décembre, par lot et par exercice d'origine (négatif = crédit). L'état validé le plus ancien sert de 
+  base : il crée les appels « Reprise de solde », et les appels et encaissements datés jusqu'à sa date 
+  n'entrent plus dans les soldes. Les états plus récents sont des points de contrôle, comparés lot par lot ; 
+  on peut remonter d'année en année. Migration e2f3a4b5c6d7.
+- Soldes par lot calculés en un seul endroit (soldes des lots, relances, comptes, compte de gestion, 
+  rapport annuel).
+
 ## 2026.11.002 — 2026-11-05
 
 - Stockage S3 : compatibilité Clever Cloud Cellar et autres services compatibles S3 hors AWS (issue #42). L'application refusait de démarrer avec l'erreur MissingContentLength : les fichiers partent désormais avec un Content-Length, sans encodage aws-chunked.
