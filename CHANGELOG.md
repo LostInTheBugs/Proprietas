@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.015 — 2026-11-09
+
+- Mises à jour : après un retour arrière, l'application automatique ne réinstalle plus la version quittée (elle reprend avec la version suivante, ou dès une mise à jour manuelle). Si une mise à jour a été faite par un ancien applicateur, la version précédente proposée est corrigée.
+
 ## 2026.11.014 — 2026-11-09
 
 - Mises à jour : le serveur garde la nouvelle version et la précédente, les plus anciennes sont supprimées (place disque). Dans Réglages → Serveur, l'administrateur peut revenir à la version précédente (sauvegarde de la base et annulation des migrations plus récentes, retour automatique en cas d'échec) ou ne pas la conserver.
