@@ -337,7 +337,8 @@ lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
 L'application vérifie les releases GitHub (toutes les heures par défaut, réglable ou
 désactivable) et affiche la version installée en bas de la barre latérale. Les
 **administrateurs de l'instance** voient un bandeau quand une version sort, et le panneau
-**Réglages → Mises à jour** : notes de toutes les versions intermédiaires, bouton
+**Réglages → Mises à jour** : notes des versions intermédiaires (la release reprend les notes des
+10 versions précédentes, seule la dernière release étant gardée sur GitHub), bouton
 « Mettre à jour », application automatique (désactivée par défaut).
 
 L'application ne redémarre jamais ses propres conteneurs (pas de socket Docker : choix de
@@ -399,7 +400,11 @@ Publier une version : entrée `## AAAA.MM.NNN — date` dans `CHANGELOG.md`, pui
 `scripts/bump-version.sh AAAA.MM.NNN`, commit, `git tag AAAA.MM.NNN && git push origin AAAA.MM.NNN`
 (le workflow `release.yml` crée la release GitHub avec les notes du CHANGELOG **et** publie
 l'image `ghcr.io/lostinthebugs/proprietas:<version>` ; pour un tag déjà publié :
-Actions → Release → *Run workflow* avec le tag). Le paquet GHCR doit être **public**
+Actions → Release → *Run workflow* avec le tag). Puis le job `nettoyage`
+(`scripts/nettoyer-github.sh`) supprime les releases et les images GHCR **antérieures** : seule la
+dernière release et la dernière image restent sur GitHub ; les tags git sont conservés et chaque
+serveur garde l'image qu'il a déjà téléchargée. Simulation : `DRY_RUN=1 GH_REPO=LostInTheBugs/Proprietas
+scripts/nettoyer-github.sh <tag>`. Le paquet GHCR doit être **public**
 (GitHub → Packages → proprietas → Package settings → Change visibility) pour que les
 serveurs le téléchargent sans identifiants.
 

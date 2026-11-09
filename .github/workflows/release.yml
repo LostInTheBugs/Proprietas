@@ -24,7 +24,12 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           if [ -f CHANGELOG.md ]; then
-            awk -v t="$TAG" 'index($0, t) && /^#/ {f=1; print; next} /^#+ *\[?20[0-9][0-9]\./ {if (f) exit} f {print}' CHANGELOG.md > /tmp/notes.md
+            # Notes de la version, puis des 10 précédentes : seule la dernière release est gardée sur
+            # GitHub (job « nettoyage »), un serveur en retard doit pourtant voir ce qui a changé.
+            awk -v t="$TAG" -v max=11 '
+              !f && index($0, t) && /^#/ {f=1; n=1; print; next}
+              /^#+ *\[?20[0-9][0-9]\./ {if (f) {n++; if (n > max) exit; if (n == 2) print "\n---\nVersions précédentes :\n"}}
+              f {print}' CHANGELOG.md > /tmp/notes.md
           fi
           [ -s /tmp/notes.md ] || echo "Release $TAG" > /tmp/notes.md
       - uses: softprops/action-gh-release@v2
@@ -68,3 +73,21 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/LostInTheBugs/Proprietas
             org.opencontainers.image.version=${{ env.TAG }}
+
+  # Ne garder sur GitHub que la dernière release et la dernière image (les tags git restent).
+  # Après la publication de l'image : un serveur qui met à jour trouve toujours son image.
+  nettoyage:
+    if: github.event_name == 'push'
+    needs: [release, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Supprimer les anciennes releases et images
+        run: scripts/nettoyer-github.sh "${GITHUB_REF_NAME}"
