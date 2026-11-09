@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.008 — 2026-11-09
+
+- Comptes : l'exercice d'un mouvement se choisit dans le formulaire (en création, il suit l'année de la date) et se corrige en modification. Les mouvements datés d'une autre année que l'exercice affiché sont signalés, et un bouton les déplace vers l'exercice de leur année. Chaque changement est inscrit au journal d'audit. Une dépense ne peut pas quitter ni rejoindre un exercice dont les charges sont déjà régularisées.
+
 ## 2026.11.007 — 2026-11-09
 
 - Avances sur charges et sur travaux : un encaissement de catégorie « Fonds de travaux » (ou « Travaux ») ne paie que la part fonds de travaux des appels, et son excédent reste une avance travaux, jamais utilisée pour des charges. Les autres encaissements paient d'abord les charges. Le dossier de recouvrement affiche le dû et l'avance pour chaque nature. Dans « Paiement copropriétaire », chaque lot reçoit une part charges et une part travaux. Rien ne change pour les paiements déjà saisis en « Charges ».
