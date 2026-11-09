@@ -119,7 +119,7 @@ def test_mode_bureau_notifie_mais_n_applique_pas(client, token_a, monkeypatch):
 def test_reglages_valides_et_bornes(client, token_a):
     r = client.put("/api/admin/updates/settings", headers=auth(token_a),
                    json={"check_interval_s": 21600, "auto_apply": True})
-    assert r.json()["settings"] == {"check_interval_s": 21600, "auto_apply": True}
+    assert r.json()["settings"] == {"check_interval_s": 21600, "auto_apply": True, "ignorer_auto": ""}
     r = client.put("/api/admin/updates/settings", headers=auth(token_a), json={"check_interval_s": 60})
     assert r.status_code == 400
 
@@ -177,3 +177,38 @@ def test_demandes_sur_la_version_precedente(client, token_a, token_b, route, act
 def test_action_de_demande_validee():
     with pytest.raises(ValueError):
         updates.write_request("2026.10.002", "x", "rm -rf")
+
+
+# ---------------------------------------------------------------- tâche 43 : retour arrière et automatique
+# Cas réel (ionos01, 09/11/2026) : retour arrière 2026.11.014 → 2026.11.013, puis 3 minutes plus tard
+# l'application automatique a réinstallé 2026.11.014.
+
+def test_retour_arriere_suspend_l_automatique_pour_la_version_quittee(client, token_a, monkeypatch):
+    _github(monkeypatch)                               # dernière : 2026.10.003 ; installée : 2026.10.001
+    monkeypatch.setattr(updates, "VERSION", "2026.10.003")
+    monkeypatch.setattr("app.routes.updates.VERSION", "2026.10.003")
+    _precedente("2026.10.002")
+    client.put("/api/admin/updates/settings", json={"auto_apply": True}, headers=auth(token_a))
+    assert client.post("/api/admin/updates/rollback", headers=auth(token_a)).status_code == 200
+    assert updates.read_settings()["ignorer_auto"] == "2026.10.003"
+    # L'applicateur a fait le retour arrière : 2026.10.002 est en service, la demande est traitée.
+    updates.cancel_request()
+    monkeypatch.setattr(updates, "VERSION", "2026.10.002")
+    updates.tick()
+    assert updates.state()["request"] is None          # 2026.10.003 n'est pas réinstallée
+
+
+def test_l_automatique_reprend_avec_une_version_plus_recente(monkeypatch):
+    _github(monkeypatch)
+    s = updates.write_settings({"auto_apply": True})
+    updates.ignorer_en_automatique("2026.10.002")
+    updates.tick()
+    assert updates.state()["request"]["version"] == "2026.10.003"
+
+
+def test_mise_a_jour_manuelle_leve_la_suspension(client, token_a, monkeypatch):
+    _github(monkeypatch)
+    client.post("/api/admin/updates/check", headers=auth(token_a))
+    updates.ignorer_en_automatique("2026.10.003")
+    assert client.post("/api/admin/updates/apply", headers=auth(token_a)).status_code == 200
+    assert updates.read_settings()["ignorer_auto"] == ""

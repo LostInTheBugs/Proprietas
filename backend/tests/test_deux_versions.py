@@ -233,3 +233,20 @@ def test_reel_premier_battement_initialise_les_versions(tmp_path):
     assert journal.count("initialisation : versions gardées 2026.11.002 et 2026.11.001") == 1
     status = json.loads((app / "data" / "updates" / "update-applier.json").read_text())
     assert status["precedente"]["version"] == "2026.11.001"
+
+
+def test_reel_precedente_egale_a_la_version_en_service_retrie(tmp_path):
+    """Cas réel : la dernière mise à jour a été faite par un ancien applicateur ; l'état indique comme
+    « précédente » la version en service. Le battement suivant refait le tri et la corrige."""
+    import os
+    app = _depot(tmp_path)
+    _en_service(app, "2026.11.002")
+    _etat(app, precedente={"version": "2026.11.002", "image": True})
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "docker").write_text(FAUX_DOCKER, encoding="utf-8")
+    (bin_ / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "FAUX_JOURNAL": str(tmp_path / "docker.log")}
+    subprocess.run([sys.executable, "deploy/apply-update.py"], cwd=app, check=True, env=env, capture_output=True)
+    status = json.loads((app / "data" / "updates" / "update-applier.json").read_text())
+    assert status["precedente"]["version"] == "2026.11.001"
