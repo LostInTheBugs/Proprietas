@@ -227,15 +227,21 @@ def choisir_precedente(lignes: list[str], actuelle: str) -> str:
 
 
 def initialiser_versions(strategy: str) -> None:
-    """Une seule fois, au premier battement de cœur de cet applicateur (la mise à jour qui l'a
-    installé a été faite par l'ancien, qui gardait toutes les images) : en « pull », garder la
-    version en service et la plus récente des anciennes, supprimer les autres."""
+    """Au premier battement de cœur de cet applicateur (la mise à jour qui l'a installé a été faite
+    par l'ancien, qui gardait toutes les images), et chaque fois que la « précédente » notée est la
+    version en service : en « pull », garder la version en service et la plus récente des
+    anciennes, supprimer les autres."""
+    actuelle = version_installee()
     try:
-        if "precedente" in json.loads(STATUS.read_text(encoding="utf-8")):
+        etat = json.loads(STATUS.read_text(encoding="utf-8"))
+        p = etat.get("precedente")
+        # Déjà fait, sauf si la « précédente » notée est la version en service : la dernière mise à
+        # jour a alors été faite par un ancien applicateur (cas réel du 09/11/2026 : retour arrière
+        # vers 2026.11.013, puis remise à jour automatique par l'applicateur de 2026.11.013).
+        if "precedente" in etat and not (isinstance(p, dict) and p.get("version") == actuelle):
             return
     except (OSError, ValueError):
         pass
-    actuelle = version_installee()
     if strategy != "pull" or not VERSION_RE.match(actuelle):
         status(precedente=None)
         return

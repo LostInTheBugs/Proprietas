@@ -24,7 +24,9 @@ from app.core.version import VERSION
 
 VERSION_RE = re.compile(r"^\d{4}\.\d{2}\.\d{3}(?:-c\d+)?$")
 CHECK_INTERVALS = (0, 3600, 6 * 3600, 12 * 3600, 24 * 3600)   # secondes ; 0 = jamais
-DEFAULT_SETTINGS = {"check_interval_s": 3600, "auto_apply": False}
+# ignorer_auto : version quittée par un retour arrière, que l'application automatique ne remet pas
+# (elle reprend dès qu'une version plus récente sort, ou après une mise à jour manuelle).
+DEFAULT_SETTINGS = {"check_interval_s": 3600, "auto_apply": False, "ignorer_auto": ""}
 
 
 # ---------------------------------------------------------------- fichiers partagés
@@ -53,7 +55,15 @@ def read_settings() -> dict:
     if s.get("check_interval_s") not in CHECK_INTERVALS:
         s["check_interval_s"] = DEFAULT_SETTINGS["check_interval_s"]
     s["auto_apply"] = bool(s.get("auto_apply"))
+    s["ignorer_auto"] = s.get("ignorer_auto") if VERSION_RE.match(str(s.get("ignorer_auto") or "")) else ""
     return s
+
+
+def ignorer_en_automatique(version: str) -> None:
+    """Après un retour arrière : l'application automatique ne réinstalle pas `version` ("" = plus rien)."""
+    s = read_settings()
+    s["ignorer_auto"] = version if VERSION_RE.match(version or "") else ""
+    _write("settings.json", s)
 
 
 def write_settings(values: dict) -> dict:
@@ -201,5 +211,6 @@ def tick() -> None:
     interval = s["check_interval_s"]
     if interval and time.time() - st["check"]["last_at"] >= interval:
         st = run_check()
-    if (st["available"] and s["auto_apply"] and st["mode"] == "server" and not st["request"]):
+    if (st["available"] and s["auto_apply"] and st["mode"] == "server" and not st["request"]
+            and st["latest"]["version"] != s["ignorer_auto"]):
         write_request(st["latest"]["version"], "application automatique")
