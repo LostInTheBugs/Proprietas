@@ -18,6 +18,7 @@ export default function Comptes() {
   const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement" | "paiement">(null);
   const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
   const [budgetEdite, setBudgetEdite] = useState<BudgetLine | null>(null);
+  const [reclassement, setReclassement] = useState<Reclassement | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -254,6 +255,21 @@ export default function Comptes() {
               </a>
             }
           >
+            {(() => {
+              const annee = exercices.find((e) => e.id === exId)?.annee;
+              const hors = mouvements.filter((m) => annee && Number(m.date.slice(0, 4)) !== annee);
+              if (!isSyndic || hors.length === 0) return null;
+              return (
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <span>{hors.length} mouvement(s) daté(s) d'une autre année que l'exercice {annee}.</span>
+                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={async () => {
+                    try {
+                      setReclassement(await api.post<Reclassement>(`/exercices/${exId}/mouvements/reclasser`, { simuler: true }));
+                    } catch (e) { setError(e instanceof Error ? e.message : "Erreur"); }
+                  }}>Les déplacer vers l'exercice de leur année…</Button>
+                </div>
+              );
+            })()}
             {mouvements.length === 0 ? (
               <Empty text="Aucun mouvement. Enregistrez les virements reçus des copropriétaires et les factures payées." />
             ) : (
@@ -274,7 +290,12 @@ export default function Comptes() {
                       const lot = lots.find((l) => l.id === m.lot_id);
                       return (
                         <tr key={m.id} className="border-b border-slate-50 last:border-0">
-                          <td className="py-2 whitespace-nowrap text-slate-600">{fmtDate(m.date)}</td>
+                          <td className="py-2 whitespace-nowrap text-slate-600">
+                            {fmtDate(m.date)}{" "}
+                            {Number(m.date.slice(0, 4)) !== exercices.find((e) => e.id === exId)?.annee && (
+                              <Badge color="amber">autre année</Badge>
+                            )}
+                          </td>
                           <td className="py-2 text-slate-700">{m.libelle}</td>
                           <td className="py-2 text-slate-600">{lot ? `Lot ${lot.numero}` : "—"}</td>
                           <td className="py-2"><Badge>{m.categorie}</Badge></td>
@@ -319,15 +340,47 @@ export default function Comptes() {
         <AppelModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "mouvement" && exId && (
-        <MouvementModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+        <MouvementModal exId={exId} exercices={exercices} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "paiement" && (
         <PaiementModal lots={lots} onClose={() => setModal(null)}
           onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {mouvementEdite && exId && (
-        <MouvementModal exId={exId} lots={lots} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
+        <MouvementModal exId={exId} exercices={exercices} lots={lots} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
           onSaved={() => { setMouvementEdite(null); refresh(); }} onError={setError} />
+      )}
+      {reclassement && exId && (
+        <Modal open title="Déplacer vers l'exercice de leur année" onClose={() => setReclassement(null)}>
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-600">
+              Ces mouvements sont datés d'une autre année que l'exercice affiché. Chacun sera rangé dans l'exercice
+              de l'année de sa date (créé s'il n'existe pas encore).
+            </p>
+            <table className="w-full">
+              <tbody>
+                {reclassement.mouvements.map((m) => (
+                  <tr key={m.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-1 text-slate-600">{fmtDate(m.date)}</td>
+                    <td className="py-1">{m.libelle}</td>
+                    <td className="py-1 text-right tabular-nums">{m.type === "encaissement" ? "+" : "−"}{fmtEUR(m.montant)}</td>
+                    <td className="py-1 pl-2 text-right text-slate-500">→ {m.vers}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setReclassement(null)}>Annuler</Button>
+              <Button onClick={async () => {
+                try {
+                  await api.post(`/exercices/${exId}/mouvements/reclasser`, { simuler: false });
+                  setReclassement(null);
+                  refresh();
+                } catch (e) { setError(e instanceof Error ? e.message : "Erreur"); setReclassement(null); }
+              }}>Déplacer {reclassement.mouvements.length} mouvement(s)</Button>
+            </div>
+          </div>
+        </Modal>
       )}
       {budgetEdite && exId && (
         <BudgetModal exId={exId} initial={budgetEdite} onClose={() => setBudgetEdite(null)}
@@ -540,9 +593,11 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
-function MouvementModal({ exId, lots, initial, onClose, onSaved, onError }: {
-  exId: number; lots: Lot[]; initial?: Mouvement; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+function MouvementModal({ exId, exercices, lots, initial, onClose, onSaved, onError }: {
+  exId: number; exercices: Exercice[]; lots: Lot[]; initial?: Mouvement; onClose: () => void; onSaved: () => void;
+  onError: (e: string) => void;
 }) {
+  const [exerciceId, setExerciceId] = useState(String(initial?.exercice_id ?? exId));
   const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10));
   const [libelle, setLibelle] = useState(initial?.libelle ?? "");
   // Par défaut une dépense (facture) : c'est la saisie la plus courante.
@@ -556,16 +611,35 @@ function MouvementModal({ exId, lots, initial, onClose, onSaved, onError }: {
         date, libelle, type, categorie, montant: Number(montant),
         lot_id: lotId === "" ? null : Number(lotId),
         appel_id: initial?.appel_id ?? null,
+        exercice_id: Number(exerciceId),
       };
       if (initial) await api.put(`/mouvements/${initial.id}`, corps);
-      else await api.post(`/exercices/${exId}/mouvements`, corps);
+      else await api.post(`/exercices/${exerciceId}/mouvements`, corps);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
   return (
     <Modal open title={initial ? "Modifier le mouvement" : "Nouveau mouvement"} onClose={onClose}>
       <div className="space-y-3">
-        <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Date" type="date" value={date} onChange={(e) => {
+            setDate(e.target.value);
+            // Nouveau mouvement : l'exercice suit l'année de la date, s'il existe.
+            const ex = exercices.find((x) => x.annee === Number(e.target.value.slice(0, 4)));
+            if (!initial && ex) setExerciceId(String(ex.id));
+          }} />
+          <Select label="Exercice" value={exerciceId} onChange={(e) => setExerciceId(e.target.value)}>
+            {exercices.map((ex) => <option key={ex.id} value={ex.id}>{ex.annee}</option>)}
+          </Select>
+        </div>
+        {(() => {
+          const annee = exercices.find((ex) => String(ex.id) === exerciceId)?.annee;
+          return annee && date && Number(date.slice(0, 4)) !== annee ? (
+            <p className="text-xs text-amber-700">
+              La date est en {date.slice(0, 4)}, mais l'exercice choisi est {annee}. Vérifiez l'exercice.
+            </p>
+          ) : null;
+        })()}
         <Input label="Libellé" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Virement lot 2 / Facture EDF" />
         <div className="grid grid-cols-2 gap-3">
           <Select label="Type" value={type} onChange={(e) => setType(e.target.value)}>
@@ -731,4 +805,9 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
       </div>
     </Modal>
   );
+}
+
+interface Reclassement {
+  simulation: boolean;
+  mouvements: { id: number; date: string; libelle: string; type: string; montant: number; vers: number }[];
 }
