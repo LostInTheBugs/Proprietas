@@ -15,6 +15,8 @@ import json
 import zipfile
 from datetime import date
 
+import pyzipper
+
 from app.models.ag import AG, Resolution, Vote
 from app.models.appel import AppelFonds, AppelLot
 from app.models.audit import AuditLog
@@ -75,16 +77,27 @@ def _copro_complete(client, db, copro, token):
     return martin, appart, cave
 
 
-def _export(client, token):
-    r = client.get("/api/sauvegarde/export", headers=auth(token))
+MDP = "motdepasse-solide"
+COMPLETE = {"mot_de_passe": MDP, "donnees_personnelles": True, "fichiers": True}
+
+
+def _export(client, token, options=COMPLETE):
+    """Sauvegarde complète (données personnelles et fichiers, donc protégée) sauf options contraires."""
+    r = client.post("/api/sauvegarde/export", json=options, headers=auth(token))
     assert r.status_code == 200, r.text
     assert r.headers["content-type"] == "application/zip"
     return r.content
 
 
-def _import(client, token, contenu):
+def _import(client, token, contenu, mot_de_passe=MDP):
     return client.post("/api/sauvegarde/import", files={"fichier": ("sauvegarde.zip", contenu, "application/zip")},
-                       headers=auth(token))
+                       data={"mot_de_passe": mot_de_passe}, headers=auth(token))
+
+
+def _ouvrir(contenu, mot_de_passe=MDP):
+    z = pyzipper.AESZipFile(io.BytesIO(contenu))
+    z.setpassword(mot_de_passe.encode())
+    return z
 
 
 def _soldes(client, token):
@@ -95,7 +108,7 @@ def test_contenu_de_l_export(client, db, copro_a, copro_b, syndic_a, syndic_b, t
     _copro_complete(client, db, copro_a, token_a)
     db.add(Lot(copropriete_id=copro_b.id, numero="B1", tantiemes=1))
     db.commit()
-    z = zipfile.ZipFile(io.BytesIO(_export(client, token_a)))
+    z = _ouvrir(_export(client, token_a))
     manifest = json.loads(z.read("manifest.json"))
     donnees = json.loads(z.read("donnees.json"))
     assert manifest["format"] == "proprietas-copropriete" and manifest["copropriete"] == copro_a.nom
@@ -151,7 +164,7 @@ def test_import_sur_une_autre_instance_cree_les_comptes(client, db, copro_a, cop
     _copro_complete(client, db, copro_a, token_a)
     contenu = _export(client, token_a)
     # Simule une instance neuve : des e-mails inconnus ; un secret 2FA chiffré avec une autre clé.
-    z = zipfile.ZipFile(io.BytesIO(contenu))
+    z = _ouvrir(contenu)
     donnees = json.loads(z.read("donnees.json"))
     for u in donnees["users"]:
         u["email"] = "nouveau." + u["email"]
@@ -161,7 +174,7 @@ def test_import_sur_une_autre_instance_cree_les_comptes(client, db, copro_a, cop
     with zipfile.ZipFile(sortie, "w") as z2:
         for nom in z.namelist():
             z2.writestr(nom, json.dumps(donnees) if nom == "donnees.json" else z.read(nom))
-    r = _import(client, token_b, sortie.getvalue())
+    r = _import(client, token_b, sortie.getvalue(), mot_de_passe="")     # archive réécrite sans mot de passe
     assert r.status_code == 200, r.text
     assert (r.json()["comptes_crees"], r.json()["deuxfa_desactivee"]) == (2, 1)
     # Le copropriétaire se connecte avec son mot de passe d'origine.
@@ -185,7 +198,7 @@ def test_fichier_qui_n_est_pas_une_sauvegarde(client, db, copro_a, syndic_a, tok
 def test_reserve_au_syndic(client, db, copro_a, syndic_a, token_a):
     membre = _make_membre(db, "m@test.fr", copro_a)
     tok = create_access_token(membre.id, copro_a.id)
-    assert client.get("/api/sauvegarde/export", headers=auth(tok)).status_code == 403
+    assert client.post("/api/sauvegarde/export", json={}, headers=auth(tok)).status_code == 403
     assert _import(client, tok, b"x").status_code == 403
 
 
