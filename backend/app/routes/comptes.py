@@ -115,6 +115,18 @@ def add_budget_line(exercice_id: int, data: BudgetLineIn, db: Session = Depends(
     return line
 
 
+@router.put("/budget/{line_id}", response_model=BudgetLineOut)
+def update_budget_line(line_id: int, data: BudgetLineIn, db: Session = Depends(get_db),
+                       user: User = Depends(require_syndic)):
+    copro = get_or_create_copro(db, user)
+    line = get_owned_via(db, BudgetLine, Exercice, line_id, copro, "exercice_id", label="Ligne")
+    for champ, valeur in data.model_dump().items():
+        setattr(line, champ, valeur)
+    db.commit()
+    db.refresh(line)
+    return line
+
+
 @router.delete("/budget/{line_id}")
 def delete_budget_line(line_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
@@ -244,12 +256,56 @@ def list_mouvements(exercice_id: int, db: Session = Depends(get_db), user: User 
     return db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).order_by(Mouvement.date.desc(), Mouvement.id.desc()).all()
 
 
+TYPES_MOUVEMENT = ("encaissement", "depense")
+CATEGORIES_MOUVEMENT = ("charges", "fonds_travaux", "travaux", "assurance", "energie", "entretien", "autre")
+
+
+def _controler_mouvement(db: Session, copro, data: MouvementIn) -> None:
+    """Type et catégorie connus ; lot et appel rattachés de la même copropriété."""
+    if data.type not in TYPES_MOUVEMENT:
+        raise HTTPException(422, "Type de mouvement inconnu (encaissement ou dépense).")
+    if data.categorie not in CATEGORIES_MOUVEMENT:
+        raise HTTPException(422, f"Catégorie inconnue : {data.categorie}.")
+    if data.lot_id is not None and not db.query(Lot).filter(
+            Lot.id == data.lot_id, Lot.copropriete_id == copro.id).first():
+        raise HTTPException(422, "Ce lot n'appartient pas à la copropriété.")
+    if data.appel_id is not None and not (db.query(AppelFonds).join(Exercice, AppelFonds.exercice_id == Exercice.id)
+                                          .filter(AppelFonds.id == data.appel_id,
+                                                  Exercice.copropriete_id == copro.id).first()):
+        raise HTTPException(422, "Cet appel de fonds n'appartient pas à la copropriété.")
+
+
+def _resume_mouvement(m) -> str:
+    sens = "+" if m.type == "encaissement" else "−"
+    montant = f"{D(m.montant or 0):.2f}".replace(".", ",")
+    return (f"{m.date:%d/%m/%Y} « {m.libelle} » {m.categorie} {sens}{montant} €"
+            + (f" lot #{m.lot_id}" if m.lot_id else ""))
+
+
 @router.post("/exercices/{exercice_id}/mouvements", response_model=MouvementOut)
 def create_mouvement(exercice_id: int, data: MouvementIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
+    _controler_mouvement(db, copro, data)
     m = Mouvement(copropriete_id=ex.copropriete_id, exercice_id=ex.id, **data.model_dump())
     db.add(m)
+    db.commit()
+    db.refresh(m)
+    return m
+
+
+@router.put("/mouvements/{mouvement_id}", response_model=MouvementOut)
+def update_mouvement(mouvement_id: int, data: MouvementIn, request: Request, db: Session = Depends(get_db),
+                     user: User = Depends(require_syndic)):
+    """Correction d'un mouvement (l'exercice ne change pas) ; avant et après au journal d'audit."""
+    copro = get_or_create_copro(db, user)
+    m = get_owned(db, Mouvement, mouvement_id, copro, label="Mouvement")
+    _controler_mouvement(db, copro, data)
+    avant = _resume_mouvement(m)
+    for champ, valeur in data.model_dump().items():
+        setattr(m, champ, valeur)
+    audit.enregistrer(db, "mouvement_modifie", user=user, copro_id=copro.id, request=request,
+                      detail=f"Mouvement #{m.id} : {avant} → {_resume_mouvement(m)}")
     db.commit()
     db.refresh(m)
     return m
