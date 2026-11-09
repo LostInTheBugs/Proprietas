@@ -608,6 +608,12 @@ class MouvementIn(BaseModel):
     montant: Montant = Decimal("0.00")
     lot_id: Optional[int] = None
     appel_id: Optional[int] = None
+    # Modification seulement : déplacer le mouvement vers un autre exercice (None = inchangé).
+    exercice_id: Optional[int] = None
+
+
+class ReclasserIn(BaseModel):
+    simuler: bool = True
 
 
 class MouvementOut(MouvementIn):

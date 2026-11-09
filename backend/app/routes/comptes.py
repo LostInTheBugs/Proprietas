@@ -16,7 +16,7 @@ from app.core.money import D, arrondi, somme
 from app.schemas import (
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
-    RegularisationIn, RegularisationOut,
+    RegularisationIn, RegularisationOut, ReclasserIn,
 )
 from app.core import audit
 from app.services import regularisation
@@ -287,7 +287,7 @@ def create_mouvement(exercice_id: int, data: MouvementIn, db: Session = Depends(
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
     _controler_mouvement(db, copro, data)
-    m = Mouvement(copropriete_id=ex.copropriete_id, exercice_id=ex.id, **data.model_dump())
+    m = Mouvement(copropriete_id=ex.copropriete_id, exercice_id=ex.id, **data.model_dump(exclude={"exercice_id"}))
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -297,18 +297,69 @@ def create_mouvement(exercice_id: int, data: MouvementIn, db: Session = Depends(
 @router.put("/mouvements/{mouvement_id}", response_model=MouvementOut)
 def update_mouvement(mouvement_id: int, data: MouvementIn, request: Request, db: Session = Depends(get_db),
                      user: User = Depends(require_syndic)):
-    """Correction d'un mouvement (l'exercice ne change pas) ; avant et après au journal d'audit."""
+    """Correction d'un mouvement, y compris son exercice ; avant et après au journal d'audit."""
     copro = get_or_create_copro(db, user)
     m = get_owned(db, Mouvement, mouvement_id, copro, label="Mouvement")
     _controler_mouvement(db, copro, data)
     avant = _resume_mouvement(m)
-    for champ, valeur in data.model_dump().items():
+    deplacement = ""
+    if data.exercice_id is not None and data.exercice_id != m.exercice_id:
+        cible = db.query(Exercice).filter(Exercice.id == data.exercice_id,
+                                          Exercice.copropriete_id == copro.id).first()
+        if cible is None:
+            raise HTTPException(422, "Cet exercice n'appartient pas à la copropriété.")
+        source = db.get(Exercice, m.exercice_id)
+        if data.type == "depense" or m.type == "depense":
+            _controler_regularisation(db, (source, cible))
+        deplacement = f", exercice {source.annee} → {cible.annee}"
+        m.exercice_id = cible.id
+    for champ, valeur in data.model_dump(exclude={"exercice_id"}).items():
         setattr(m, champ, valeur)
     audit.enregistrer(db, "mouvement_modifie", user=user, copro_id=copro.id, request=request,
-                      detail=f"Mouvement #{m.id} : {avant} → {_resume_mouvement(m)}")
+                      detail=f"Mouvement #{m.id} : {avant} → {_resume_mouvement(m)}{deplacement}")
     db.commit()
     db.refresh(m)
     return m
+
+
+def _controler_regularisation(db: Session, exercices) -> None:
+    """Une dépense ne quitte pas (et n'entre pas dans) un exercice dont les charges sont régularisées."""
+    for ex in exercices:
+        if regularisation.appel_existant(db, ex) is not None:
+            raise HTTPException(422, f"Les charges de l'exercice {ex.annee} sont déjà régularisées : "
+                                     "y ajouter ou en retirer une dépense fausserait la régularisation.")
+
+
+@router.post("/exercices/{exercice_id}/mouvements/reclasser")
+def reclasser_mouvements(exercice_id: int, data: ReclasserIn, request: Request, db: Session = Depends(get_db),
+                         user: User = Depends(require_syndic)):
+    """Déplace vers l'exercice de leur année les mouvements datés d'une autre année que l'exercice."""
+    copro = get_or_create_copro(db, user)
+    ex = get_exercice(db, exercice_id, copro)
+    hors = (db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).order_by(Mouvement.date, Mouvement.id).all())
+    hors = [m for m in hors if m.date.year != ex.annee]
+    liste = [{"id": m.id, "date": m.date, "libelle": m.libelle, "type": m.type, "montant": float(m.montant or 0),
+              "vers": m.date.year} for m in hors]
+    if data.simuler or not hors:
+        return {"simulation": data.simuler, "mouvements": liste}
+    cibles = {}
+    for annee in sorted({m.date.year for m in hors}):
+        cible = db.query(Exercice).filter(Exercice.copropriete_id == copro.id, Exercice.annee == annee).first()
+        if cible is None:
+            cible = Exercice(copropriete_id=copro.id, annee=annee, cloture=annee < date.today().year)
+            db.add(cible)
+            db.flush()
+        cibles[annee] = cible
+    for m in hors:
+        if m.type == "depense":
+            _controler_regularisation(db, (ex, cibles[m.date.year]))
+    for m in hors:
+        m.exercice_id = cibles[m.date.year].id
+    par_annee = ", ".join(f"{sum(1 for m in hors if m.date.year == a)} vers {a}" for a in sorted(cibles))
+    audit.enregistrer(db, "mouvements_reclasses", user=user, copro_id=copro.id, request=request,
+                      detail=f"Exercice {ex.annee} : {len(hors)} mouvement(s) déplacé(s) ({par_annee})")
+    db.commit()
+    return {"simulation": False, "mouvements": liste}
 
 
 @router.delete("/mouvements/{mouvement_id}")
