@@ -139,14 +139,29 @@ def run_check() -> dict:
 
 
 # ---------------------------------------------------------------- demande d'application
-def write_request(version: str, by: str) -> None:
+ACTIONS = ("update", "rollback", "oublier_precedente")
+
+
+def write_request(version: str, by: str, action: str = "update") -> None:
+    """Demande à l'applicateur : mise à jour, retour à la version précédente conservée, ou
+    abandon de cette version précédente (son image est alors supprimée du serveur)."""
     if not VERSION_RE.match(version):
         raise ValueError(f"version invalide : {version}")
-    _write("update-request.json", {"version": version, "at": time.time(), "by": by})
+    if action not in ACTIONS:
+        raise ValueError(f"action invalide : {action}")
+    _write("update-request.json", {"version": version, "at": time.time(), "by": by, "action": action})
 
 
 def cancel_request() -> None:
     (_dir() / "update-request.json").unlink(missing_ok=True)
+
+
+def _precedente(p) -> dict | None:
+    if not isinstance(p, dict) or not VERSION_RE.match(str(p.get("version") or "")) or p["version"] == VERSION:
+        return None
+    octets = p.get("octets")
+    return {"version": p["version"], "image": bool(p.get("image")),
+            "octets": int(octets) if isinstance(octets, (int, float)) else None}
 
 
 # ---------------------------------------------------------------- état complet
@@ -164,13 +179,16 @@ def state() -> dict:
         "changes": newer,                         # toutes les notes entre la version installée et la dernière
         "check": {"last_at": float(cache.get("checked_at") or 0), "error": str(cache.get("error") or "")},
         "request": ({"version": req.get("version"), "at": float(req.get("at") or 0),
-                     "by": str(req.get("by") or "")} if req.get("version") else None),
+                     "by": str(req.get("by") or ""), "action": str(req.get("action") or "update")}
+                    if req.get("version") else None),
         "applier": {"installed": float(app.get("seen_at") or 0) > 0,
                     "seen_at": float(app.get("seen_at") or 0),
                     "result": str(app.get("result") or ""),
                     "applied": str(app.get("applied") or ""),
                     "applied_at": float(app.get("at") or 0),
-                    "backup": str(app.get("backup") or "")},
+                    "backup": str(app.get("backup") or ""),
+                    # Version précédente gardée après une mise à jour (retour arrière possible).
+                    "precedente": _precedente(app.get("precedente"))},
         "settings": read_settings(),
     }
 
