@@ -558,3 +558,11 @@ export interface ImportReprise {
   erreurs: { ligne: number; message: string }[];
   etat_id: number | null;
 }
+
+// Paiement d'un copropriétaire réparti entre ses lots
+export interface Repartition {
+  proprietaire_id: number;
+  montant: number;
+  excedent: number;
+  lots: { lot_id: number; lot_numero: string; du: number; propose: number }[];
+}
