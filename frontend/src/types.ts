@@ -407,6 +407,8 @@ export interface DecompteLigne {
   fonds: number;
   montant: number;
   restant_du: number;
+  restant_du_charges?: number;
+  restant_du_fonds?: number;
   echu: boolean;
 }
 
@@ -443,6 +445,10 @@ export interface RecouvrementDossier {
   interets: number;
   taux_legal: number;
   total_reclame: number;
+  du_charges: number;
+  du_travaux: number;
+  avance_charges: number;
+  avance_travaux: number;
   decompte: DecompteLigne[];
   actes: RecouvrementActe[];
   relances: Relance[];
@@ -564,5 +570,8 @@ export interface Repartition {
   proprietaire_id: number;
   montant: number;
   excedent: number;
-  lots: { lot_id: number; lot_numero: string; du: number; propose: number }[];
+  lots: {
+    lot_id: number; lot_numero: string; du: number; du_charges: number; du_travaux: number;
+    propose: number; propose_charges: number; propose_travaux: number;
+  }[];
 }
