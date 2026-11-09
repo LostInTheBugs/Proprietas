@@ -569,7 +569,8 @@ class ImportRepriseOut(BaseModel):
 # ---------- Paiement d'un copropriétaire pour tous ses lots ----------
 class PaiementPart(BaseModel):
     lot_id: int
-    montant: Montant = Decimal("0.00")
+    montant: Montant = Decimal("0.00")            # part charges
+    montant_travaux: Montant = Decimal("0.00")    # part fonds de travaux
 
 
 class PaiementIn(BaseModel):
@@ -584,7 +585,11 @@ class RepartitionLot(BaseModel):
     lot_id: int
     lot_numero: str
     du: float
+    du_charges: float = 0.0
+    du_travaux: float = 0.0
     propose: float
+    propose_charges: float = 0.0
+    propose_travaux: float = 0.0
 
 
 class RepartitionOut(BaseModel):
@@ -1071,6 +1076,8 @@ class DecompteLigne(BaseModel):
     fonds: float = 0.0
     montant: float = 0.0
     restant_du: float = 0.0
+    restant_du_charges: float = 0.0
+    restant_du_fonds: float = 0.0
     echu: bool = False
 
 
@@ -1123,6 +1130,10 @@ class RecouvrementDossierOut(BaseModel):
     interets: float = 0.0
     taux_legal: float = 0.0
     total_reclame: float = 0.0
+    du_charges: float = 0.0
+    du_travaux: float = 0.0
+    avance_charges: float = 0.0       # paiements généraux non encore utilisés
+    avance_travaux: float = 0.0       # paiements « fonds de travaux » non encore utilisés
     decompte: List[DecompteLigne] = []
     actes: List[RecouvrementActeOut] = []
     relances: List[RelanceOut] = []

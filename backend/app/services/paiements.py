@@ -1,11 +1,13 @@
 """Paiement d'un copropriétaire pour l'ensemble de ses lots (un virement, plusieurs lots).
 
-- Répartition proposée : les restants dus de tous ses lots (décompte FIFO de recouvrement.appels_lot)
-  sont soldés de la plus ancienne échéance à la plus récente ; à échéance égale, dans l'ordre des
-  appels puis des lots. Un excédent (avance) va au lot qui a le plus de tantièmes.
-- Enregistrement : une part par lot (le syndic peut corriger la proposition), somme = montant reçu ;
-  un encaissement « charges » par part non nulle, dans l'exercice de l'année de la date (créé s'il
-  manque, clôturé si l'année est passée).
+- Répartition proposée : les restants dus de tous ses lots (recouvrement.ventilation_lot) sont soldés
+  de la plus ancienne échéance à la plus récente ; à échéance égale, dans l'ordre des appels puis des
+  lots ; dans un appel, charges puis fonds de travaux. Chaque somme est rangée dans sa nature (charges
+  ou travaux). Un excédent est une avance sur charges du lot qui a le plus de tantièmes.
+- Enregistrement : par lot, une part charges et une part travaux (le syndic peut corriger la
+  proposition), total = montant reçu ; un encaissement « charges » et/ou un encaissement « fonds de
+  travaux » (réservé à la part fonds de travaux des appels) par lot, dans l'exercice de l'année de la
+  date (créé s'il manque, clôturé si l'année est passée).
 """
 from datetime import date
 from decimal import Decimal
@@ -33,32 +35,38 @@ def repartition(db: Session, copro, proprietaire_id: int, montant: Decimal) -> d
         raise HTTPException(422, "Le montant reçu doit être positif.")
     lots = lots_du_proprietaire(db, copro, proprietaire_id)
     dus = []
-    du_par_lot = {}
+    ventil = {}
     for lot in lots:
-        lignes = recouvrement.appels_lot(db, copro, lot)
-        du_par_lot[lot.id] = recouvrement.solde_lot(lignes)
-        for l in lignes:
-            if l["restant_du"] > 0:
-                dus.append((l["echeance"] or date.min, l["appel_id"], lot.id, l["restant_du"]))
+        v = recouvrement.ventilation_lot(db, copro, lot)
+        ventil[lot.id] = v
+        for l in v["lignes"]:
+            for ordre, nature, cle in ((0, "charges", "restant_du_charges"), (1, "travaux", "restant_du_fonds")):
+                if l[cle] > 0:
+                    dus.append((l["echeance"] or date.min, l["appel_id"], lot.id, ordre, nature, l[cle]))
     dus.sort()
     reste = arrondi(montant)
-    propose = {lot.id: D(0) for lot in lots}
-    for _, _, lot_id, restant in dus:
+    propose = {lot.id: {"charges": D(0), "travaux": D(0)} for lot in lots}
+    for _, _, lot_id, _, nature, restant in dus:
         if reste <= 0:
             break
         part = min(reste, restant)
-        propose[lot_id] += part
+        propose[lot_id][nature] += part
         reste = arrondi(reste - part)
     if reste > 0:
         principal = max(lots, key=lambda l: (l.tantiemes or 0, -l.id))
-        propose[principal.id] += reste
-    return {
-        "proprietaire_id": proprietaire_id,
-        "montant": arrondi(montant),
-        "excedent": reste,
-        "lots": [{"lot_id": lot.id, "lot_numero": lot.numero, "du": du_par_lot[lot.id],
-                  "propose": arrondi(propose[lot.id])} for lot in lots],
-    }
+        propose[principal.id]["charges"] += reste
+    sortie = []
+    for lot in lots:
+        v, pr = ventil[lot.id], propose[lot.id]
+        sortie.append({
+            "lot_id": lot.id, "lot_numero": lot.numero,
+            "du": arrondi(v["du_charges"] + v["du_travaux"]),
+            "du_charges": v["du_charges"], "du_travaux": v["du_travaux"],
+            "propose": arrondi(pr["charges"] + pr["travaux"]),
+            "propose_charges": arrondi(pr["charges"]), "propose_travaux": arrondi(pr["travaux"]),
+        })
+    return {"proprietaire_id": proprietaire_id, "montant": arrondi(montant), "excedent": reste,
+            "lots": sortie}
 
 
 def _exercice(db: Session, copro_id: int, annee: int) -> Exercice:
@@ -81,10 +89,10 @@ def enregistrer(db: Session, copro, proprietaire_id: int, jour: date, montant: D
             raise HTTPException(422, "Un des lots n'appartient pas à ce copropriétaire.")
         if p.lot_id in vus:
             raise HTTPException(422, "Un lot apparaît deux fois dans la répartition.")
-        if p.montant < 0:
+        if p.montant < 0 or p.montant_travaux < 0:
             raise HTTPException(422, "Une part ne peut pas être négative.")
         vus.add(p.lot_id)
-    total = arrondi(somme(p.montant for p in parts))
+    total = arrondi(somme(p.montant + p.montant_travaux for p in parts))
     if total != arrondi(montant):
         raise HTTPException(422, f"La répartition totalise {total:.2f} € au lieu de {arrondi(montant):.2f} €."
                             .replace(".", ","))
@@ -92,12 +100,15 @@ def enregistrer(db: Session, copro, proprietaire_id: int, jour: date, montant: D
     libelle = (libelle or "").strip() or "Paiement"
     crees = []
     for p in parts:
-        if p.montant == 0:
-            continue
-        m = Mouvement(copropriete_id=copro.id, exercice_id=ex.id, date=jour,
-                      libelle=f"{libelle} — lot {lots[p.lot_id].numero}", type="encaissement",
-                      categorie="charges", montant=p.montant, lot_id=p.lot_id)
-        db.add(m)
-        crees.append(m)
+        numero = lots[p.lot_id].numero
+        for montant_part, categorie, suffixe in ((p.montant, "charges", ""),
+                                                 (p.montant_travaux, "fonds_travaux", " (travaux)")):
+            if montant_part == 0:
+                continue
+            m = Mouvement(copropriete_id=copro.id, exercice_id=ex.id, date=jour,
+                          libelle=f"{libelle} — lot {numero}{suffixe}", type="encaissement",
+                          categorie=categorie, montant=montant_part, lot_id=p.lot_id)
+            db.add(m)
+            crees.append(m)
     db.flush()
     return crees

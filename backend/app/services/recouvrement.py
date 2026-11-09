@@ -45,8 +45,23 @@ LIBELLES_STATUT = {
 }
 
 
-def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
-    """Décompte du lot : appels triés (échéance puis émission), encaissements imputés FIFO."""
+# Encaissements réservés au fonds de travaux (avance ou cotisation) : imputés seulement sur la part
+# « fonds de travaux » des appels. Les autres catégories (charges…) sont des paiements généraux.
+CATEGORIES_TRAVAUX = ("fonds_travaux", "travaux")
+
+
+def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
+    """Décompte du lot, par nature.
+
+    Appels triés (échéance puis émission). Imputation en deux passes :
+    1. les encaissements « fonds de travaux » / « travaux » soldent, du plus ancien au plus récent,
+       la part fonds de travaux des appels ; leur reste est une AVANCE TRAVAUX, jamais utilisée
+       pour des charges ;
+    2. les autres encaissements et les crédits (parts négatives : trop-perçu d'une régularisation,
+       crédit de reprise) soldent, du plus ancien au plus récent, ce qui reste dû sur chaque appel,
+       charges d'abord puis fonds de travaux ; leur reste est une AVANCE (charges).
+    Sans encaissement « travaux », le résultat est identique à l'imputation FIFO unique d'avant.
+    """
     paires = (
         db.query(AppelLot, AppelFonds, Exercice)
         .join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
@@ -58,24 +73,52 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
     b = reprise.base(db, copro.id)
     paires = [x for x in paires if reprise.appel_compte(x[1], b)]
     paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id))
-    encaisse = arrondi(somme(D(m.montant or D(0)) for m in db.query(Mouvement).filter(
+    encaissements = [m for m in db.query(Mouvement).filter(
         Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()
-        if reprise.encaissement_compte(m, b)))
+        if reprise.encaissement_compte(m, b)]
+    reste_trav = arrondi(somme(D(m.montant or 0) for m in encaissements
+                               if (m.categorie or "") in CATEGORIES_TRAVAUX))
+    general = arrondi(somme(D(m.montant or 0) for m in encaissements
+                            if (m.categorie or "") not in CATEGORIES_TRAVAUX))
 
-    # Un montant négatif (trop-perçu d'une régularisation de charges) est un CRÉDIT : il s'ajoute
-    # aux sommes disponibles et vient en déduction des appels dus, même antérieurs.
-    credits = arrondi(somme(-((p.montant_charges or D(0)) + (p.montant_fonds_travaux or D(0)))
-                            for p, _, _ in paires
-                            if (p.montant_charges or D(0)) + (p.montant_fonds_travaux or D(0)) < 0))
-    reste = arrondi(encaisse + credits)
-    lignes = []
+    # Composantes dues de chaque appel. Un montant total négatif est un CRÉDIT : il s'ajoute aux
+    # paiements généraux et vient en déduction des appels dus, même antérieurs.
+    composantes = []
+    credits = D(0)
     for part, appel, ex in paires:
+        c = arrondi(part.montant_charges or D(0))
+        f = arrondi(part.montant_fonds_travaux or D(0))
+        if c + f < 0:
+            credits += -(c + f)
+            composantes.append(None)
+            continue
+        if c < 0:
+            c, f = D(0), f + c
+        if f < 0:
+            c, f = c + f, D(0)
+        composantes.append([c, f])
+    reste_gen = arrondi(general + credits)
+
+    # Passe 1 : paiements travaux sur la part fonds de travaux.
+    for comp in composantes:
+        if comp is None or reste_trav <= 0:
+            continue
+        x = min(reste_trav, comp[1])
+        comp[1] = arrondi(comp[1] - x)
+        reste_trav = arrondi(reste_trav - x)
+    # Passe 2 : paiements généraux et crédits, appel par appel, charges puis fonds de travaux.
+    for comp in composantes:
+        if comp is None:
+            continue
+        for i in (0, 1):
+            x = min(reste_gen, comp[i])
+            comp[i] = arrondi(comp[i] - x)
+            reste_gen = arrondi(reste_gen - x)
+
+    lignes = []
+    for (part, appel, ex), comp in zip(paires, composantes):
         montant = arrondi((part.montant_charges or D(0)) + (part.montant_fonds_travaux or D(0)))
-        if montant < 0:
-            impute = montant   # crédit déjà ajouté aux sommes disponibles : restant dû nul
-        else:
-            impute = min(reste, montant)
-            reste = arrondi(reste - impute)
+        rc, rf = (D(0), D(0)) if comp is None else (comp[0], comp[1])
         echeance = appel.date_echeance or appel.date_emission
         lignes.append({
             "appel_id": appel.id,
@@ -86,11 +129,24 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
             "charges": arrondi(part.montant_charges or D(0)),
             "fonds": arrondi(part.montant_fonds_travaux or D(0)),
             "montant": montant,
-            "restant_du": arrondi(montant - impute),
+            "restant_du": arrondi(rc + rf),
+            "restant_du_charges": rc,
+            "restant_du_fonds": rf,
             "echu": bool(echeance and echeance <= date.today()),
             "comptes_approuves": ex.comptes_approuves_le is not None,
         })
-    return lignes
+    return {
+        "lignes": lignes,
+        "du_charges": arrondi(somme(l["restant_du_charges"] for l in lignes)),
+        "du_travaux": arrondi(somme(l["restant_du_fonds"] for l in lignes)),
+        "avance_charges": reste_gen,
+        "avance_travaux": reste_trav,
+    }
+
+
+def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
+    """Décompte du lot (lignes de ventilation_lot)."""
+    return ventilation_lot(db, copro, lot)["lignes"]
 
 
 def solde_lot(lignes: list[dict]) -> Decimal:

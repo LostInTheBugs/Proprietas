@@ -84,6 +84,8 @@ def _ligne_out(l: dict) -> DecompteLigne:
         exercice=l.get("exercice"), libelle=l.get("libelle") or "", echeance=l.get("echeance"),
         charges=l.get("charges") or D(0), fonds=l.get("fonds") or D(0),
         montant=l.get("montant") or D(0), restant_du=l.get("restant_du") or D(0),
+        restant_du_charges=l.get("restant_du_charges") or D(0),
+        restant_du_fonds=l.get("restant_du_fonds") or D(0),
         echu=bool(l.get("echu")),
     )
 
@@ -138,7 +140,8 @@ def dossier(lot_id: int, db: Session = Depends(get_db), user: User = Depends(req
     """Dossier complet d'un lot : décompte, actes, relances, calculs."""
     copro = get_or_create_copro(db, user)
     lot = _lot_ou_404(db, copro, lot_id)
-    lignes = svc.appels_lot(db, copro, lot)
+    v = svc.ventilation_lot(db, copro, lot)
+    lignes = v["lignes"]
     d = svc.statut_dossier(db, copro, lot, lignes=lignes)
     p = _proprio(db, lot)
     relances = (db.query(Relance).filter(Relance.lot_id == lot.id)
@@ -155,6 +158,8 @@ def dossier(lot_id: int, db: Session = Depends(get_db), user: User = Depends(req
         md_jours=d["md_jours"], jours_restants=d["jours_restants"],
         frais_total=d["frais_total"], interets=d["interets"], taux_legal=d["taux"],
         total_reclame=d["total_reclame"],
+        du_charges=v["du_charges"], du_travaux=v["du_travaux"],
+        avance_charges=v["avance_charges"], avance_travaux=v["avance_travaux"],
         decompte=[_ligne_out(l) for l in lignes],
         actes=[_acte_out(db, a) for a in d["actes"]],
         relances=[RelanceOut(

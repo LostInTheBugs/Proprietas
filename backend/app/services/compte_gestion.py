@@ -23,8 +23,10 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
     depenses = [m for m in mouvements if m.type == "depense"]
     encaissements = [m for m in mouvements if m.type == "encaissement"]
-    enc_charges = somme(m.montant for m in encaissements if m.categorie != "fonds_travaux")
-    enc_ft = somme(m.montant for m in encaissements if m.categorie == "fonds_travaux")
+    # Encaissements « fonds de travaux » ou « travaux » : réservés au fonds de travaux
+    # (même règle que l'imputation du décompte, recouvrement.CATEGORIES_TRAVAUX).
+    enc_charges = somme(m.montant for m in encaissements if m.categorie not in ("fonds_travaux", "travaux"))
+    enc_ft = somme(m.montant for m in encaissements if m.categorie in ("fonds_travaux", "travaux"))
     dep_ft = somme(m.montant for m in depenses if m.categorie == "fonds_travaux")
     budget = somme(b.montant for b in exercice.budget_lines)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
