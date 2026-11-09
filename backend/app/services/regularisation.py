@@ -8,7 +8,8 @@ copropriétaire lors de l'approbation des comptes » (Cass. 3e civ., 14 avr. 201
 - Charges réelles : dépenses de l'exercice hors fonds de travaux et hors travaux (financés par
   des appels distincts). Une dépense rattachée à un lot est imputée à ce seul lot ; les autres
   sont réparties aux tantièmes (plus fort reste).
-- Provisions : parts « charges » des appels de l'exercice, hors appel de régularisation. Les
+- Provisions : parts « charges » des appels de l'exercice, hors appel de régularisation et hors
+  appel « Reprise de solde » (reprise de l'historique : ce n'est pas une provision). Les
   cotisations au fonds de travaux ne sont jamais régularisées (art. 14-2-1 : acquises au syndicat).
 - Écart = réel − provisions : complément (> 0) ou crédit (< 0), dans un appel « Régularisation
   des charges » rattaché à l'exercice approuvé. Le lot est celui du propriétaire ACTUEL.
@@ -49,7 +50,8 @@ def calcul(db: Session, ex) -> dict:
 
     provisions = {lot.id: D(0) for lot in lots}
     parts = (db.query(AppelLot).join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
-             .filter(AppelFonds.exercice_id == ex.id, AppelFonds.regularisation_de_id.is_(None)).all())
+             .filter(AppelFonds.exercice_id == ex.id, AppelFonds.regularisation_de_id.is_(None),
+                     AppelFonds.reprise_etat_id.is_(None)).all())
     for p in parts:
         if p.lot_id in provisions:
             provisions[p.lot_id] += D(p.montant_charges or 0)

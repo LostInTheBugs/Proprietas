@@ -17,6 +17,9 @@ class AppelFonds(Base):
     # Appel de régularisation des charges : exercice régularisé (décret n° 67-223, art. 6-2, 3°).
     # Ses parts peuvent être négatives (trop-perçu crédité au copropriétaire).
     regularisation_de_id = Column(Integer, ForeignKey("exercices.id", ondelete="SET NULL"), nullable=True)
+    # Appel « Reprise de solde » généré par l'état de reprise qui sert de base (services/reprise.py).
+    # Il n'est pas une provision de son exercice et ne se supprime pas à la main.
+    reprise_etat_id = Column(Integer, ForeignKey("etats_reprise.id"), nullable=True)
 
     exercice = relationship("Exercice", back_populates="appels", foreign_keys=[exercice_id])
     parts = relationship("AppelLot", back_populates="appel", cascade="all, delete-orphan")

@@ -17,11 +17,12 @@ from app.models.audit import AuditLog
 from app.models.instance import InstanceState
 from app.models.recouvrement import ActeRecouvrement
 from app.models.notification import NotificationPV
+from app.models.reprise import EtatReprise, EtatRepriseLigne
 
 __all__ = [
     "User", "UserCopro", "Copropriete", "Personne", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
-    "NotificationPV",
+    "NotificationPV", "EtatReprise", "EtatRepriseLigne",
 ]

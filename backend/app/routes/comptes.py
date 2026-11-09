@@ -88,6 +88,9 @@ def update_exercice(exercice_id: int, data: ExerciceIn, db: Session = Depends(ge
 def delete_exercice(exercice_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
+    if any(a.reprise_etat_id is not None for a in ex.appels):
+        raise HTTPException(422, "Cet exercice porte un appel de reprise de l'historique : "
+                                 "il ne peut pas être supprimé.")
     db.delete(ex)
     db.commit()
     return {"ok": True}
@@ -204,6 +207,8 @@ def _appel_out(db: Session, a: AppelFonds) -> AppelOut:
 def delete_appel(appel_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     appel = get_owned_via(db, AppelFonds, Exercice, appel_id, copro, "exercice_id", label="Appel")
+    if appel.reprise_etat_id is not None:
+        raise HTTPException(422, "Appel de reprise de l'historique : il se gère depuis l'écran Historique.")
     db.delete(appel)
     db.commit()
     return {"ok": True}

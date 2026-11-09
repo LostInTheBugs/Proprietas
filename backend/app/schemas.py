@@ -477,6 +477,65 @@ class RegularisationOut(BaseModel):
     total_ecart: float = 0.0
 
 
+# ---------- Reprise de l'historique (états au 31/12) ----------
+class EtatRepriseLigneIn(BaseModel):
+    lot_id: int
+    proprietaire_id: Optional[int] = None     # défaut : propriétaire actuel du lot
+    exercice_origine: int
+    montant_charges: Montant = Decimal("0.00")        # négatif = crédit
+    montant_fonds_travaux: Montant = Decimal("0.00")
+
+
+class EtatRepriseIn(BaseModel):
+    date: date
+    commentaire: str = ""
+    lignes: List[EtatRepriseLigneIn] = []
+
+
+class EtatRepriseLigneOut(BaseModel):
+    id: int
+    lot_id: int
+    lot_numero: str
+    proprietaire_id: Optional[int] = None
+    exercice_origine: int
+    montant_charges: float
+    montant_fonds_travaux: float
+
+
+class ControleLigne(BaseModel):
+    lot_id: int
+    lot_numero: str
+    attendu: float
+    calcule: float
+    ecart: float
+
+
+class ControleOut(BaseModel):
+    date: date
+    depart: date
+    ok: bool
+    ecart_total: float
+    lignes: List[ControleLigne] = []
+
+
+class EtatRepriseOut(BaseModel):
+    id: int
+    date: date
+    valide: bool
+    valide_le: Optional[datetime] = None
+    role: str                       # brouillon | base | point_de_controle
+    commentaire: str = ""
+    total_charges: float = 0.0
+    total_fonds_travaux: float = 0.0
+    nb_lignes: int = 0
+    controle_ok: Optional[bool] = None   # None : aucun contrôle (base seule, ou premier état)
+
+
+class EtatRepriseDetail(EtatRepriseOut):
+    lignes: List[EtatRepriseLigneOut] = []
+    controles: List[ControleOut] = []
+
+
 # ---------- Mouvements ----------
 class MouvementIn(BaseModel):
     date: date
