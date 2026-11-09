@@ -16,6 +16,7 @@ from app.services.country_rules import repartir_par_tantiemes
 from app.services.regime import regime_copro
 from app.core.money import D, arrondi, somme
 from app.schemas import (
+    MouvementsGroupeIn,
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
     RegularisationIn, RegularisationOut, ReclasserIn, EnsembleSolde,
@@ -369,6 +370,56 @@ def reclasser_mouvements(exercice_id: int, data: ReclasserIn, request: Request, 
                       detail=f"Exercice {ex.annee} : {len(hors)} mouvement(s) déplacé(s) ({par_annee})")
     db.commit()
     return {"simulation": False, "mouvements": liste}
+
+
+@router.post("/mouvements/groupe")
+def modifier_mouvements_groupe(data: MouvementsGroupeIn, request: Request, db: Session = Depends(get_db),
+                               user: User = Depends(require_syndic)):
+    """Change l'exercice, le type, la catégorie et/ou le contrat de plusieurs mouvements (tout ou rien)."""
+    copro = get_or_create_copro(db, user)
+    champs = data.model_fields_set - {"ids"}
+    champs -= {c for c in ("exercice_id", "type", "categorie") if getattr(data, c) is None}
+    ids = sorted(set(data.ids))
+    if not ids:
+        raise HTTPException(422, "Aucun mouvement sélectionné.")
+    if not champs:
+        raise HTTPException(422, "Aucune modification demandée.")
+    mouvements = db.query(Mouvement).filter(Mouvement.id.in_(ids), Mouvement.copropriete_id == copro.id).all()
+    if len(mouvements) != len(ids):
+        raise HTTPException(422, "Certains mouvements n'appartiennent pas à la copropriété.")
+    if "type" in champs and data.type not in TYPES_MOUVEMENT:
+        raise HTTPException(422, "Type de mouvement inconnu (encaissement ou dépense).")
+    if "categorie" in champs and data.categorie not in CATEGORIES_MOUVEMENT:
+        raise HTTPException(422, f"Catégorie inconnue : {data.categorie}.")
+    if "contrat_id" in champs and data.contrat_id is not None and not db.query(Contrat).filter(
+            Contrat.id == data.contrat_id, Contrat.copropriete_id == copro.id).first():
+        raise HTTPException(422, "Ce contrat n'appartient pas à la copropriété.")
+    cible = None
+    if "exercice_id" in champs:
+        cible = db.query(Exercice).filter(Exercice.id == data.exercice_id,
+                                          Exercice.copropriete_id == copro.id).first()
+        if cible is None:
+            raise HTTPException(422, "Cet exercice n'appartient pas à la copropriété.")
+        for m in mouvements:
+            nouveau_type = data.type if "type" in champs else m.type
+            if m.exercice_id != cible.id and "depense" in (m.type, nouveau_type):
+                _controler_regularisation(db, (db.get(Exercice, m.exercice_id), cible))
+    for m in mouvements:
+        if cible is not None:
+            m.exercice_id = cible.id
+        for champ in champs - {"exercice_id"}:
+            setattr(m, champ, getattr(data, champ))
+    contrat = db.get(Contrat, data.contrat_id) if data.contrat_id else None
+    changements = ", ".join(filter(None, [
+        f"exercice {cible.annee}" if cible is not None else "",
+        f"type {data.type}" if "type" in champs else "",
+        f"catégorie {data.categorie}" if "categorie" in champs else "",
+        (f"contrat « {contrat.libelle} »" if contrat else "sans contrat") if "contrat_id" in champs else "",
+    ]))
+    audit.enregistrer(db, "mouvements_modifies", user=user, copro_id=copro.id, request=request,
+                      detail=f"{len(mouvements)} mouvement(s) (#{', #'.join(map(str, ids))}) : {changements}"[:1000])
+    db.commit()
+    return {"modifies": len(mouvements)}
 
 
 @router.delete("/mouvements/{mouvement_id}")
