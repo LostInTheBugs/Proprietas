@@ -11,8 +11,11 @@ export interface UpdateState {
   available: boolean;
   changes: ReleaseInfo[];
   check: { last_at: number; error: string };
-  request: { version: string; at: number; by: string } | null;
-  applier: { installed: boolean; seen_at: number; result: string; applied: string; applied_at: number; backup: string };
+  request: { version: string; at: number; by: string; action: "update" | "rollback" | "oublier_precedente" } | null;
+  applier: {
+    installed: boolean; seen_at: number; result: string; applied: string; applied_at: number; backup: string;
+    precedente: { version: string; image: boolean; octets: number | null } | null;
+  };
   settings: { check_interval_s: number; auto_apply: boolean };
 }
 
@@ -21,6 +24,7 @@ const INTERVALLES: [number, string][] = [
   [86400, "Une fois par jour"], [0, "Jamais (désactivé)"],
 ];
 
+const mo = (octets: number | null) => (octets ? `${Math.round(octets / 1024 / 1024)} Mo` : "");
 const quand = (ts: number) => (ts ? new Date(ts * 1000).toLocaleString("fr-FR") : "jamais");
 const jour = (iso: string) => (iso ? new Date(iso).toLocaleDateString("fr-FR") : "");
 
@@ -64,6 +68,7 @@ export function UpdatesCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showChanges, setShowChanges] = useState(false);
+  const [confirmerRetour, setConfirmerRetour] = useState(false);
   if (!admin || !st) return null;
 
   async function call(fn: () => Promise<UpdateState>) {
@@ -112,10 +117,41 @@ export function UpdatesCard() {
           </div>
         )}
 
+        {st.mode === "server" && st.applier.precedente && !st.request && (() => {
+          const p = st.applier.precedente;
+          return (
+            <div className="space-y-2 rounded-lg border border-slate-200 px-3 py-2">
+              <p>
+                Version précédente conservée : <b>{p.version}</b>
+                {p.image && p.octets ? <span className="text-slate-500"> (image de {mo(p.octets)} sur le serveur)</span> : null}
+              </p>
+              <p className="text-xs text-slate-500">
+                Elle permet de revenir en arrière si la nouvelle version pose problème. Les plus anciennes sont
+                supprimées automatiquement à chaque mise à jour.
+                {!p.image && " Stratégie « build » : le retour arrière reconstruit cette version (plusieurs minutes)."}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" disabled={busy || !applicateurActif} onClick={() => setConfirmerRetour(true)}>
+                  Revenir à {p.version}…
+                </Button>
+                <Button variant="ghost" disabled={busy || !applicateurActif}
+                  onClick={() => call(() => api.post<UpdateState>("/admin/updates/oublier-precedente"))}>
+                  Ne pas la conserver{p.image && p.octets ? ` (libère ${mo(p.octets)})` : ""}
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
+
         {st.request && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Mise à jour vers <b>{st.request.version}</b> demandée par {st.request.by} le {quand(st.request.at)} :
-            l'applicateur du serveur va sauvegarder la base puis redémarrer l'application (quelques minutes).{" "}
+            {st.request.action === "rollback" ? <>Retour à la version <b>{st.request.version}</b></>
+              : st.request.action === "oublier_precedente" ? <>Suppression de la version <b>{st.request.version}</b></>
+                : <>Mise à jour vers <b>{st.request.version}</b></>}{" "}
+            demandé{st.request.action === "update" ? "e" : ""} par {st.request.by} le {quand(st.request.at)} :
+            {st.request.action === "oublier_precedente"
+              ? " l'applicateur du serveur va supprimer son image (moins d'une minute)."
+              : " l'applicateur du serveur va sauvegarder la base puis redémarrer l'application (quelques minutes)."}{" "}
             <button className="font-medium underline" disabled={busy}
               onClick={() => call(() => api.del<UpdateState>("/admin/updates/request"))}>Annuler</button>
           </p>
@@ -148,6 +184,28 @@ export function UpdatesCard() {
         </div>
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
+
+      <Modal open={confirmerRetour} title={`Revenir à ${st.applier.precedente?.version ?? ""}`} onClose={() => setConfirmerRetour(false)}>
+        <div className="space-y-3 text-sm text-slate-700">
+          <p>L'applicateur du serveur va, dans l'ordre :</p>
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>sauvegarder la base de données ;</li>
+            <li>annuler les changements de structure de la base apportés par {st.current} (les données saisies
+              depuis la mise à jour sont gardées, sauf celles des champs ajoutés par cette version) ;</li>
+            <li>relancer l'application en {st.applier.precedente?.version}.</li>
+          </ol>
+          <p className="text-xs text-slate-500">
+            En cas d'échec, il revient à {st.current}. L'application est indisponible quelques minutes.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmerRetour(false)}>Annuler</Button>
+            <Button disabled={busy} onClick={() => {
+              setConfirmerRetour(false);
+              call(() => api.post<UpdateState>("/admin/updates/rollback"));
+            }}>Revenir à {st.applier.precedente?.version}</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={showChanges} wide title={`Changements depuis ${st.current}`} onClose={() => setShowChanges(false)}>
         <div className="space-y-5">
