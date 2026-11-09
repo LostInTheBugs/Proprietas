@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.005 — 2026-11-09
+
+- Comptes : bouton « Modifier » sur les mouvements (date, libellé, type, catégorie, montant, lot) et sur les lignes de budget ; chaque modification d'un mouvement est inscrite au journal d'audit, avec l'avant et l'après. Le formulaire de mouvement propose désormais « Dépense » par défaut. Type, catégorie, lot et appel sont contrôlés à la saisie.
+
 ## 2026.11.004 — 2026-11-09
 
 - Historique : import CSV d'un état au 31 décembre (créé en brouillon), d'appels de fonds ou de paiements. Vérification préalable avec les erreurs par numéro de ligne, refus en bloc à la moindre erreur, et un fichier importé deux fois ne compte jamais double. Séparateur « ; » ou « , », montants à la française, fichiers UTF-8 ou Excel (Windows-1252).
