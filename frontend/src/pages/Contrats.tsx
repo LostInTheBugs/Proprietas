@@ -106,6 +106,11 @@ export default function Contrats() {
                     <td className="px-3 py-2 text-slate-600">{c.contact_nom || "—"}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                       {c.montant > 0 ? `${fmtEUR(c.montant)} ${PERIODES[c.periode] ? `/ ${PERIODES[c.periode].toLowerCase()}` : ""}` : "—"}
+                      {(c.nb_mouvements ?? 0) > 0 && (
+                        <span className="block text-xs text-slate-500">
+                          payé en {new Date().getFullYear()} : {fmtEUR(c.depenses_annee ?? 0)} ({c.nb_mouvements} mouvement{(c.nb_mouvements ?? 0) > 1 ? "s" : ""})
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 tabular-nums text-slate-700">
                       {dateFr(c.date_fin)}

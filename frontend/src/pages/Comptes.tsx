@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, uploadDocument } from "../api";
 import { useUser } from "../auth";
-import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation, Repartition } from "../types";
+import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation, Repartition, Contrat,
+  Document as DocumentFichier } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 
@@ -14,6 +15,8 @@ export default function Comptes() {
   const [appels, setAppels] = useState<Appel[]>([]);
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
+  const [contrats, setContrats] = useState<Contrat[]>([]);
+  const [documents, setDocuments] = useState<DocumentFichier[]>([]);
   const [recap, setRecap] = useState<Recap | null>(null);
   const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement" | "paiement">(null);
   const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
@@ -37,6 +40,8 @@ export default function Comptes() {
     api.get<Appel[]>(`/exercices/${exId}/appels`).then(setAppels).catch(() => {});
     api.get<Mouvement[]>(`/exercices/${exId}/mouvements`).then(setMouvements).catch(() => {});
     api.get<Lot[]>("/lots").then(setLots).catch(() => {});
+    api.get<Contrat[]>("/contrats").then(setContrats).catch(() => {});
+    api.get<DocumentFichier[]>("/documents").then(setDocuments).catch(() => {});
     api.get<Recap>("/recap").then(setRecap).catch(() => {});
   }, [exId]);
 
@@ -296,7 +301,20 @@ export default function Comptes() {
                               <Badge color="amber">autre année</Badge>
                             )}
                           </td>
-                          <td className="py-2 text-slate-700">{m.libelle}</td>
+                          <td className="py-2 text-slate-700">
+                            {m.libelle}
+                            {(m.contrat_id || m.document_id) && (
+                              <span className="block text-xs text-slate-500">
+                                {m.contrat_id && <>Contrat : {contrats.find((c) => c.id === m.contrat_id)?.libelle ?? `#${m.contrat_id}`}</>}
+                                {m.contrat_id && m.document_id && " · "}
+                                {m.document_id && (
+                                  <a href={`/api/documents/${m.document_id}/download`} className="text-indigo-600 hover:underline">
+                                    📎 {documents.find((d) => d.id === m.document_id)?.libelle ?? "facture"}
+                                  </a>
+                                )}
+                              </span>
+                            )}
+                          </td>
                           <td className="py-2 text-slate-600">{lot ? `Lot ${lot.numero}` : "—"}</td>
                           <td className="py-2"><Badge>{m.categorie}</Badge></td>
                           <td className={`py-2 text-right font-semibold tabular-nums ${m.type === "encaissement" ? "text-emerald-600" : "text-slate-700"}`}>
@@ -340,14 +358,16 @@ export default function Comptes() {
         <AppelModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "mouvement" && exId && (
-        <MouvementModal exId={exId} exercices={exercices} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+        <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
+          onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "paiement" && (
         <PaiementModal lots={lots} onClose={() => setModal(null)}
           onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {mouvementEdite && exId && (
-        <MouvementModal exId={exId} exercices={exercices} lots={lots} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
+        <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
+          initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
           onSaved={() => { setMouvementEdite(null); refresh(); }} onError={setError} />
       )}
       {reclassement && exId && (
@@ -395,6 +415,8 @@ export default function Comptes() {
     setAppels(await api.get(`/exercices/${exId}/appels`));
     setMouvements(await api.get(`/exercices/${exId}/mouvements`));
     setRecap(await api.get("/recap"));
+    setDocuments(await api.get("/documents"));
+    setContrats(await api.get("/contrats"));
   }
 }
 
@@ -593,10 +615,16 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
-function MouvementModal({ exId, exercices, lots, initial, onClose, onSaved, onError }: {
-  exId: number; exercices: Exercice[]; lots: Lot[]; initial?: Mouvement; onClose: () => void; onSaved: () => void;
-  onError: (e: string) => void;
+function MouvementModal({ exId, exercices, lots, contrats, documents, initial, onClose, onSaved, onError }: {
+  exId: number; exercices: Exercice[]; lots: Lot[]; contrats: Contrat[]; documents: DocumentFichier[];
+  initial?: Mouvement; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
+  const [contratId, setContratId] = useState(initial?.contrat_id != null ? String(initial.contrat_id) : "");
+  const [documentId, setDocumentId] = useState(initial?.document_id != null ? String(initial.document_id) : "");
+  const [fichier, setFichier] = useState<File | null>(null);
+  // Factures d'abord, puis les autres documents (les plus récents en tête).
+  const docsTries = [...documents].sort((a, b) =>
+    Number(b.categorie === "facture") - Number(a.categorie === "facture") || b.date_ajout.localeCompare(a.date_ajout));
   const [exerciceId, setExerciceId] = useState(String(initial?.exercice_id ?? exId));
   const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10));
   const [libelle, setLibelle] = useState(initial?.libelle ?? "");
@@ -607,11 +635,19 @@ function MouvementModal({ exId, exercices, lots, initial, onClose, onSaved, onEr
   const [lotId, setLotId] = useState(initial?.lot_id != null ? String(initial.lot_id) : "");
   async function save() {
     try {
+      // Nouveau fichier joint : déposé dans Documents (catégorie facture), puis rattaché.
+      let docId = documentId === "" ? null : Number(documentId);
+      if (fichier) {
+        const doc = await uploadDocument("facture", libelle || fichier.name, fichier);
+        docId = doc.id;
+      }
       const corps = {
         date, libelle, type, categorie, montant: Number(montant),
         lot_id: lotId === "" ? null : Number(lotId),
         appel_id: initial?.appel_id ?? null,
         exercice_id: Number(exerciceId),
+        contrat_id: contratId === "" ? null : Number(contratId),
+        document_id: docId,
       };
       if (initial) await api.put(`/mouvements/${initial.id}`, corps);
       else await api.post(`/exercices/${exerciceId}/mouvements`, corps);
@@ -669,6 +705,29 @@ function MouvementModal({ exId, exercices, lots, initial, onClose, onSaved, onEr
             {lots.map((l) => <option key={l.id} value={l.id}>Lot {l.numero}</option>)}
           </Select>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Contrat" value={contratId} onChange={(e) => setContratId(e.target.value)}>
+            <option value="">— aucun —</option>
+            {contrats.map((c) => <option key={c.id} value={c.id}>{c.libelle}</option>)}
+          </Select>
+          <Select label="Facture (document)" value={documentId} disabled={!!fichier}
+            onChange={(e) => setDocumentId(e.target.value)}>
+            <option value="">— aucune —</option>
+            {docsTries.map((d) => (
+              <option key={d.id} value={d.id}>{d.libelle}{d.categorie !== "facture" ? ` (${d.categorie})` : ""}</option>
+            ))}
+          </Select>
+        </div>
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-slate-600">ou joindre un nouveau fichier (PDF, image…)</span>
+          <input type="file" className="block w-full text-sm text-slate-600"
+            onChange={(e) => setFichier(e.target.files?.[0] ?? null)} />
+          {fichier && (
+            <span className="mt-1 block text-xs text-slate-500">
+              Il sera rangé dans Documents (catégorie Facture) et rattaché à ce mouvement.
+            </span>
+          )}
+        </label>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>Enregistrer</Button>

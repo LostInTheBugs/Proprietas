@@ -165,6 +165,8 @@ export interface Mouvement {
   appel_id: number | null;
   piece_path: string;
   exercice_id?: number;
+  contrat_id?: number | null;   // contrat rattaché
+  document_id?: number | null;  // facture (document) rattachée
 }
 
 export interface EtatDateLot {
@@ -340,6 +342,8 @@ export interface Contrat {
   notes: string;
   statut: string; // actif, expire_bientot, expire
   jours_restants: number | null;
+  nb_mouvements?: number;     // mouvements rattachés
+  depenses_annee?: number;    // dépenses rattachées de l'année en cours
 }
 
 export interface Document {
