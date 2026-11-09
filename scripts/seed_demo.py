@@ -2,8 +2,14 @@
 """Seed de démonstration Proprietas.
 
 Crée un compte démo + 2 copropriétés réalistes (lots, comptes copropriétaires,
-AG, PV/votes, documents, carnet, travaux, relances). Idempotent : ne fait rien
+AG, PV/votes, documents, carnet, travaux, relances). Idempotent : ne recrée rien
 si le compte démo existe déjà.
+
+Reprise de l'historique (écran Historique, 2026.11.003) : la Résidence Les Acacias
+démarre en 2026 ; elle reçoit un état validé au 31/12/2025 (la base) et un brouillon
+au 31/12/2024 avec des écarts. Cette étape est ajoutée À PART et seulement si la
+copropriété n'a encore aucun état : relancer le script sur une démo existante
+l'ajoute sans toucher au reste.
 
 MODÈLE « ZÉRO FICHE » : les propriétaires sont des COMPTES UTILISATEURS (plus de
 fiches « Lots & occupants ») — chaque copropriétaire de la démo a donc un compte,
@@ -29,6 +35,7 @@ from app.models.document import Document
 from app.models.carnet import Entretien
 from app.models.travaux import Travaux
 from app.models.relance import Relance
+from app.models.reprise import EtatReprise, EtatRepriseLigne
 
 db = SessionLocal()
 EMAIL_DEMO = "demo@proprietas.cloudfr.net"
@@ -61,9 +68,58 @@ def petit_pdf(titre: str, corps: str) -> bytes:
     return buf.getvalue()
 
 
+def ajouter_reprise_demo():
+    """États de reprise de la Résidence Les Acacias (idempotent : rien si un état existe déjà)."""
+    from app.services import reprise
+
+    demo = db.query(User).filter(User.email == EMAIL_DEMO).first()
+    ids = [uc.copropriete_id for uc in db.query(UserCopro).filter(UserCopro.user_id == demo.id)]
+    ac = (db.query(Copropriete).filter(Copropriete.id.in_(ids), Copropriete.nom == "Résidence Les Acacias")
+          .first())
+    if ac is None:
+        print("Reprise : Résidence Les Acacias introuvable — rien à faire.")
+        return
+    if db.query(EtatReprise).filter(EtatReprise.copropriete_id == ac.id).first():
+        print("Reprise : états déjà en place — rien à faire.")
+        return
+    lots = {l.numero: l for l in db.query(Lot).filter(Lot.copropriete_id == ac.id)}
+
+    def etat(jour, commentaire, lignes):
+        e = EtatReprise(copropriete_id=ac.id, date=jour, commentaire=commentaire)
+        e.lignes = [EtatRepriseLigne(lot_id=lots[num].id, proprietaire_id=lots[num].proprietaire_id,
+                                     exercice_origine=annee, montant_charges=charges,
+                                     montant_fonds_travaux=fonds)
+                    for num, annee, charges, fonds in lignes]
+        db.add(e)
+        db.flush()
+        return e
+
+    # Base : relevé de l'ancien syndic au 31/12/2025. Lot 1 (Benali) doit le T4 2025 ; lot 2
+    # (Fontaine) a un trop-perçu ; lot 3 (Rossi) doit 2024 (exercice approuvé) et 2025.
+    base = etat(date(2025, 12, 31), "Relevé des comptes copropriétaires remis par l'ancien syndic", [
+        ("1", 2025, 180.00, 9.00),
+        ("2", 2025, -45.00, 0.00),
+        ("3", 2024, 95.00, 10.00),
+        ("3", 2025, 240.00, 12.00),
+    ])
+    reprise.valider(db, ac.id, base)
+    db.flush()
+    # Exercice 2024 approuvé (AG du 20/03/2025) : l'aperçu 19-2 le distingue de 2025.
+    ex_2024 = db.query(Exercice).filter(Exercice.copropriete_id == ac.id, Exercice.annee == 2024).first()
+    ex_2024.comptes_approuves_le = date(2025, 3, 20)
+    # Brouillon de l'année précédente : le détail 2025 n'est pas saisi, d'où les écarts affichés.
+    etat(date(2024, 12, 31), "Brouillon : saisir les appels et paiements 2025 dans Comptes avant de valider", [
+        ("1", 2024, 60.00, 0.00),
+        ("3", 2024, 95.00, 10.00),
+    ])
+    db.commit()
+    print("Reprise : Résidence Les Acacias — base au 31/12/2025 validée, brouillon au 31/12/2024.")
+
+
 def main():
     if db.query(User).filter(User.email == EMAIL_DEMO).first():
-        print("Démo déjà en place — rien à faire.")
+        print("Démo déjà en place — rien à recréer.")
+        ajouter_reprise_demo()
         return
 
     # ------------------------------------------------------------------ user
@@ -444,9 +500,10 @@ def main():
                      description="Contrôle annuel de la chaudière collective."))
 
     db.commit()
+    ajouter_reprise_demo()
     print("Démo créée : demo@proprietas.cloudfr.net / demo123456")
     print("  - Résidence Les Tilleuls (Paris, 5 lots, comptes 2024-2026, AG, documents, PPT)")
-    print("  - Résidence Les Acacias (Lyon, 3 lots)")
+    print("  - Résidence Les Acacias (Lyon, 3 lots, historique repris au 31/12/2025)")
     print("  - Comptes copropriétaires (mot de passe demo123456) : marie.dubois, jean.martin,")
     print("    sophie.bernard, paul.petit, contact.sci-lilas, karim.benali, claire.fontaine, enzo.rossi")
 
