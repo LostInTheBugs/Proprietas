@@ -612,6 +612,8 @@ class MouvementIn(BaseModel):
     appel_id: Optional[int] = None
     # Modification seulement : déplacer le mouvement vers un autre exercice (None = inchangé).
     exercice_id: Optional[int] = None
+    contrat_id: Optional[int] = None     # contrat rattaché
+    document_id: Optional[int] = None    # facture (document) rattachée
 
 
 class ReclasserIn(BaseModel):
@@ -894,6 +896,8 @@ class ContratOut(BaseModel):
     notes: str = ""
     statut: str = "actif"  # actif, expire_bientot, expire
     jours_restants: Optional[int] = None
+    nb_mouvements: int = 0          # mouvements rattachés (toutes années)
+    depenses_annee: float = 0.0     # total des dépenses rattachées de l'année en cours
 
 
 # ---------- Plan pluriannuel de travaux ----------

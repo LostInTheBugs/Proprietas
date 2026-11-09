@@ -6,6 +6,8 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.contrat import Contrat
 from app.models.contact import Contact
+from app.models.mouvement import Mouvement
+from app.core.money import D, arrondi, somme
 from app.core.scoping import get_owned
 from app.routes.copro import get_or_create_copro
 from app.schemas import ContratIn, ContratOut
@@ -55,6 +57,11 @@ def _out(db: Session, c: Contrat) -> ContratOut:
     o.contact_nom = c.contact.nom if c.contact else ""
     o.statut = statut
     o.jours_restants = jours
+    # Mouvements rattachés : nombre, et total des dépenses de l'année en cours.
+    mouvements = db.query(Mouvement).filter(Mouvement.contrat_id == c.id).all()
+    o.nb_mouvements = len(mouvements)
+    o.depenses_annee = float(arrondi(somme(D(m.montant or 0) for m in mouvements
+                                           if m.type == "depense" and m.date and m.date.year == date.today().year)))
     return o
 
 
@@ -94,6 +101,9 @@ def modifier(contrat_id: int, data: ContratIn, db: Session = Depends(get_db), us
 def supprimer(contrat_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     c = get_owned(db, Contrat, contrat_id, copro, label="Contrat")
+    # Les mouvements rattachés restent, déliés.
+    db.query(Mouvement).filter(Mouvement.contrat_id == c.id).update({Mouvement.contrat_id: None},
+                                                                    synchronize_session=False)
     db.delete(c)
     db.commit()
     return {"ok": True}

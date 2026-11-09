@@ -8,6 +8,8 @@ from app.models.lot import Lot
 from app.models.exercice import Exercice, BudgetLine
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
+from app.models.contrat import Contrat
+from app.models.document import Document
 from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
 from app.services.country_rules import repartir_par_tantiemes
@@ -274,6 +276,12 @@ def _controler_mouvement(db: Session, copro, data: MouvementIn) -> None:
                                           .filter(AppelFonds.id == data.appel_id,
                                                   Exercice.copropriete_id == copro.id).first()):
         raise HTTPException(422, "Cet appel de fonds n'appartient pas à la copropriété.")
+    if data.contrat_id is not None and not db.query(Contrat).filter(
+            Contrat.id == data.contrat_id, Contrat.copropriete_id == copro.id).first():
+        raise HTTPException(422, "Ce contrat n'appartient pas à la copropriété.")
+    if data.document_id is not None and not db.query(Document).filter(
+            Document.id == data.document_id, Document.copropriete_id == copro.id).first():
+        raise HTTPException(422, "Ce document n'appartient pas à la copropriété.")
 
 
 def _resume_mouvement(m) -> str:
