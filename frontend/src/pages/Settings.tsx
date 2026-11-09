@@ -6,6 +6,7 @@ import { fmtDate, fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
+import { SauvegardeCard } from "../components/Sauvegarde";
 
 export default function Settings() {
   const { user: me, refresh } = useUser();
@@ -508,6 +509,8 @@ export default function Settings() {
           {isSyndic && <Button onClick={saveRelanceAuto}>Enregistrer</Button>}
         </div>
       </Card>)}
+
+      {isSyndic && <SauvegardeCard />}
 
       {!isSyndic && (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
