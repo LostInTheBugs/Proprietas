@@ -1,8 +1,9 @@
-"""Totaux par lot (appels, encaissements, solde) : un seul calcul pour tout l'application.
+"""Totaux par lot (appels, encaissements, solde) : un seul calcul pour toute l'application.
 
 Le même calcul était recopié dans six écrans (soldes des lots, relances, récapitulatif des comptes,
 compte de gestion, rapport annuel). Il est centralisé ici pour qu'une règle commune s'applique
-partout de la même façon.
+partout de la même façon : depuis la reprise de l'historique, les appels et encaissements
+COUVERTS par l'état de reprise qui sert de base n'entrent plus dans les soldes (services/reprise.py).
 """
 from decimal import Decimal
 
@@ -11,16 +12,24 @@ from sqlalchemy.orm import Session
 from app.core.money import D, arrondi, somme
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
+from app.services import reprise
 
 
 def parts_lot(db: Session, lot) -> list[tuple[AppelLot, AppelFonds]]:
-    """Parts d'appels du lot, avec leur appel."""
-    return (db.query(AppelLot, AppelFonds).join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
-            .filter(AppelLot.lot_id == lot.id).all())
+    """Parts d'appels du lot qui entrent dans les soldes, avec leur appel."""
+    b = reprise.base(db, lot.copropriete_id)
+    return [(p, a) for p, a in
+            db.query(AppelLot, AppelFonds).join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
+            .filter(AppelLot.lot_id == lot.id).all()
+            if reprise.appel_compte(a, b)]
 
 
 def encaissements_lot(db: Session, lot) -> list[Mouvement]:
-    return db.query(Mouvement).filter(Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()
+    """Encaissements du lot qui entrent dans les soldes."""
+    b = reprise.base(db, lot.copropriete_id)
+    return [m for m in db.query(Mouvement).filter(Mouvement.lot_id == lot.id,
+                                                  Mouvement.type == "encaissement").all()
+            if reprise.encaissement_compte(m, b)]
 
 
 def totaux_lot(db: Session, lot) -> dict[str, Decimal]:

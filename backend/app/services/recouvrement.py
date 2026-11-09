@@ -21,7 +21,7 @@ from app.models.copropriete import Copropriete
 from app.models.exercice import Exercice
 from app.models.mouvement import Mouvement
 from app.models.recouvrement import ActeRecouvrement
-from app.services import delais
+from app.services import delais, reprise
 
 # Types d'actes créables via l'API (l'activation 19-2 a sa route dédiée).
 TYPES_ACTE = ("mise_en_demeure", "frais", "conciliation", "commissaire_justice", "tribunal", "note")
@@ -54,9 +54,13 @@ def appels_lot(db: Session, copro: Copropriete, lot) -> list[dict]:
         .filter(AppelLot.lot_id == lot.id, Exercice.copropriete_id == copro.id)
         .all()
     )
+    # Appels et encaissements couverts par l'état de reprise de base : hors décompte.
+    b = reprise.base(db, copro.id)
+    paires = [x for x in paires if reprise.appel_compte(x[1], b)]
     paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id))
     encaisse = arrondi(somme(D(m.montant or D(0)) for m in db.query(Mouvement).filter(
-        Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()))
+        Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()
+        if reprise.encaissement_compte(m, b)))
 
     # Un montant négatif (trop-perçu d'une régularisation de charges) est un CRÉDIT : il s'ajoute
     # aux sommes disponibles et vient en déduction des appels dus, même antérieurs.
