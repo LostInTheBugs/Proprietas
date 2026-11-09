@@ -376,7 +376,8 @@ l'image de la nouvelle version et celle de la **version précédente**, et suppr
   récentes que l'ancienne version (sa tête est lue dans son tag git ; les données saisies depuis sont
   gardées, sauf celles des champs ajoutés), relance de l'ancienne image, vérification de l'API. En cas
   d'échec, retour automatique à la version actuelle (migrations réappliquées). La version quittée
-  devient à son tour la précédente.
+  devient à son tour la précédente. L'application automatique (si activée) ne réinstalle pas la version
+  quittée : elle reprend avec la version suivante, ou dès une mise à jour manuelle.
 - **Ne pas la conserver** : son image est supprimée (place libérée).
 
 En stratégie « build », rien n'est gardé en image : le retour arrière reconstruit l'ancienne version

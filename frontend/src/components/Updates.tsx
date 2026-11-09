@@ -16,7 +16,7 @@ export interface UpdateState {
     installed: boolean; seen_at: number; result: string; applied: string; applied_at: number; backup: string;
     precedente: { version: string; image: boolean; octets: number | null } | null;
   };
-  settings: { check_interval_s: number; auto_apply: boolean };
+  settings: { check_interval_s: number; auto_apply: boolean; ignorer_auto: string };
 }
 
 const INTERVALLES: [number, string][] = [
@@ -182,6 +182,12 @@ export function UpdatesCard() {
             </label>
           )}
         </div>
+        {st.mode === "server" && st.settings.auto_apply && st.settings.ignorer_auto && (
+          <p className="text-xs text-amber-700">
+            Après le retour arrière, l'application automatique ne réinstalle pas {st.settings.ignorer_auto} : elle
+            reprendra avec la prochaine version, ou dès une mise à jour manuelle.
+          </p>
+        )}
         {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
 

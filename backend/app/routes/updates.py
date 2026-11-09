@@ -64,6 +64,7 @@ def appliquer(user: User = Depends(require_instance_admin)):
     if st["request"]:
         raise HTTPException(409, f"Une mise à jour vers {st['request']['version']} est déjà demandée")
     updates.write_request(st["latest"]["version"], user.email)
+    updates.ignorer_en_automatique("")      # mise à jour manuelle : l'automatique reprend normalement
     return updates.state()
 
 
@@ -77,6 +78,9 @@ def _demande_sur_precedente(user: User, action: str) -> dict:
     if st["request"]:
         raise HTTPException(409, f"Une demande est déjà en attente ({st['request']['version']})")
     updates.write_request(precedente["version"], user.email, action)
+    if action == "rollback":
+        # Sans cela, l'application automatique remettrait aussitôt la version qu'on vient de quitter.
+        updates.ignorer_en_automatique(VERSION)
     return updates.state()
 
 
