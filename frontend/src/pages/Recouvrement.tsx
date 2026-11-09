@@ -10,7 +10,7 @@ import type {
   Relance,
   RelanceLot,
 } from "../types";
-import { fmtDate, fmtDateTime, fmtEUR } from "../types";
+import { fmtDate, fmtDateTime, fmtEUR, libelleEnsemble } from "../types";
 import { Badge, Button, Card, Empty, Input, Modal, Select } from "../components/ui";
 
 const COULEUR_STATUT: Record<string, "green" | "red" | "amber" | "slate" | "indigo"> = {
@@ -232,7 +232,14 @@ export default function Recouvrement() {
                             className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                           />
                         </td>
-                        <td className="px-3 py-2 font-medium text-slate-700">Lot {l.lot_numero}</td>
+                        <td className="px-3 py-2 font-medium text-slate-700">
+                          Lot {l.lot_numero}
+                          {l.annexes && l.annexes.length > 0 && (
+                            <span className="block text-xs font-normal text-slate-500">
+                              + {l.annexes.map((a) => a.numero + (a.designation ? ` (${a.designation})` : "")).join(", ")}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-slate-600">
                           {l.personne_nom}
                           {l.personne_email && <span className="block text-xs text-slate-400">{l.personne_email}</span>}
@@ -410,7 +417,7 @@ function DossierModal({ lotId, onClose, onChanged }: { lotId: number; onClose: (
     : [];
 
   return (
-    <Modal open wide title={`Dossier de recouvrement — lot ${d?.lot_numero ?? "…"}`} onClose={onClose}>
+    <Modal open wide title={`Dossier de recouvrement — ${d ? libelleEnsemble(d.lot_numero, d.annexes).replace("Lot", "lot") : "…"}`} onClose={onClose}>
       {!d ? (
         <p className="text-sm text-slate-500">Chargement…</p>
       ) : (
