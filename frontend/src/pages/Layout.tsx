@@ -9,6 +9,7 @@ const NAV: { to: string; label: string; icon: string; syndic?: boolean }[] = [
   { to: "/", label: "Tableau de bord", icon: "▦" },
   { to: "/lots", label: "Lots & occupants", icon: "⌂" },
   { to: "/comptes", label: "Comptes", icon: "€" },
+  { to: "/historique", label: "Historique", icon: "🕰", syndic: true },
   { to: "/ag", label: "Assemblées", icon: "🗳" },
   { to: "/documents", label: "Documents", icon: "▤" },
   { to: "/contacts", label: "Contacts", icon: "👥" },

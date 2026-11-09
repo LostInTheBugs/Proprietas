@@ -16,6 +16,7 @@ import Recouvrement from "./pages/Recouvrement";
 import TravauxPage from "./pages/Travaux";
 import Consolide from "./pages/Consolide";
 import Securite from "./pages/Securite";
+import Historique from "./pages/Historique";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   // Session en cookie httpOnly : on ne peut pas la tester en JS — on rend la
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="relances" element={<Navigate to="/recouvrement" replace />} />
           <Route path="travaux" element={<TravauxPage />} />
           <Route path="consolide" element={<Consolide />} />
+          <Route path="historique" element={<SyndicRoute><Historique /></SyndicRoute>} />
           <Route path="securite" element={<SyndicRoute><Securite /></SyndicRoute>} />
           <Route path="settings" element={<Settings />} />
         </Route>
