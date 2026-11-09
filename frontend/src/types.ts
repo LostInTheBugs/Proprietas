@@ -105,6 +105,7 @@ export interface Lot {
   proprietaire_id: number | null; // compte utilisateur propriétaire (« zéro fiche »)
   proprietaire_nom?: string; // « Prénom Nom » du compte propriétaire (enrichi)
   statut_occupation: string; // "" | "occupant" | "loue" | "vacant" (jamais de nom de locataire — RGPD)
+  lot_principal_id?: number | null; // lot non séparable : rattaché à ce lot principal
   proprietaire_occupant?: boolean; // dérivé : statut_occupation == "occupant"
   notes: string;
 }
@@ -188,6 +189,16 @@ export interface Recap {
   nb_lots_principaux: number;              // logements, bureaux, commerces (art. 41-8)
   budget_moyen_3_exercices: number | null; // null = moins de 3 exercices consécutifs budgétés
   lots: EtatDateLot[];
+  ensembles?: EnsembleSolde[];
+}
+
+export interface EnsembleSolde {
+  lot: Lot;
+  annexes: Lot[];
+  appels_charges: number;
+  appels_fonds: number;
+  encaisse: number;
+  solde: number;
 }
 
 export interface Vote {
@@ -380,9 +391,22 @@ export const toLocalInput = (d: Date) => {
 };
 
 // ---------- Recouvrement ----------
+export interface Annexe {
+  lot_id: number;
+  numero: string;
+  designation: string;
+}
+
+/** « Lot 1 » ou « Lot 1 + 12 (Cave), 25 (Garage) » (lots non séparables). */
+export const libelleEnsemble = (numero: string, annexes?: { numero: string; designation?: string }[]) =>
+  `Lot ${numero}` + (annexes && annexes.length
+    ? " + " + annexes.map((a) => a.numero + (a.designation ? ` (${a.designation})` : "")).join(", ")
+    : "");
+
 export interface RecouvrementLot {
   lot_id: number;
   lot_numero: string;
+  annexes?: Annexe[];
   personne_id: number | null;
   personne_nom: string;
   personne_email: string;
@@ -429,6 +453,7 @@ export interface RecouvrementActe {
 export interface RecouvrementDossier {
   lot_id: number;
   lot_numero: string;
+  annexes?: Annexe[];
   personne_nom: string;
   personne_email: string;
   personne_adresse: string;

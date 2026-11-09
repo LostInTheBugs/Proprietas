@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useUser } from "../auth";
-import type { Recap, Mouvement, Travaux, InvitationsResult } from "../types";
+import type { Recap, Mouvement, Travaux, InvitationsResult, Lot } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Card, Stat, Badge, Empty } from "../components/ui";
 
@@ -43,7 +43,9 @@ export default function Dashboard() {
   }
 
   const tauxRecouvrement = recap.budget_previsionnel > 0 ? (recap.encaisse / recap.budget_previsionnel) * 100 : 0;
-  const impayes = recap.lots.filter((l) => l.solde > 0.01);
+  // Lots non séparables : une ligne par ensemble (lot principal + annexes).
+  const unites = recap.ensembles ?? recap.lots.map((l) => ({ ...l, annexes: [] as Lot[] }));
+  const impayes = unites.filter((l) => l.solde > 0.01);
   const totalImpayes = impayes.reduce((s, l) => s + l.solde, 0);
 
   // Trésorerie mensuelle (exercice = année civile)
@@ -244,7 +246,10 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Situation par lot (état daté)">
+        <Card title="Situation par lot (état daté)" action={
+          unites.some((u) => u.annexes.length > 0)
+            ? <span className="text-xs text-slate-500">lots non séparables regroupés</span> : undefined
+        }>
           {recap.lots.length === 0 ? (
             <Empty text="Aucun lot — créez les lots dans l'onglet Lots & occupants." />
           ) : (
@@ -259,11 +264,16 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recap.lots.map((l) => (
+                {unites.map((l) => (
                   <tr key={l.lot.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2.5">
                       <span className="font-medium text-slate-800">Lot {l.lot.numero}</span>
                       {l.lot.designation && <span className="ml-2 text-xs text-slate-500">{l.lot.designation}</span>}
+                      {l.annexes.map((a) => (
+                        <span key={a.id} className="block text-xs text-slate-500">
+                          + lot {a.numero}{a.designation ? ` — ${a.designation}` : ""}
+                        </span>
+                      ))}
                     </td>
                     <td className="py-2.5 text-right tabular-nums text-slate-600">
                       {fmtEUR(l.appels_charges + l.appels_fonds)}
@@ -305,7 +315,9 @@ export default function Dashboard() {
               {impayes.map((l) => (
                 <div key={l.lot.id} className="flex items-center justify-between rounded-lg bg-red-50/60 px-3 py-2.5">
                   <div>
-                    <p className="text-sm font-medium text-slate-800">Lot {l.lot.numero}</p>
+                    <p className="text-sm font-medium text-slate-800">
+                      Lot {l.lot.numero}{l.annexes.length > 0 && ` + ${l.annexes.map((a) => a.numero).join(", ")}`}
+                    </p>
                     <p className="text-xs text-slate-500">
                       {l.appels_charges + l.appels_fonds > 0
                         ? `${((l.encaisse / (l.appels_charges + l.appels_fonds)) * 100).toFixed(0)} % payé`

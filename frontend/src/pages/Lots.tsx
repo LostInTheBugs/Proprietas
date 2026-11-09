@@ -74,10 +74,19 @@ export default function Lots() {
                 </tr>
               </thead>
               <tbody>
-                {lots.map((lot) => (
+                {lots.map((lot) => {
+                  const principal = lots.find((l) => l.id === lot.lot_principal_id);
+                  const annexes = lots.filter((l) => l.lot_principal_id === lot.id);
+                  return (
                   <tr key={lot.id} className="border-b border-slate-50 last:border-0">
                     <td className="py-2.5 font-semibold text-slate-800">{lot.numero}</td>
-                    <td className="py-2.5 text-slate-600">{lot.designation || "—"}</td>
+                    <td className="py-2.5 text-slate-600">
+                      {lot.designation || "—"}
+                      {principal && <span className="ml-2"><Badge color="indigo">rattaché au lot {principal.numero}</Badge></span>}
+                      {annexes.length > 0 && (
+                        <span className="ml-2"><Badge color="indigo">avec lot{annexes.length > 1 ? "s" : ""} {annexes.map((a) => a.numero).join(", ")}</Badge></span>
+                      )}
+                    </td>
                     <td className="py-2.5 text-right tabular-nums text-slate-700">{lot.tantiemes}</td>
                     <td className="py-2.5 text-slate-600">{lot.proprietaire_nom || "—"}</td>
                     <td className="py-2.5">{occupationBadge(lot)}</td>
@@ -92,7 +101,8 @@ export default function Lots() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -107,6 +117,7 @@ export default function Lots() {
       {modal && (
         <LotModal
           item={modal.item}
+          lots={lots}
           comptes={comptes}
           autresTotal={totalTantiemes - (modal.item ? modal.item.tantiemes : 0)}
           onClose={() => setModal(null)}
@@ -119,8 +130,9 @@ export default function Lots() {
   );
 }
 
-function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
-  item?: Lot; comptes: User[]; autresTotal: number; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+function LotModal({ item, lots, comptes, autresTotal, onClose, onSaved, onError }: {
+  item?: Lot; lots: Lot[]; comptes: User[]; autresTotal: number; onClose: () => void; onSaved: () => void;
+  onError: (e: string) => void;
 }) {
   const [f, setF] = useState({
     numero: item?.numero ?? "",
@@ -129,7 +141,12 @@ function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
     tantiemes: item?.tantiemes ?? 0,
     proprietaire_id: item?.proprietaire_id ?? "",
     statut_occupation: item?.statut_occupation ?? "",
+    lot_principal_id: item?.lot_principal_id != null ? String(item.lot_principal_id) : "",
   });
+  // Lots principaux possibles : ni ce lot, ni une annexe ; ce lot ne doit pas avoir lui-même d'annexes.
+  const aDesAnnexes = !!item && lots.some((l) => l.lot_principal_id === item.id);
+  const principaux = lots.filter((l) => l.id !== item?.id && !l.lot_principal_id);
+  const principalChoisi = lots.find((l) => String(l.id) === f.lot_principal_id);
   const set = (k: string, v: unknown) => setF((p) => ({ ...p, [k]: v }));
   const totalProjete = autresTotal + Number(f.tantiemes || 0);
 
@@ -138,9 +155,11 @@ function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
       const body = {
         numero: f.numero, designation: f.designation, type: f.type,
         tantiemes: Number(f.tantiemes),
-        proprietaire_id: f.proprietaire_id === "" ? null : Number(f.proprietaire_id),
+        proprietaire_id: principalChoisi ? principalChoisi.proprietaire_id
+          : f.proprietaire_id === "" ? null : Number(f.proprietaire_id),
         statut_occupation: f.statut_occupation,
         notes: "",
+        lot_principal_id: f.lot_principal_id === "" ? null : Number(f.lot_principal_id),
       };
       if (item) await api.put(`/lots/${item.id}`, body);
       else await api.post("/lots", body);
@@ -184,12 +203,36 @@ function LotModal({ item, comptes, autresTotal, onClose, onSaved, onError }: {
           <option value="annexe">Annexe (grenier, box, local…)</option>
           <option value="autre">Autre (compté comme logement)</option>
         </Select>
-        <Select label="Propriétaire" value={f.proprietaire_id} onChange={(e) => set("proprietaire_id", e.target.value)}>
-          <option value="">— aucun —</option>
-          {comptes.map((c) => (
-            <option key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ")}</option>
+        <Select
+          label="Lot non séparable — rattaché au lot principal"
+          value={f.lot_principal_id}
+          disabled={aDesAnnexes}
+          onChange={(e) => set("lot_principal_id", e.target.value)}
+        >
+          <option value="">— aucun : lot séparé —</option>
+          {principaux.map((l) => (
+            <option key={l.id} value={l.id}>
+              Lot {l.numero}{l.designation ? ` — ${l.designation}` : ""}{l.proprietaire_nom ? ` (${l.proprietaire_nom})` : ""}
+            </option>
           ))}
         </Select>
+        <p className="text-xs text-slate-500">
+          {aDesAnnexes
+            ? "Ce lot a des annexes rattachées : c'est un lot principal."
+            : "Cave, garage… vendus avec un logement : rattachez-les à lui. L'ensemble est suivi comme une seule unité (décompte, relances, recouvrement, quittance), avec le même propriétaire."}
+        </p>
+        {principalChoisi ? (
+          <p className="text-sm text-slate-600">
+            Propriétaire : <b>{principalChoisi.proprietaire_nom || "—"}</b> (celui du lot {principalChoisi.numero})
+          </p>
+        ) : (
+          <Select label="Propriétaire" value={f.proprietaire_id} onChange={(e) => set("proprietaire_id", e.target.value)}>
+            <option value="">— aucun —</option>
+            {comptes.map((c) => (
+              <option key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ")}</option>
+            ))}
+          </Select>
+        )}
         <Select
           label="Occupation du lot"
           value={f.statut_occupation}
