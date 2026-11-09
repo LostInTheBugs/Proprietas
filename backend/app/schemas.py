@@ -460,8 +460,11 @@ class RegularisationIn(BaseModel):
 
 
 class RegularisationLigne(BaseModel):
+    """Une ligne par ensemble (lot principal + annexes non séparables), ou par lot seul."""
     lot_id: int
     lot_numero: str
+    libelle: str = ""                  # « Lot 1 » ou « Lot 1 (avec lot 12) »
+    annexes: List[str] = []
     provisions: float
     charges_reelles: float
     ecart: float          # > 0 : complément dû ; < 0 : trop-perçu crédité

@@ -421,20 +421,21 @@ function RegularisationPanel({ exId, onError, onCreated }: {
         Charges réelles (dépenses hors fonds de travaux et hors travaux, réparties aux tantièmes ; une dépense
         rattachée à un lot reste à ce lot) comparées aux provisions appelées. Le complément est appelé, le
         trop-perçu est crédité au copropriétaire actuel (décret du 17 mars 1967, art. 6-2). Le fonds de travaux
-        n'est pas régularisé.
+        n'est pas régularisé. Les lots non séparables (cave, garage rattachés) sont régularisés ensemble, sur le
+        lot principal.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-slate-500">
-              <th className="py-1">Lot</th><th className="py-1 text-right">Provisions</th>
+              <th className="py-1">Lot ou ensemble</th><th className="py-1 text-right">Provisions</th>
               <th className="py-1 text-right">Charges réelles</th><th className="py-1 text-right">Écart</th>
             </tr>
           </thead>
           <tbody>
             {reg.lignes.map((l) => (
               <tr key={l.lot_id} className="border-t border-slate-100">
-                <td className="py-1">Lot {l.lot_numero}</td>
+                <td className="py-1">{l.libelle || `Lot ${l.lot_numero}`}</td>
                 <td className="py-1 text-right tabular-nums">{fmtEUR(l.provisions)}</td>
                 <td className="py-1 text-right tabular-nums">{fmtEUR(l.charges_reelles)}</td>
                 <td className={`py-1 text-right tabular-nums ${l.ecart > 0 ? "text-red-700" : l.ecart < 0 ? "text-emerald-700" : ""}`}>
