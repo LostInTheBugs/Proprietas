@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.010 — 2026-11-09
+
+- Mouvements : un mouvement peut être rattaché à un contrat et à une facture (un document existant, ou un nouveau fichier joint depuis le formulaire, rangé dans Documents). La liste des mouvements affiche le contrat et le lien vers la facture ; la page Contrats indique ce qui a été payé dans l'année pour chaque contrat. Migration a5b6c7d8e9f0.
+
 ## 2026.11.009 — 2026-11-09
 
 - Lots non séparables : dans « Lots & occupants », une cave ou un garage peut être rattaché à son lot principal. L'ensemble a le même propriétaire et se suit comme une seule unité : tableau de bord, recouvrement (un dossier, une mise en demeure), relances, paiements et quittances. Un lot sans rattachement reste séparé. Migration f4a5b6c7d8e9.
