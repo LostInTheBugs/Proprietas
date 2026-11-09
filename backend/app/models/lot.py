@@ -24,6 +24,9 @@ class Lot(Base):
     # occupant ») — il le déclare pour chacun de ses lots (Réglages → Mes lots).
     statut_occupation = Column(String, nullable=False, default="", server_default="")
     notes = Column(String, default="")
+    # Lot non séparable : annexe (cave, garage…) rattachée à un lot principal, vendue et suivie
+    # avec lui (services/ensembles.py). NULL = lot séparé.
+    lot_principal_id = Column(Integer, ForeignKey("lots.id", ondelete="SET NULL"), nullable=True)
 
     copropriete = relationship("Copropriete", back_populates="lots")
     proprietaire = relationship("User", foreign_keys=[proprietaire_id])

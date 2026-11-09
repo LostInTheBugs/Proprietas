@@ -26,7 +26,7 @@ ART_19_2_TEXTE = (
 )
 
 
-def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: str) -> BytesIO:
+def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: str, annexes=()) -> BytesIO:
     """PDF de mise en demeure (délai 30 jours, mécanisme de l'article 19-2).
 
     `lignes` : décompte des provisions ÉCHUES impayées (dicts de recouvrement.appels_lot).
@@ -56,7 +56,9 @@ def generer_mise_en_demeure_pdf(copro, lot, proprietaire, lignes, syndic_nom: st
         ("Syndicat des copropriétaires", copro.nom),
         ("Adresse de la copropriété", adresse_copro or "—"),
         ("Destinataire", nom_dest if adresse_dest == "—" else f"{nom_dest} — {adresse_dest}"),
-        ("Lot concerné", f"Lot {lot.numero}" + (f" — {lot.designation}" if lot.designation else "")),
+        ("Lots concernés" if annexes else "Lot concerné",
+         " ; ".join(f"Lot {l.numero}" + (f" — {l.designation}" if l.designation else "")
+                    for l in [lot, *annexes])),
         ("Date", _date_fr(date.today()).split(" ", 1)[-1]),
     ]
     t = Table([[Paragraph(f"<b>{k}</b>", style("cell")), Paragraph(str(v), style("cell"))] for k, v in infos],

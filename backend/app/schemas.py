@@ -342,6 +342,8 @@ class LotIn(BaseModel):
     # | "loue" | "vacant" — jamais de nom de locataire (RGPD).
     statut_occupation: str = ""
     notes: str = ""
+    # Lot non séparable : rattaché à ce lot principal (cave, garage…). None = lot séparé.
+    lot_principal_id: Optional[int] = None
 
     @field_validator("statut_occupation")
     @classmethod
@@ -632,6 +634,16 @@ class EtatDateLot(BaseModel):
     solde: float = 0.0
 
 
+class EnsembleSolde(BaseModel):
+    """Lots non séparables : lot principal + annexes, totaux additionnés."""
+    lot: LotOut
+    annexes: List[LotOut] = []
+    appels_charges: float = 0.0
+    appels_fonds: float = 0.0
+    encaisse: float = 0.0
+    solde: float = 0.0
+
+
 class RecapOut(BaseModel):
     exercice_id: int
     annee: int
@@ -642,6 +654,7 @@ class RecapOut(BaseModel):
     fonds_travaux_encaisse: float = 0.0
     appels_en_cours: int = 0
     lots: List[EtatDateLot] = []
+    ensembles: List[EnsembleSolde] = []   # une entrée par ensemble (lot séparé ou lot principal + annexes)
     nb_lots: int = 0
     # Art. 41-8 : ≤ 5 lots de logements, bureaux ou commerces, OU budget prévisionnel moyen
     # < 15 000 € sur 3 exercices consécutifs (None = moins de 3 exercices consécutifs budgétés).
@@ -1054,9 +1067,16 @@ class InstanceUpdate(BaseModel):
 
 
 # ---------- Recouvrement ----------
+class AnnexeOut(BaseModel):
+    lot_id: int
+    numero: str
+    designation: str = ""
+
+
 class RecouvrementLotOut(BaseModel):
     lot_id: int
     lot_numero: str
+    annexes: List[AnnexeOut] = []   # lots non séparables rattachés (suivis avec ce lot)
     personne_id: Optional[int] = None
     personne_nom: str = ""
     personne_email: str = ""
@@ -1075,6 +1095,7 @@ class RecouvrementLotOut(BaseModel):
 
 
 class DecompteLigne(BaseModel):
+    lot_numero: str = ""
     exercice: Optional[int] = None
     libelle: str = ""
     echeance: Optional[date] = None
@@ -1119,6 +1140,7 @@ class ReceptionIn(BaseModel):
 class RecouvrementDossierOut(BaseModel):
     lot_id: int
     lot_numero: str
+    annexes: List[AnnexeOut] = []
     personne_nom: str = ""
     personne_email: str = ""
     personne_adresse: str = ""

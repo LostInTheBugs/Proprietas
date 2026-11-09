@@ -1,6 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.core.money import D
+from app.core.money import D, somme
 from sqlalchemy.orm import Session
 from app.core import audit
 from app.core.database import get_db
@@ -8,6 +8,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
 from app.services.soldes import totaux_lot
+from app.services import ensembles
 from app.models.relance import Relance
 from app.models.copropriete import Copropriete
 from app.routes.copro import get_or_create_copro
@@ -20,20 +21,24 @@ router = APIRouter(prefix="/api/relances", tags=["relances"])
 def _etat_lots(db: Session, copro: Copropriete) -> list[dict]:
     """Solde par lot : appels (charges + fonds travaux) − encaissements du lot.
 
+    Lots non séparables : une entrée par ensemble (lot principal + annexes, totaux additionnés),
+    rattachée au lot principal ; `libelle` décrit l'ensemble (« Lot 1 (avec lots 12, 25) »).
     Le propriétaire est le compte utilisateur (modèle « zéro fiche »).
     """
-    lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     result = []
-    for lot in lots:
-        t = totaux_lot(db, lot)
+    for groupe in ensembles.ensembles(db, copro.id):
+        lot = groupe[0]
+        t = [totaux_lot(db, l) for l in groupe]
         personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         result.append({
             "lot": lot,
+            "lots": groupe,
+            "libelle": ensembles.libelle(groupe),
             "personne": personne,
-            "appels_charges": t["appels_charges"],
-            "appels_fonds": t["appels_fonds"],
-            "encaisse": t["encaisse"],
-            "solde": t["solde"],
+            "appels_charges": somme(x["appels_charges"] for x in t),
+            "appels_fonds": somme(x["appels_fonds"] for x in t),
+            "encaisse": somme(x["encaisse"] for x in t),
+            "solde": somme(x["solde"] for x in t),
         })
     return result
 
@@ -70,11 +75,11 @@ def envoyer_relance_lot(db: Session, copro: Copropriete, e: dict, syndic_nom: st
     if not p or not p.email:
         return "sans_email"
     corps = relance_texte(
-        copro, e["lot"].numero, p.prenom or p.nom,
+        copro, e.get("libelle", f"Lot {e['lot'].numero}").removeprefix("Lot "), p.prenom or p.nom,
         e["solde"], e["appels_charges"], e["appels_fonds"], e["encaisse"],
         syndic_nom,
     )
-    sujet = f"Rappel de règlement — lot {e['lot'].numero} — {copro.nom}"
+    sujet = f"Rappel de règlement — {e.get('libelle', 'Lot ' + e['lot'].numero).lower()} — {copro.nom}"
     try:
         envoyer_email(copro, p.email, sujet, corps)
         statut = "envoye"
@@ -89,7 +94,7 @@ def envoyer_relance_lot(db: Session, copro: Copropriete, e: dict, syndic_nom: st
     ))
     audit.enregistrer(
         db, "relance_envoyee", user=acteur, copro_id=copro.id, request=request,
-        detail=(f"Lot {e['lot'].numero} → {p.email} "
+        detail=(f"{e.get('libelle', 'Lot ' + e['lot'].numero)} → {p.email} "
                 f"({'automatique' if acteur is None else 'manuelle'}, {statut})"),
     )
     return statut

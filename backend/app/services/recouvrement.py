@@ -21,7 +21,7 @@ from app.models.copropriete import Copropriete
 from app.models.exercice import Exercice
 from app.models.mouvement import Mouvement
 from app.models.recouvrement import ActeRecouvrement
-from app.services import delais, reprise
+from app.services import delais, ensembles, reprise
 
 # Types d'actes créables via l'API (l'activation 19-2 a sa route dédiée).
 TYPES_ACTE = ("mise_en_demeure", "frais", "conciliation", "commissaire_justice", "tribunal", "note")
@@ -61,20 +61,28 @@ def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
        crédit de reprise) soldent, du plus ancien au plus récent, ce qui reste dû sur chaque appel,
        charges d'abord puis fonds de travaux ; leur reste est une AVANCE (charges).
     Sans encaissement « travaux », le résultat est identique à l'imputation FIFO unique d'avant.
+
+    Lots non séparables (services/ensembles.py) : le décompte porte sur tout l'ensemble du lot
+    (lot principal + annexes) ; appels et paiements de tous ses lots sont mis en commun, et le
+    libellé de chaque appel indique son lot.
     """
+    lots = ensembles.membres(db, lot)
+    ids = [l.id for l in lots]
+    rang = {l.id: i for i, l in enumerate(lots)}
+    numeros = {l.id: l.numero for l in lots}
     paires = (
         db.query(AppelLot, AppelFonds, Exercice)
         .join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
         .join(Exercice, AppelFonds.exercice_id == Exercice.id)
-        .filter(AppelLot.lot_id == lot.id, Exercice.copropriete_id == copro.id)
+        .filter(AppelLot.lot_id.in_(ids), Exercice.copropriete_id == copro.id)
         .all()
     )
     # Appels et encaissements couverts par l'état de reprise de base : hors décompte.
     b = reprise.base(db, copro.id)
     paires = [x for x in paires if reprise.appel_compte(x[1], b)]
-    paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id))
+    paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id, rang[x[0].lot_id]))
     encaissements = [m for m in db.query(Mouvement).filter(
-        Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()
+        Mouvement.lot_id.in_(ids), Mouvement.type == "encaissement").all()
         if reprise.encaissement_compte(m, b)]
     reste_trav = arrondi(somme(D(m.montant or 0) for m in encaissements
                                if (m.categorie or "") in CATEGORIES_TRAVAUX))
@@ -120,11 +128,16 @@ def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
         montant = arrondi((part.montant_charges or D(0)) + (part.montant_fonds_travaux or D(0)))
         rc, rf = (D(0), D(0)) if comp is None else (comp[0], comp[1])
         echeance = appel.date_echeance or appel.date_emission
+        libelle = appel.libelle or ""
+        if len(lots) > 1:
+            libelle = f"{libelle} — lot {numeros[part.lot_id]}"
         lignes.append({
             "appel_id": appel.id,
+            "lot_id": part.lot_id,
+            "lot_numero": numeros[part.lot_id],
             "exercice_id": ex.id,
             "exercice": ex.annee,
-            "libelle": appel.libelle or "",
+            "libelle": libelle,
             "echeance": echeance,
             "charges": arrondi(part.montant_charges or D(0)),
             "fonds": arrondi(part.montant_fonds_travaux or D(0)),
@@ -176,8 +189,10 @@ def exercice_courant(db: Session, copro: Copropriete) -> Exercice | None:
 
 
 def actes_lot(db: Session, copro: Copropriete, lot) -> list[ActeRecouvrement]:
+    """Actes du dossier : ceux de tous les lots de l'ensemble (lots non séparables)."""
+    ids = [l.id for l in ensembles.membres(db, lot)]
     return (db.query(ActeRecouvrement)
-            .filter(ActeRecouvrement.copropriete_id == copro.id, ActeRecouvrement.lot_id == lot.id)
+            .filter(ActeRecouvrement.copropriete_id == copro.id, ActeRecouvrement.lot_id.in_(ids))
             .order_by(ActeRecouvrement.date_acte, ActeRecouvrement.id).all())
 
 

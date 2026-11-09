@@ -10,14 +10,14 @@ from reportlab.platypus import (
 
 from app.core.money import D, somme
 from app.services.emailer import _date_fr
+from app.services import ensembles
 from app.services.pdf_base import register_fonts, style, table_style, page_margins, fmt_eur
 
 
 def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
-    """Quittances d'appels de fonds de l'exercice, groupées (une page par lot)."""
+    """Quittances d'appels de fonds de l'exercice, groupées (une page par lot, ou par ensemble de lots non séparables)."""
     from app.models.appel import AppelFonds, AppelLot
     from app.models.mouvement import Mouvement
-    from app.models.lot import Lot
     from app.models.user import User
 
     register_fonts()
@@ -28,13 +28,17 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         **page_margins(),
     )
 
-    lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
+    # Lots non séparables : une quittance par ensemble (lot principal + annexes).
+    groupes = ensembles.ensembles(db, copro.id)
     if lot_ids:
-        lots = [l for l in lots if l.id in lot_ids]
+        groupes = [g for g in groupes if any(l.id in lot_ids for l in g)]
     appels = db.query(AppelFonds).filter(AppelFonds.exercice_id == exercice.id).order_by(AppelFonds.date_emission).all()
 
     el = []
-    for i, lot in enumerate(lots):
+    for i, groupe in enumerate(groupes):
+        lot = groupe[0]
+        ids = [l.id for l in groupe]
+        numeros = {l.id: l.numero for l in groupe}
         personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         proprietaire = f"{personne.prenom} {personne.nom}".strip() if personne else "—"
 
@@ -42,7 +46,9 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         el.append(Paragraph(f"Exercice {exercice.annee} — {copro.nom}", style("sous_titre")))
 
         infos = [
-            ("Lot", f"Lot {lot.numero} ({lot.tantiemes}‰)"),
+            ("Lots" if len(groupe) > 1 else "Lot",
+             " ; ".join(f"Lot {l.numero}" + (f" — {l.designation}" if l.designation and len(groupe) > 1 else "")
+                        + f" ({l.tantiemes}‰)" for l in groupe)),
             ("Propriétaire", proprietaire),
             ("Adresse de l'immeuble", f"{copro.adresse} {copro.code_postal or ''} {copro.ville or ''}".strip()),
             ("Date de la quittance", _date_fr(date.today())),
@@ -54,22 +60,23 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         el.append(Spacer(1, 8))
 
         # Appels de fonds
-        parts = db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()
-        parts_par_appel = {p.appel_id: p for p in parts}
-        appels_lot = [a for a in appels if a.id in parts_par_appel]
+        parts = db.query(AppelLot).filter(AppelLot.lot_id.in_(ids)).all()
+        ordre = {a.id: k for k, a in enumerate(appels)}
+        parts = sorted((p for p in parts if p.appel_id in ordre), key=lambda p: (ordre[p.appel_id], ids.index(p.lot_id)))
+        appels_par_id = {a.id: a for a in appels}
         el.append(Paragraph("1. APPELS DE FONDS", style("section")))
         rows = [[Paragraph("<b>Échéance</b>", style("th")), Paragraph("<b>Libellé</b>", style("th")),
                  Paragraph("<b>Charges</b>", style("th")), Paragraph("<b>Fonds travaux</b>", style("th")),
                  Paragraph("<b>Total</b>", style("th"))]]
         total_charges = D(0)
         total_ft = D(0)
-        for a in appels_lot:
-            p = parts_par_appel[a.id]
+        for p in parts:
+            a = appels_par_id[p.appel_id]
             total_charges += D(p.montant_charges)
             total_ft += D(p.montant_fonds_travaux)
             rows.append([
                 Paragraph((a.date_echeance or a.date_emission).strftime("%d/%m/%Y"), style("cell")),
-                Paragraph(a.libelle, style("cell")),
+                Paragraph(a.libelle + (f" — lot {numeros[p.lot_id]}" if len(groupe) > 1 else ""), style("cell")),
                 Paragraph(fmt_eur(p.montant_charges), style("cell")),
                 Paragraph(fmt_eur(p.montant_fonds_travaux), style("cell")),
                 Paragraph(fmt_eur(D(p.montant_charges) + D(p.montant_fonds_travaux)), style("cell")),
@@ -85,8 +92,9 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
         el.append(Spacer(1, 8))
 
         # Encaissements
+        # Paiements de l'exercice, sur tous les lots de l'ensemble.
         encaissements = db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement",
+            Mouvement.lot_id.in_(ids), Mouvement.type == "encaissement", Mouvement.exercice_id == exercice.id,
         ).order_by(Mouvement.date).all()
         el.append(Paragraph("2. PAIEMENTS REÇUS", style("section")))
         if not encaissements:
@@ -100,7 +108,8 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
                 rows.append([
                     Paragraph(m.date.strftime("%d/%m/%Y"), style("cell")),
                     Paragraph(m.libelle, style("cell")),
-                    Paragraph("Fonds de travaux" if m.categorie == "fonds_travaux" else "Charges", style("cell")),
+                    Paragraph("Fonds de travaux" if m.categorie in ("fonds_travaux", "travaux") else "Charges",
+                              style("cell")),
                     Paragraph(fmt_eur(m.montant), style("cell")),
                 ])
             rows.append([Paragraph("", style("cell")), Paragraph("", style("cell")),
@@ -139,7 +148,7 @@ def generer_quittances_pdf(copro, exercice, db, lot_ids=None) -> BytesIO:
             style("legal"),
         ))
 
-        if i < len(lots) - 1:
+        if i < len(groupes) - 1:
             el.append(PageBreak())
 
     doc.build(el)
