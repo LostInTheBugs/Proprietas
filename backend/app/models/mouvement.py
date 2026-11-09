@@ -17,6 +17,9 @@ class Mouvement(Base):
     lot_id = Column(Integer, ForeignKey("lots.id"), nullable=True)  # null = copro entière
     appel_id = Column(Integer, ForeignKey("appels_fonds.id"), nullable=True)
     piece_path = Column(String, default="")
+    # Contrat et facture (document) rattachés ; supprimer l'un ou l'autre délie le mouvement.
+    contrat_id = Column(Integer, ForeignKey("contrats.id", ondelete="SET NULL"), nullable=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
 
     copropriete = relationship("Copropriete")
     exercice = relationship("Exercice", back_populates="mouvements")

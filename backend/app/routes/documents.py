@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.document import Document
+from app.models.mouvement import Mouvement
 from app.core.scoping import get_owned
 from app.core.stockage import NomInvalide, StockageIndisponible, StockageLocal, stockage_depuis
 from app.routes.copro import get_or_create_copro
@@ -143,6 +144,9 @@ def delete_document(doc_id: int, db: Session = Depends(get_db), user: User = Dep
         pass                    # nom forgé : aucun fichier légitime à supprimer, la fiche part
     except StockageIndisponible as e:
         raise _indisponible(e) from e
+    # Les mouvements rattachés à ce document (facture) restent, déliés.
+    db.query(Mouvement).filter(Mouvement.document_id == doc.id).update({Mouvement.document_id: None},
+                                                                       synchronize_session=False)
     db.delete(doc)
     db.commit()
     return {"ok": True}
