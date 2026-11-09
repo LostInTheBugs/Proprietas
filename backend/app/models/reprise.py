@@ -25,6 +25,11 @@ class EtatReprise(Base):
     valide_le = Column(DateTime, nullable=True)
     commentaire = Column(String, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.now)
+    # Soldes bancaires à la date de l'état (facultatifs, NULL = non saisi) : compte du syndicat et
+    # compte du fonds de travaux. Ils contrôlent les opérations saisies entre deux états et donnent
+    # le solde de départ de la trésorerie (base).
+    solde_banque = Column(Numeric(12, 2), nullable=True)
+    solde_banque_fonds = Column(Numeric(12, 2), nullable=True)
 
     lignes = relationship("EtatRepriseLigne", back_populates="etat", cascade="all, delete-orphan",
                           order_by="EtatRepriseLigne.id")

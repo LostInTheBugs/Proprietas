@@ -22,7 +22,7 @@ from app.schemas import (
     RegularisationIn, RegularisationOut, ReclasserIn, EnsembleSolde,
 )
 from app.core import audit
-from app.services import regularisation
+from app.services import regularisation, reprise
 from app.services.soldes import totaux_lot
 from app.services import ensembles
 
@@ -483,6 +483,7 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
         encaisse=arrondi(encaisse), depense=arrondi(depense),
         solde_caisse=arrondi(encaisse - depense),
         fonds_travaux_encaisse=arrondi(ft_encaisse),
+        **{f"tresorerie_{k}": v for k, v in reprise.tresorerie(db, copro.id).items()},
         appels_en_cours=appels_en_cours,
         lots=lots_out,
         ensembles=ens_out,

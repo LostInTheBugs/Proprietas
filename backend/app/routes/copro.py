@@ -7,6 +7,7 @@ from app.models.copropriete import Copropriete
 from app.models.mouvement import Mouvement
 from app.schemas import CoproOut, CoproUpdate, TresorerieOut
 from app.services.two_factor import politique_defaut
+from app.services import reprise
 from app.core.money import D, arrondi, somme
 
 router = APIRouter(prefix="/api/copro", tags=["copro"])
@@ -69,18 +70,15 @@ def get_tresorerie(db: Session = Depends(get_db), user: User = Depends(get_curre
     portés au crédit selon la comptabilité (encaissements − dépenses des exercices).
     Réservé au syndic : la modification (PUT /api/copro)."""
     copro = get_or_create_copro(db, user)
-    mouvements = db.query(Mouvement).filter(Mouvement.copropriete_id == copro.id).all()
-    enc = somme(m.montant for m in mouvements if m.type == "encaissement" and m.categorie != "fonds_travaux")
-    dep = somme(m.montant for m in mouvements if m.type == "depense" and m.categorie != "fonds_travaux")
-    ft_enc = somme(m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux")
-    ft_dep = somme(m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux")
+    # Solde de départ : soldes bancaires de l'état de base de l'historique, s'ils sont saisis.
+    t = reprise.tresorerie(db, copro.id)
     return TresorerieOut(
         compte_bancaire_separe=copro.compte_bancaire_separe or "",
-        solde_compte=arrondi(enc - dep),
+        solde_compte=t["syndicat"],
         fonds_travaux_actif=bool(copro.fonds_travaux_actif),
         fonds_travaux_compte=copro.fonds_travaux_compte or "",
         fonds_travaux_taux_pct=copro.fonds_travaux_taux_pct or D(0),
-        fonds_travaux_solde=arrondi(ft_enc - ft_dep),
+        fonds_travaux_solde=t["fonds_travaux"],
     )
 
 
