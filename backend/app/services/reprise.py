@@ -27,6 +27,7 @@ from app.models.lot import Lot
 from app.models.mouvement import Mouvement
 from app.models.reprise import EtatReprise
 from app.models.user import UserCopro
+from app.services import ensembles
 
 PREFIXE_LIBELLE = "Reprise de solde"
 
@@ -86,10 +87,14 @@ def controle(db: Session, copro_id: int, depart: EtatReprise, cible: EtatReprise
     attendu = _par_lot(cible)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro_id).order_by(Lot.id).all()
     lignes = []
-    for lot in lots:
-        a, c = arrondi(attendu[lot.id]), arrondi(calcule[lot.id])
-        lignes.append({"lot_id": lot.id, "lot_numero": lot.numero, "attendu": a, "calcule": c,
-                       "ecart": arrondi(a - c)})
+    # Lots non séparables (lot principal + annexes) : comparés ensemble. Le copropriétaire paie
+    # souvent l'ensemble sur le lot principal ; lot par lot, on verrait des écarts qui se compensent.
+    for groupe in ensembles.ensembles(db, copro_id, lots):
+        a = arrondi(somme(attendu[l.id] for l in groupe))
+        c = arrondi(somme(calcule[l.id] for l in groupe))
+        lignes.append({"lot_id": groupe[0].id, "lot_numero": groupe[0].numero,
+                       "libelle": ensembles.libelle(groupe), "annexes": [l.numero for l in groupe[1:]],
+                       "attendu": a, "calcule": c, "ecart": arrondi(a - c)})
     ecarts = [l for l in lignes if l["ecart"] != 0]
     return {"date": cible.date, "depart": depart.date, "ok": not ecarts,
             "ecart_total": arrondi(somme(l["ecart"] for l in lignes)), "lignes": lignes}
@@ -115,7 +120,8 @@ def _message_ecarts(ctrls: list[dict]) -> str:
     for c in ctrls:
         if c["ok"]:
             continue
-        lots = ", ".join(f"lot {l['lot_numero']} : {l['ecart']:+.2f} €".replace(".", ",")
+        lots = ", ".join(f"{l['libelle'] if l['annexes'] else 'lot ' + l['lot_numero']} : "
+                         f"{l['ecart']:+.2f} €".replace(".", ",")
                          for l in c["lignes"] if l["ecart"] != 0)
         morceaux.append(f"au {c['date']:%d/%m/%Y}, écart sur {lots}")
     return ("Contrôle non concordant " + " ; ".join(morceaux) +

@@ -24,6 +24,20 @@ const ROLE: Record<EtatReprise["role"], { label: string; color: "indigo" | "gree
   brouillon: { label: "Brouillon", color: "slate" },
 };
 
+/** « Lot 1 — Martin », « Lot 1 (avec lot 12) — Martin », « Lot 12 — annexe du lot 1 ». */
+function nomLot(lots: Lot[], id: number | ""): string {
+  const lot = lots.find((l) => l.id === id);
+  if (!lot) return id === "" ? "—" : `Lot ${id}`;
+  const principal = lot.lot_principal_id ? lots.find((l) => l.id === lot.lot_principal_id) : undefined;
+  if (principal) return `Lot ${lot.numero} — annexe du lot ${principal.numero}`;
+  const annexes = lots.filter((l) => l.lot_principal_id === lot.id).map((l) => l.numero);
+  const avec = annexes.length ? ` (avec lot${annexes.length > 1 ? "s" : ""} ${annexes.join(", ")})` : "";
+  return `Lot ${lot.numero}${avec}${lot.proprietaire_nom ? ` — ${lot.proprietaire_nom}` : ""}`;
+}
+
+/** Lot principal ou lot seul (pas une annexe rattachée à un lot de la liste). */
+const estPrincipal = (lots: Lot[], lot: Lot) => !lot.lot_principal_id || !lots.some((l) => l.id === lot.lot_principal_id);
+
 let compteur = 0;
 const nouvelleCle = () => ++compteur;
 
@@ -112,6 +126,11 @@ export default function Historique() {
           <li>
             Pour <b>remonter d'une année</b>, saisissez les appels et encaissements de l'année dans Comptes, puis validez
             l'état au 31 décembre précédent : il devient la base si tous les contrôles tombent juste.
+          </li>
+          <li>
+            <b>Lots non séparables</b> (cave, garage rattachés à un lot principal, voir Lots) : une seule ligne
+            pour l'ensemble suffit, sur le lot principal, et les contrôles se font par ensemble. Un copropriétaire
+            qui paie tout sur son appartement ne crée donc pas d'écart entre l'appartement et la cave.
           </li>
           <li>Un état validé ne se modifie plus : une correction passe par un appel ou un encaissement.</li>
         </ul>
@@ -356,8 +375,9 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
 
   function uneLigneParLot() {
     const presents = new Set(lignes.map((l) => `${l.lot_id}-${l.exercice_origine}`));
+    // Une ligne par ensemble : le lot principal porte le solde de ses annexes (cave, garage).
     const ajout = lots
-      .filter((lot) => !presents.has(`${lot.id}-${annee}`))
+      .filter((lot) => estPrincipal(lots, lot) && !presents.has(`${lot.id}-${annee}`))
       .map((lot) => ({ cle: nouvelleCle(), lot_id: lot.id, exercice_origine: annee,
                        montant_charges: "", montant_fonds_travaux: "" }));
     setLignes((ls) => [...ls, ...ajout]);
@@ -406,7 +426,7 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
         d'origine permet à l'article 19-2 de distinguer les exercices dont les comptes sont approuvés.
       </p>
       {lignes.length === 0 ? (
-        <Empty text="Aucune ligne. « Une ligne par lot » prépare une ligne par lot pour l'exercice de l'état." />
+        <Empty text="Aucune ligne. « Une ligne par lot » prépare une ligne par lot (une seule par ensemble de lots non séparables) pour l'exercice de l'état." />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -427,9 +447,7 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
                       value={l.lot_id} onChange={(e) => maj(l.cle, "lot_id", e.target.value)}>
                       <option value="">—</option>
                       {lots.map((lot) => (
-                        <option key={lot.id} value={lot.id}>
-                          Lot {lot.numero}{lot.proprietaire_nom ? ` — ${lot.proprietaire_nom}` : ""}
-                        </option>
+                        <option key={lot.id} value={lot.id}>{nomLot(lots, lot.id)}</option>
                       ))}
                     </select>
                   </td>
@@ -481,7 +499,7 @@ function TableControle({ c }: { c: Controle }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500">
-            <th className="py-1">Lot</th>
+            <th className="py-1">Lot ou ensemble</th>
             <th className="py-1 text-right">État saisi</th>
             <th className="py-1 text-right">Calculé</th>
             <th className="py-1 text-right">Écart</th>
@@ -490,7 +508,7 @@ function TableControle({ c }: { c: Controle }) {
         <tbody>
           {c.lignes.map((l) => (
             <tr key={l.lot_id} className={l.ecart !== 0 ? "bg-red-50" : ""}>
-              <td className="py-1">Lot {l.lot_numero}</td>
+              <td className="py-1">{l.libelle || `Lot ${l.lot_numero}`}</td>
               <td className="py-1 text-right tabular-nums">{fmtEUR(l.attendu)}</td>
               <td className="py-1 text-right tabular-nums">{fmtEUR(l.calcule)}</td>
               <td className={`py-1 text-right tabular-nums ${l.ecart !== 0 ? "font-semibold text-red-700" : "text-slate-400"}`}>
@@ -527,11 +545,6 @@ function DetailEtat({ etat, lots, onMaj, onFermer, onError }: {
     );
   }
 
-  const nomLot = (id: number) => {
-    const lot = lots.find((l) => l.id === id);
-    return lot ? `Lot ${lot.numero}${lot.proprietaire_nom ? ` — ${lot.proprietaire_nom}` : ""}` : `Lot ${id}`;
-  };
-
   return (
     <Card
       title={<>État au {fmtDate(etat.date)} <Badge color={ROLE[etat.role].color}>{ROLE[etat.role].label}</Badge></>}
@@ -553,7 +566,7 @@ function DetailEtat({ etat, lots, onMaj, onFermer, onError }: {
           <tbody>
             {etat.lignes.map((l) => (
               <tr key={l.id} className="border-b border-slate-50 last:border-0">
-                <td className="py-2 text-slate-700">{nomLot(l.lot_id)}</td>
+                <td className="py-2 text-slate-700">{nomLot(lots, l.lot_id)}</td>
                 <td className="py-2 text-slate-700">{l.exercice_origine}</td>
                 <td className="py-2 text-right tabular-nums">{fmtEUR(l.montant_charges)}</td>
                 <td className="py-2 text-right tabular-nums">{fmtEUR(l.montant_fonds_travaux)}</td>
