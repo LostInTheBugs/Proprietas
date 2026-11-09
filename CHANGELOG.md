@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.011 — 2026-11-09
+
+- Sauvegarde d'une copropriété (Réglages, syndic) : téléchargement d'une archive ZIP contenant toutes les données de la copropriété, ses comptes et les fichiers des documents ; import de cette archive, sur ce serveur ou un autre, en nouvelle copropriété (comptes existants réutilisés, sinon recréés avec leur mot de passe ; 2FA à réactiver si la clé du serveur diffère). Limite COPRO_IMPORT_MAX_MB (500 Mo par défaut).
+
 ## 2026.11.010 — 2026-11-09
 
 - Mouvements : un mouvement peut être rattaché à un contrat et à une facture (un document existant, ou un nouveau fichier joint depuis le formulaire, rangé dans Documents). La liste des mouvements affiche le contrat et le lien vers la facture ; la page Contrats indique ce qui a été payé dans l'année pour chaque contrat. Migration a5b6c7d8e9f0.
