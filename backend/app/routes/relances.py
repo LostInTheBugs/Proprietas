@@ -1,14 +1,13 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.core.money import D, arrondi, somme
+from app.core.money import D
 from sqlalchemy.orm import Session
 from app.core import audit
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
-from app.models.appel import AppelLot
-from app.models.mouvement import Mouvement
+from app.services.soldes import totaux_lot
 from app.models.relance import Relance
 from app.models.copropriete import Copropriete
 from app.routes.copro import get_or_create_copro
@@ -26,18 +25,15 @@ def _etat_lots(db: Session, copro: Copropriete) -> list[dict]:
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     result = []
     for lot in lots:
-        appels_c = somme([a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
-        appels_f = somme([a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all()])
-        enc = somme([m.montant for m in db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all()])
+        t = totaux_lot(db, lot)
         personne = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         result.append({
             "lot": lot,
             "personne": personne,
-            "appels_charges": arrondi(appels_c),
-            "appels_fonds": arrondi(appels_f),
-            "encaisse": arrondi(enc),
-            "solde": arrondi(appels_c + appels_f - enc),
+            "appels_charges": t["appels_charges"],
+            "appels_fonds": t["appels_fonds"],
+            "encaisse": t["encaisse"],
+            "solde": t["solde"],
         })
     return result
 

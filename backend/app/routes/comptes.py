@@ -20,6 +20,7 @@ from app.schemas import (
 )
 from app.core import audit
 from app.services import regularisation
+from app.services.soldes import totaux_lot
 
 router = APIRouter(prefix="/api", tags=["comptes"])
 
@@ -288,13 +289,10 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
 
     lots_out = []
     for lot in lots:
-        appels_c = somme(a.montant_charges for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        appels_f = somme(a.montant_fonds_travaux for a in db.query(AppelLot).filter(AppelLot.lot_id == lot.id).all())
-        enc = somme(m.montant for m in db.query(Mouvement).filter(
-            Mouvement.lot_id == lot.id, Mouvement.type == "encaissement").all())
+        t = totaux_lot(db, lot)
         lots_out.append(EtatDateLot(
-            lot=lot, appels_charges=arrondi(appels_c), appels_fonds=arrondi(appels_f),
-            encaisse=arrondi(enc), solde=arrondi(appels_c + appels_f - enc),
+            lot=lot, appels_charges=t["appels_charges"], appels_fonds=t["appels_fonds"],
+            encaisse=t["encaisse"], solde=t["solde"],
         ))
 
     return RecapOut(
