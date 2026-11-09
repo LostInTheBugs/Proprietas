@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.006 — 2026-11-09
+
+- Comptes : bouton « Paiement copropriétaire » pour un virement qui couvre tous les lots d'un copropriétaire. L'application propose la répartition (les sommes dues les plus anciennes d'abord, l'excédent en avance sur le lot principal), le syndic peut la corriger, puis un encaissement est enregistré pour chaque lot. Chaque paiement est inscrit au journal d'audit.
+
 ## 2026.11.005 — 2026-11-09
 
 - Comptes : bouton « Modifier » sur les mouvements (date, libellé, type, catégorie, montant, lot) et sur les lignes de budget ; chaque modification d'un mouvement est inscrite au journal d'audit, avec l'avant et l'après. Le formulaire de mouvement propose désormais « Dépense » par défaut. Type, catégorie, lot et appel sont contrôlés à la saisie.
