@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.014 — 2026-11-09
+
+- Mises à jour : le serveur garde la nouvelle version et la précédente, les plus anciennes sont supprimées (place disque). Dans Réglages → Serveur, l'administrateur peut revenir à la version précédente (sauvegarde de la base et annulation des migrations plus récentes, retour automatique en cas d'échec) ou ne pas la conserver.
+
 ## 2026.11.013 — 2026-11-09
 
 - Comptes : filtres (libellé, type, lot, catégorie, contrat, montant), colonnes Type et Contrat, tri sur chaque colonne ; sélection de plusieurs mouvements pour changer d'un coup l'exercice, le type, la catégorie ou le contrat.
