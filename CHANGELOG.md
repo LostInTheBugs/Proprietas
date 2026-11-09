@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.017 — 2026-11-09
+
+- Historique : chaque état peut porter le solde bancaire du compte du syndicat et celui du compte du fonds de travaux au 31 décembre. Entre deux états, solde de départ + encaissements − dépenses saisis est comparé à la banque (avertissement en cas d'écart, sans bloquer). La trésorerie affichée part du solde de la base. Migration b6c7d8e9f0a1.
+
 ## 2026.11.016 — 2026-11-09
 
 - Historique : les lots non séparables (cave, garage rattachés) sont contrôlés par ensemble ; un copropriétaire qui paie tout sur son appartement ne crée plus d'écart entre l'appartement et la cave. « Une ligne par lot » ne prépare qu'une ligne par ensemble.
