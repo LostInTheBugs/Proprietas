@@ -368,6 +368,21 @@ sécurité). Elle **dépose une demande** dans `data/updates/` ; un **applicateu
 `data/backups/`, 10 dernières gardées), passe le dépôt sur le tag demandé, reconstruit les
 conteneurs et vérifie que l'API répond dans la nouvelle version.
 
+**Deux versions sur le serveur** (stratégie « pull ») : après chaque mise à jour, l'applicateur garde
+l'image de la nouvelle version et celle de la **version précédente**, et supprime les autres. Dans
+**Réglages → Serveur → Mises à jour**, l'administrateur choisit ensuite :
+
+- **Revenir à la version précédente** : sauvegarde de la base, annulation des migrations Alembic plus
+  récentes que l'ancienne version (sa tête est lue dans son tag git ; les données saisies depuis sont
+  gardées, sauf celles des champs ajoutés), relance de l'ancienne image, vérification de l'API. En cas
+  d'échec, retour automatique à la version actuelle (migrations réappliquées). La version quittée
+  devient à son tour la précédente.
+- **Ne pas la conserver** : son image est supprimée (place libérée).
+
+En stratégie « build », rien n'est gardé en image : le retour arrière reconstruit l'ancienne version
+depuis son tag. Au premier passage de l'applicateur qui apporte cette fonction, les images déjà
+accumulées sont triées de la même façon (version en service + la plus récente des anciennes).
+
 Installation, une fois, sur le serveur :
 
 ```bash

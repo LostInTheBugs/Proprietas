@@ -67,6 +67,31 @@ def appliquer(user: User = Depends(require_instance_admin)):
     return updates.state()
 
 
+def _demande_sur_precedente(user: User, action: str) -> dict:
+    st = updates.state()
+    if st["mode"] != "server":
+        raise HTTPException(400, "Version de bureau : pas de version précédente gérée par l'application")
+    precedente = st["applier"]["precedente"]
+    if not precedente:
+        raise HTTPException(400, "Aucune version précédente conservée sur ce serveur")
+    if st["request"]:
+        raise HTTPException(409, f"Une demande est déjà en attente ({st['request']['version']})")
+    updates.write_request(precedente["version"], user.email, action)
+    return updates.state()
+
+
+@router.post("/admin/updates/rollback")
+def revenir(user: User = Depends(require_instance_admin)):
+    """Revenir à la version précédente conservée (l'applicateur annule les migrations plus récentes)."""
+    return _demande_sur_precedente(user, "rollback")
+
+
+@router.post("/admin/updates/oublier-precedente")
+def oublier(user: User = Depends(require_instance_admin)):
+    """Ne pas conserver la version précédente : l'applicateur supprime son image."""
+    return _demande_sur_precedente(user, "oublier_precedente")
+
+
 @router.delete("/admin/updates/request")
 def annuler(user: User = Depends(require_instance_admin)):
     updates.cancel_request()
