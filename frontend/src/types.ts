@@ -184,6 +184,8 @@ export interface Recap {
   encaisse: number;
   depense: number;
   solde_caisse: number;
+  tresorerie_syndicat: number;        // solde de la base de l'historique + mouvements depuis
+  tresorerie_fonds_travaux: number;
   fonds_travaux_encaisse: number;
   appels_en_cours: number;
   nb_lots: number;
@@ -582,11 +584,28 @@ export interface EtatReprise {
   total_fonds_travaux: number;
   nb_lignes: number;
   controle_ok: boolean | null;
+  solde_banque: number | null;        // compte du syndicat au 31/12 (null = non saisi)
+  solde_banque_fonds: number | null;  // compte du fonds de travaux
+  banque_ok: boolean | null;          // écart bancaire : avertissement seulement
+}
+
+export interface ControleBanque {
+  compte: "syndicat" | "fonds_travaux";
+  depart: string;
+  date: string;
+  solde_depart: number;
+  encaissements: number;
+  depenses: number;
+  calcule: number;
+  saisi: number;
+  ecart: number;
+  ok: boolean;
 }
 
 export interface EtatRepriseDetail extends EtatReprise {
   lignes: EtatRepriseLigne[];
   controles: Controle[];
+  controles_banque: ControleBanque[];
 }
 
 export interface ImportReprise {

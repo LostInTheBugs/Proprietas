@@ -92,8 +92,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Budget prévisionnel" value={fmtEUR(recap.budget_previsionnel)} />
         <Stat label="Encaissé" value={fmtEUR(recap.encaisse)} sub={`${tauxRecouvrement.toFixed(0)} % du budget`} accent />
-        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Solde en caisse : ${fmtEUR(recap.solde_caisse)}`} />
-        <Stat label="Fonds de travaux" value={fmtEUR(recap.fonds_travaux_encaisse)} sub="Cotisations encaissées" />
+        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Trésorerie du syndicat : ${fmtEUR(recap.tresorerie_syndicat)}`} />
+        <Stat label="Fonds de travaux" value={fmtEUR(recap.fonds_travaux_encaisse)}
+          sub={`Cotisations de l'exercice · sur le compte : ${fmtEUR(recap.tresorerie_fonds_travaux)}`} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

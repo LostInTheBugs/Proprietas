@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { Controle, EtatReprise, EtatRepriseDetail, ImportReprise, Lot } from "../types";
+import type { Controle, ControleBanque, EtatReprise, EtatRepriseDetail, ImportReprise, Lot } from "../types";
 import { fmtDate, fmtEUR } from "../types";
 import { Badge, Button, Card, Empty, Input, Select } from "../components/ui";
 
@@ -121,11 +121,18 @@ export default function Historique() {
           </li>
           <li>
             Un état validé plus récent est un <b>point de contrôle</b> : la base, plus les appels, moins les
-            encaissements saisis entre les deux dates, doit retomber exactement sur lui, lot par lot.
+            encaissements saisis entre les deux dates, doit retomber exactement sur lui, lot par lot (ou par ensemble de lots non séparables).
           </li>
           <li>
             Pour <b>remonter d'une année</b>, saisissez les appels et encaissements de l'année dans Comptes, puis validez
             l'état au 31 décembre précédent : il devient la base si tous les contrôles tombent juste.
+          </li>
+          <li>
+            <b>Soldes bancaires</b> (facultatifs) : ce qu'il y avait au 31 décembre sur le compte du syndicat et sur
+            celui du fonds de travaux. Entre deux états, solde de départ + encaissements − dépenses saisis dans Comptes
+            doit retomber sur le solde de la banque : un écart signale une opération oubliée (ou un chèque pas encore
+            encaissé). C'est un avertissement, il ne bloque pas la validation. Le solde de la base est aussi le point
+            de départ de la trésorerie affichée.
           </li>
           <li>
             <b>Lots non séparables</b> (cave, garage rattachés à un lot principal, voir Lots) : une seule ligne
@@ -171,6 +178,7 @@ export default function Historique() {
                     <th className="pb-2 text-right font-medium">Charges</th>
                     <th className="pb-2 text-right font-medium">Fonds de travaux</th>
                     <th className="pb-2 pl-6 font-medium">Contrôle</th>
+                    <th className="pb-2 pl-4 font-medium">Banque</th>
                     <th className="pb-2" />
                   </tr>
                 </thead>
@@ -188,6 +196,15 @@ export default function Historique() {
                           <Badge color="green">Concordant</Badge>
                         ) : (
                           <Badge color="red">Écart</Badge>
+                        )}
+                      </td>
+                      <td className="py-2.5 pl-4">
+                        {e.banque_ok === null ? (
+                          <span className="text-slate-400">—</span>
+                        ) : e.banque_ok ? (
+                          <Badge color="green">Concordante</Badge>
+                        ) : (
+                          <Badge color="amber">Écart</Badge>
                         )}
                       </td>
                       <td className="py-2.5 text-right">
@@ -364,6 +381,8 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
 }) {
   const [annee, setAnnee] = useState(initial ? initial.date.slice(0, 4) : String(anneeDefaut));
   const [commentaire, setCommentaire] = useState(initial?.commentaire ?? "");
+  const [banque, setBanque] = useState(initial?.solde_banque != null ? String(initial.solde_banque) : "");
+  const [banqueFonds, setBanqueFonds] = useState(initial?.solde_banque_fonds != null ? String(initial.solde_banque_fonds) : "");
   const [lignes, setLignes] = useState<LigneSaisie[]>(initial ? versSaisie(initial) : []);
   const [busy, setBusy] = useState(false);
 
@@ -393,6 +412,8 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
     const corps = {
       date: `${annee}-12-31`,
       commentaire,
+      solde_banque: banque.trim() === "" ? null : montantSaisi(banque),
+      solde_banque_fonds: banqueFonds.trim() === "" ? null : montantSaisi(banqueFonds),
       lignes: lignes.map((l) => ({
         lot_id: l.lot_id,
         exercice_origine: Number(l.exercice_origine),
@@ -420,6 +441,12 @@ function EditeurEtat({ lots, anneeDefaut, initial, onAnnuler, onEnregistre, onEr
           <Input label="Commentaire (source : relevé de l'ancien syndic, etc.)" value={commentaire}
             onChange={(e) => setCommentaire(e.target.value)} />
         </div>
+      </div>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <Input label="Solde du compte du syndicat ce jour-là (facultatif)" inputMode="decimal" placeholder="relevé bancaire"
+          value={banque} onChange={(e) => setBanque(e.target.value)} />
+        <Input label="Solde du compte du fonds de travaux (facultatif)" inputMode="decimal"
+          placeholder="vide si même compte" value={banqueFonds} onChange={(e) => setBanqueFonds(e.target.value)} />
       </div>
       <p className="mb-2 text-xs text-slate-500">
         Une ligne par lot et par exercice d'origine : le restant dû à cette date (négatif = crédit). L'exercice
@@ -522,6 +549,37 @@ function TableControle({ c }: { c: Controle }) {
   );
 }
 
+function TableBanque({ c }: { c: ControleBanque }) {
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${c.ok ? "border-slate-200" : "border-amber-300 bg-amber-50"}`}>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="font-medium text-slate-700">
+          {c.compte === "syndicat" ? "Compte du syndicat" : "Compte du fonds de travaux"} — du {fmtDate(c.depart)} au {fmtDate(c.date)}
+        </p>
+        {c.ok ? <Badge color="green">Concordant</Badge> : <Badge color="amber">Écart {fmtEUR(c.ecart)}</Badge>}
+      </div>
+      <table className="w-full">
+        <tbody className="tabular-nums">
+          <tr><td className="py-0.5 text-slate-500">Solde au {fmtDate(c.depart)}</td><td className="text-right">{fmtEUR(c.solde_depart)}</td></tr>
+          <tr><td className="py-0.5 text-slate-500">+ Encaissements saisis</td><td className="text-right">{fmtEUR(c.encaissements)}</td></tr>
+          <tr><td className="py-0.5 text-slate-500">− Dépenses saisies</td><td className="text-right">{fmtEUR(c.depenses)}</td></tr>
+          <tr className="border-t border-slate-200"><td className="py-0.5 font-medium">= Solde calculé</td><td className="text-right font-medium">{fmtEUR(c.calcule)}</td></tr>
+          <tr><td className="py-0.5 font-medium">Solde à la banque</td><td className="text-right font-medium">{fmtEUR(c.saisi)}</td></tr>
+        </tbody>
+      </table>
+      {!c.ok && (
+        <p className="mt-2 text-xs text-amber-800">
+          {c.ecart < 0
+            ? `La banque a ${fmtEUR(-c.ecart)} de moins que le calcul : une dépense non saisie, un encaissement saisi en `
+              + "trop, ou un chèque reçu et saisi mais pas encore crédité ?"
+            : `La banque a ${fmtEUR(c.ecart)} de plus que le calcul : un encaissement non saisi, une dépense saisie en `
+              + "trop, ou un chèque émis et saisi mais pas encore débité ?"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DetailEtat({ etat, lots, onMaj, onFermer, onError }: {
   etat: EtatRepriseDetail;
   lots: Lot[];
@@ -579,6 +637,22 @@ function DetailEtat({ etat, lots, onMaj, onFermer, onError }: {
             </tr>
           </tbody>
         </table>
+      )}
+
+      {(etat.solde_banque !== null || etat.solde_banque_fonds !== null) && (
+        <p className="mb-3 text-sm text-slate-600">
+          À la banque ce jour-là :{" "}
+          {etat.solde_banque !== null && <>compte du syndicat <b>{fmtEUR(etat.solde_banque)}</b></>}
+          {etat.solde_banque !== null && etat.solde_banque_fonds !== null && " · "}
+          {etat.solde_banque_fonds !== null && <>fonds de travaux <b>{fmtEUR(etat.solde_banque_fonds)}</b></>}
+        </p>
+      )}
+
+      {etat.controles_banque.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <p className="text-sm font-semibold text-slate-700">Contrôle bancaire (avertissement, ne bloque pas la validation)</p>
+          {etat.controles_banque.map((c) => <TableBanque key={`${c.compte}-${c.depart}-${c.date}`} c={c} />)}
+        </div>
       )}
 
       {etat.controles.length > 0 && (
