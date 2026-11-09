@@ -15,8 +15,10 @@ from app.models.lot import Lot
 from app.models.reprise import EtatReprise, EtatRepriseLigne
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
-from app.schemas import EtatRepriseDetail, EtatRepriseIn, EtatRepriseOut
+from app.schemas import (EtatRepriseDetail, EtatRepriseIn, EtatRepriseOut, ImportRepriseIn,
+                         ImportRepriseOut)
 from app.services import reprise as svc
+from app.services import reprise_import
 
 router = APIRouter(prefix="/api/reprise", tags=["reprise"])
 
@@ -139,3 +141,18 @@ def valider(etat_id: int, request: Request, db: Session = Depends(get_db),
     db.commit()
     db.refresh(etat)
     return _out(db, copro.id, etat, svc.base(db, copro.id), detail=True)
+
+
+@router.post("/import", response_model=ImportRepriseOut)
+def importer(data: ImportRepriseIn, request: Request, db: Session = Depends(get_db),
+             user: User = Depends(require_syndic)):
+    """Import CSV (état au 31/12, appels ou paiements) : simulation, puis import en bloc."""
+    copro = get_or_create_copro(db, user)
+    res = reprise_import.importer(db, copro, data.type, data.contenu, data.simuler, data.date)
+    if not data.simuler:
+        audit.enregistrer(db, "reprise_import", user=user, copro_id=copro.id, request=request,
+                          detail=f"Import CSV {data.type} : {res['resume'].get('lignes', 0)} ligne(s)")
+        db.commit()
+    else:
+        db.rollback()
+    return res

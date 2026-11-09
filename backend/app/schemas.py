@@ -536,6 +536,36 @@ class EtatRepriseDetail(EtatRepriseOut):
     controles: List[ControleOut] = []
 
 
+_Date = date   # le champ « date » ci-dessous masquerait le type dans la classe
+
+
+class ImportRepriseIn(BaseModel):
+    type: str                      # etat | appels | paiements
+    contenu: str                   # texte du fichier CSV
+    simuler: bool = True
+    date: Optional[_Date] = None   # état : 31 décembre
+
+    @field_validator("contenu")
+    @classmethod
+    def _taille(cls, v: str) -> str:
+        if len(v) > 2_000_000:
+            raise ValueError("Fichier trop volumineux (2 Mo au plus).")
+        return v
+
+
+class ImportErreur(BaseModel):
+    ligne: int
+    message: str
+
+
+class ImportRepriseOut(BaseModel):
+    simulation: bool
+    type: str
+    resume: dict
+    erreurs: List[ImportErreur] = []
+    etat_id: Optional[int] = None
+
+
 # ---------- Mouvements ----------
 class MouvementIn(BaseModel):
     date: date
