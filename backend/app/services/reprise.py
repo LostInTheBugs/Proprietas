@@ -173,6 +173,8 @@ def tresorerie(db: Session, copro_id: int) -> dict:
         depart = getattr(b, champ) if b is not None else None
         f = _flux(db, copro_id, b.date if depart is not None else None, None)[compte]
         out[compte] = arrondi(D(depart or 0) + f["encaissement"] - f["depense"])
+    # Date du solde bancaire de départ (None : aucun saisi, la trésorerie part de 0).
+    out["depuis"] = b.date if b is not None and (b.solde_banque is not None or b.solde_banque_fonds is not None) else None
     return out
 
 

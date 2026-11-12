@@ -92,10 +92,35 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Budget prévisionnel" value={fmtEUR(recap.budget_previsionnel)} />
         <Stat label="Encaissé" value={fmtEUR(recap.encaisse)} sub={`${tauxRecouvrement.toFixed(0)} % du budget`} accent />
-        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Trésorerie du syndicat : ${fmtEUR(recap.tresorerie_syndicat)}`} />
-        <Stat label="Fonds de travaux" value={fmtEUR(recap.fonds_travaux_encaisse)}
-          sub={`Cotisations de l'exercice · sur le compte : ${fmtEUR(recap.tresorerie_fonds_travaux)}`} />
+        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Solde de l'exercice : ${fmtEUR(recap.solde_caisse)}`} />
+        <Stat label="Fonds de travaux" value={fmtEUR(recap.fonds_travaux_encaisse)} sub="Cotisations de l'exercice" />
       </div>
+
+      {/* Ce qui devrait être en banque, d'après les opérations saisies (à rapprocher du relevé). */}
+      <Card title="Sur les comptes (selon les opérations saisies)">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {([
+            ["Compte du syndicat", recap.tresorerie_syndicat],
+            ["Compte du fonds de travaux", recap.tresorerie_fonds_travaux],
+            ["Total", recap.tresorerie_syndicat + recap.tresorerie_fonds_travaux],
+          ] as [string, number][]).map(([label, v], i) => (
+            <div key={label} className={i === 2 ? "sm:border-l sm:border-slate-100 sm:pl-4" : ""}>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums ${v < 0 ? "text-red-600" : i === 2 ? "text-indigo-600" : "text-slate-800"}`}>
+                {fmtEUR(v)}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          {recap.tresorerie_depuis
+            ? `Solde bancaire au ${fmtDate(recap.tresorerie_depuis)} (Historique), plus les encaissements et moins les dépenses saisis depuis. `
+            : "Aucun solde bancaire de départ saisi dans Historique : calcul à partir de 0 (somme des encaissements moins les dépenses saisis). "}
+          Comparez avec le relevé de la banque : un écart signale une opération non saisie ou pas encore passée. Les sommes
+          encore dues par les copropriétaires n'y sont pas.{" "}
+          <Link to="/historique" className="text-indigo-600 hover:underline">Historique</Link>
+        </p>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Trésorerie mensuelle */}

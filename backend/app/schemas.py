@@ -735,6 +735,7 @@ class RecapOut(BaseModel):
     # Trésorerie actuelle (solde de la base de l'historique + mouvements depuis), par compte.
     tresorerie_syndicat: float = 0.0
     tresorerie_fonds_travaux: float = 0.0
+    tresorerie_depuis: Optional[date] = None   # solde bancaire de départ (base de l'historique)
     fonds_travaux_encaisse: float = 0.0
     appels_en_cours: int = 0
     lots: List[EtatDateLot] = []
