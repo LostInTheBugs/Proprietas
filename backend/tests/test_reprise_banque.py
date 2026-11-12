@@ -150,3 +150,16 @@ def test_soldes_bancaires_reserves_et_isoles(client, db, copro_a, copro_b, syndi
     assert _banque(client, token_b, e["id"], "1").status_code == 404
     tok = create_access_token(_make_membre(db, "m@test.fr", copro_a).id, copro_a.id)
     assert _banque(client, tok, e["id"], "1").status_code == 403
+
+
+# ---------------------------------------------------------------- tâche 48 : tableau de bord
+def test_recap_indique_d_ou_part_la_tresorerie(client, db, copro_a, syndic_a, token_a):
+    l1, _ = _lots(db, copro_a)
+    _mouvements(db, copro_a, l1)
+    recap = client.get("/api/recap", headers=auth(token_a)).json()
+    assert recap["tresorerie_depuis"] is None                       # aucun solde bancaire : part de 0
+    base = _etat(client, token_a, B0, [_ligne(l1, Y - 1, 100)], syndicat=1000, fonds=200)
+    _valider(client, token_a, base["id"])
+    recap = client.get("/api/recap", headers=auth(token_a)).json()
+    assert recap["tresorerie_depuis"] == B0.isoformat()
+    assert (recap["tresorerie_syndicat"], recap["tresorerie_fonds_travaux"]) == (2249, 250)
