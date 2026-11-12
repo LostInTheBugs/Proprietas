@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.020 — 2026-11-12
+
+- Tableau de bord : bloc « Sur les comptes » avec ce qui devrait être en banque d'après les opérations saisies (compte du syndicat, fonds de travaux, total), et d'où part le calcul.
+
 ## 2026.11.019 — 2026-11-09
 
 - Régularisation des charges : les lots non séparables (cave, garage rattachés) sont régularisés ensemble, sur une seule ligne et une seule part d'appel au nom du lot principal.
