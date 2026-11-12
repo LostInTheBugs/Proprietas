@@ -186,6 +186,7 @@ export interface Recap {
   solde_caisse: number;
   tresorerie_syndicat: number;        // solde de la base de l'historique + mouvements depuis
   tresorerie_fonds_travaux: number;
+  tresorerie_depuis: string | null;   // date du solde bancaire de départ (null : la trésorerie part de 0)
   fonds_travaux_encaisse: number;
   appels_en_cours: number;
   nb_lots: number;
