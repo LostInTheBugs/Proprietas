@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import mimetypes
 import os
@@ -102,11 +103,13 @@ async def upload_document(
     # petit serveur avant d'être refusé), et rien n'atteint le stockage avant d'être accepté.
     max_bytes = int(settings.upload_max_mb * 1024 * 1024)
     taille = 0
+    empreinte = hashlib.sha256()     # avec la taille : retrouver le fichier s'il est renommé sur le drive
     with tempfile.SpooledTemporaryFile(max_size=BLOC_UPLOAD) as tmp:
         while bloc := await fichier.read(BLOC_UPLOAD):
             taille += len(bloc)
             if taille > max_bytes:
                 raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
+            empreinte.update(bloc)
             tmp.write(bloc)
         tmp.seek(0)
         sur_le_drive = False
@@ -128,6 +131,8 @@ async def upload_document(
         libelle=libelle,
         fichier=nom_stocke,
         emplacement="drive" if sur_le_drive else "",
+        taille=taille,
+        empreinte=empreinte.hexdigest(),
         date_ajout=date.today(),
     )
     db.add(doc)

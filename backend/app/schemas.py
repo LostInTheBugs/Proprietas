@@ -1320,3 +1320,8 @@ class DriveIn(BaseModel):
     utilisateur: str = ""
     mot_de_passe: str = ""               # vide : garder celui qui est enregistré
     dossier: str = ""
+
+
+class DriveRelierIn(BaseModel):
+    document_id: int
+    chemin: str

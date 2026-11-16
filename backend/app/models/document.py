@@ -14,6 +14,10 @@ class Document(Base):
     fichier = Column(String, default="")
     # "" : stockage de l'instance (dossier local ou S3) ; "drive" : drive de la copropriété.
     emplacement = Column(String, default="", nullable=False, server_default="")
+    # Taille (octets) et empreinte SHA-256 du contenu, relevées au dépôt ou au déplacement : elles
+    # permettent de retrouver sur le drive un fichier renommé ou déplacé. Vides pour les anciens documents.
+    taille = Column(Integer, nullable=True)
+    empreinte = Column(String, nullable=True)
     date_ajout = Column(Date, nullable=False)
 
     copropriete = relationship("Copropriete", back_populates="documents")

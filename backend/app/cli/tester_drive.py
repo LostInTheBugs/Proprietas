@@ -4,7 +4,7 @@
         --utilisateur syndic --dossier "Proprietas/Essai"
 
 Étapes : essai d'écriture (dossier, fichier témoin), dépôt de deux fichiers du même nom avec accents
-et apostrophe, tailles, relecture, suppression. Tout ce qui est créé est supprimé, sauf les dossiers.
+et apostrophe, tailles, relecture, liste du dossier, suppression. Tout ce qui est créé est supprimé, sauf les dossiers.
 Code de sortie 0 si tout est conforme.
 """
 import argparse
@@ -44,6 +44,11 @@ def main(argv=None) -> int:
             conforme = taille == len(contenu) + 1 and lu == contenu + str(n).encode()
             ok = ok and conforme
             print(f"relecture {n} : {taille} octets, {'conforme' if conforme else 'DIFFÉRENT'}")
+        # Liste du dossier (vérification du drive, fichiers renommés) : les deux dépôts y sont, à la bonne taille.
+        arbre = st.lister_arbre()
+        listes = all(arbre.get(c) == len(contenu) + 1 for c in chemins)
+        ok = ok and listes
+        print(f"liste du dossier : {len(arbre)} fichier(s), {'les deux dépôts y sont' if listes else 'DÉPÔTS ABSENTS OU TAILLE FAUSSE'}")
         for chemin in chemins:
             st.supprimer(chemin)
         restes = [c for c in chemins if st.existe(c)]

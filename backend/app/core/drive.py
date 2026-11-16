@@ -24,7 +24,7 @@ import socket
 import uuid
 from types import SimpleNamespace
 from typing import BinaryIO, Iterator
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 from xml.etree import ElementTree
 
 import httpx
@@ -39,6 +39,7 @@ DOSSIERS = {
 RACINE = "Proprietas"
 INTERDITS = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]')     # refusés par Windows, donc par les clients de synchro
 MAX_XML = 1024 * 1024
+MAX_XML_LISTE = 20 * 1024 * 1024     # liste d'un dossier (PROPFIND Depth: 1)
 TRANSPORT = None                # remplacé par les tests (httpx.MockTransport)
 
 
@@ -143,21 +144,65 @@ class StockageWebDAV:
         for n in range(1, len(segments) + 1):
             self._requete(client, "MKCOL", self._adresse(segments[:n]), (201, 405))
 
+    @staticmethod
+    def _xml(r: httpx.Response, maximum: int = MAX_XML) -> ElementTree.Element:
+        """Réponse « multistatus » analysée : bornée, sans DTD (pas d'entités à développer)."""
+        if len(r.content) > maximum or b"<!DOCTYPE" in r.content or b"<!ENTITY" in r.content:
+            raise StockageIndisponible("Réponse du drive illisible.")
+        try:
+            return ElementTree.fromstring(r.content)
+        except ElementTree.ParseError as e:
+            raise StockageIndisponible("Réponse du drive illisible.") from e
+
     def _taille(self, client: httpx.Client, adresse: str) -> int | None:
         """Taille d'un FICHIER ; None s'il n'existe pas (ou si c'est un dossier)."""
         r = self._requete(client, "PROPFIND", adresse, (207, 404), headers={"Depth": "0"})
         if r.status_code == 404:
             return None
-        if len(r.content) > MAX_XML or b"<!DOCTYPE" in r.content or b"<!ENTITY" in r.content:
-            raise StockageIndisponible("Réponse du drive illisible.")
-        try:
-            racine = ElementTree.fromstring(r.content)
-        except ElementTree.ParseError as e:
-            raise StockageIndisponible("Réponse du drive illisible.") from e
+        racine = self._xml(r)
         if racine.find(".//{DAV:}collection") is not None:
             return None
         taille = racine.findtext(".//{DAV:}getcontentlength")
         return int(taille) if taille and taille.isdigit() else 0
+
+    def lister_arbre(self, profondeur: int = 4, maximum: int = 5000) -> dict[str, int]:
+        """Tous les fichiers sous le dossier du drive : { chemin relatif: taille }.
+
+        Parcours dossier par dossier (PROPFIND Depth: 1, admis partout), `profondeur` niveaux au plus,
+        fichiers cachés (« .… ») ignorés. Au-delà de `maximum` fichiers : StockageIndisponible.
+        """
+        base = unquote(urlsplit(self.url).path).rstrip("/")
+        racine = "/".join(self.dossier)
+        fichiers: dict[str, int] = {}
+        a_voir = [(self.dossier, 0)]
+        with self._client() as client:
+            while a_voir:
+                segments, niveau = a_voir.pop()
+                r = self._requete(client, "PROPFIND", self._adresse(segments) + "/", (207, 404),
+                                  headers={"Depth": "1"})
+                if r.status_code == 404:
+                    continue
+                ici = "/".join(segments)
+                for reponse in self._xml(r, MAX_XML_LISTE).iter("{DAV:}response"):
+                    # href : chemin absolu encodé, parfois adresse complète (%c3 ou %C3 selon le serveur).
+                    chemin = unquote(urlsplit(reponse.findtext("{DAV:}href") or "").path).rstrip("/")
+                    if base and chemin.startswith(base + "/"):
+                        chemin = chemin[len(base):]
+                    chemin = chemin.strip("/")
+                    if chemin == ici or not chemin.startswith(racine + "/"):
+                        continue
+                    nom = chemin.rpartition("/")[2]
+                    if nom.startswith("."):
+                        continue
+                    if reponse.find(".//{DAV:}collection") is not None:
+                        if niveau + 1 < profondeur:
+                            a_voir.append((chemin.split("/"), niveau + 1))
+                        continue
+                    taille = reponse.findtext(".//{DAV:}getcontentlength")
+                    fichiers[chemin[len(racine) + 1:]] = int(taille) if taille and taille.isdigit() else 0
+                    if len(fichiers) > maximum:
+                        raise StockageIndisponible(f"Plus de {maximum} fichiers dans le dossier du drive.")
+        return fichiers
 
     # --- interface de stockage (voir core/stockage.Stockage)
     def nom_libre(self, dossier: str, nom: str) -> str:

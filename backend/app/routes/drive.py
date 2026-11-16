@@ -6,7 +6,10 @@ Réservé au syndic. Règles (voir aussi core/drive.py) :
 - tant que des documents sont sur le drive, on ne peut ni le débrancher ni changer son dossier
   (les fichiers deviendraient introuvables) ; l'adresse, l'identifiant et le mot de passe restent
   modifiables (serveur déplacé, mot de passe renouvelé) ;
-- branchement et débranchement sont inscrits au journal d'audit.
+- branchement et débranchement sont inscrits au journal d'audit ;
+- fichiers existants : déplacement vers le drive et rapatriement sur le serveur, par lots
+  (services/drive_fichiers.py) ; vérification du drive, fichier renommé retrouvé par son contenu ou
+  relié à la main.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -19,7 +22,9 @@ from app.core.stockage import NomInvalide, StockageIndisponible
 from app.models.document import Document
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
-from app.schemas import DriveIn
+from app.core.scoping import get_owned
+from app.schemas import DriveIn, DriveRelierIn
+from app.services import drive_fichiers
 
 router = APIRouter(prefix="/api/drive", tags=["drive"])
 
@@ -33,6 +38,8 @@ def _etat(db: Session, copro) -> dict:
             "utilisateur": copro.drive_user or "", "dossier": copro.drive_dossier or "",
             "mot_de_passe_defini": bool(copro.drive_password),
             "documents_sur_le_drive": _sur_le_drive(db, copro),
+            "documents_sur_le_serveur": db.query(Document).filter(
+                Document.copropriete_id == copro.id, Document.emplacement == "", Document.fichier != "").count(),
             "dossier_propose": drive.dossier_propose(copro.nom)}
 
 
@@ -106,3 +113,92 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
                       detail=f"{st.url} — dossier « {dossier} »")
     db.commit()
     return _etat(db, copro)
+
+
+# ---------------------------------------------------------------- fichiers existants, vérification
+def _branche(copro):
+    """Le drive de la copropriété ; 409 s'il n'est pas branché, 503 s'il est inutilisable."""
+    _autorise()
+    from app.routes import documents
+    try:
+        st = documents._drive(copro)
+    except StockageIndisponible as e:
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
+    if st is None:
+        raise HTTPException(409, "Aucun drive n'est branché.")
+    return st
+
+
+def _instance():
+    from app.routes import documents
+    return documents._stockage()
+
+
+def _lot(operation, db, copro, action: str, user, request) -> dict:
+    try:
+        bilan = operation(db, copro, _instance(), _branche(copro))
+    except StockageIndisponible as e:
+        db.rollback()
+        raise HTTPException(503, f"Déplacement interrompu : {e} Les fichiers déjà déplacés le restent.") from e
+    if bilan["deplaces"]:
+        audit.enregistrer(db, action, user=user, copro_id=copro.id, request=request,
+                          detail=f"{bilan['deplaces']} fichier(s), {bilan['restants']} restant(s)")
+        db.commit()
+    return bilan
+
+
+@router.post("/deplacer")
+def deplacer(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Déplace vers le drive un LOT de fichiers encore sur le serveur ; à rappeler tant que `restants` > 0."""
+    return _lot(drive_fichiers.deplacer_vers_drive, db, get_or_create_copro(db, user), "drive_deplacement", user, request)
+
+
+@router.post("/rapatrier")
+def rapatrier(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Ramène sur le serveur un LOT de fichiers du drive ; à rappeler tant que `restants` > 0."""
+    return _lot(drive_fichiers.rapatrier, db, get_or_create_copro(db, user), "drive_rapatriement", user, request)
+
+
+@router.get("/verification")
+def verification(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    copro = get_or_create_copro(db, user)
+    try:
+        return drive_fichiers.verifier(db, copro, _branche(copro))
+    except StockageIndisponible as e:
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
+
+
+@router.post("/retrouver")
+def retrouver(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Relie les documents introuvables aux fichiers du drive de même contenu (renommés ou déplacés)."""
+    copro = get_or_create_copro(db, user)
+    try:
+        bilan = drive_fichiers.retrouver(db, copro, _branche(copro))
+    except StockageIndisponible as e:
+        db.rollback()
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
+    for r in bilan["relies"]:
+        audit.enregistrer(db, "drive_fichier_relie", user=user, copro_id=copro.id, request=request,
+                          detail=f"« {r['libelle']} » : {r['ancien']} → {r['nouveau']} (retrouvé par son contenu)")
+    db.commit()
+    return bilan
+
+
+@router.post("/relier")
+def relier(data: DriveRelierIn, request: Request, db: Session = Depends(get_db),
+           user: User = Depends(require_syndic)):
+    """Rattache à la main un fichier du drive à un document dont le fichier est introuvable."""
+    copro = get_or_create_copro(db, user)
+    doc = get_owned(db, Document, data.document_id, copro, label="Document")
+    ancien = doc.fichier
+    try:
+        drive_fichiers.relier(db, copro, _branche(copro), doc, data.chemin)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except StockageIndisponible as e:
+        db.rollback()
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
+    audit.enregistrer(db, "drive_fichier_relie", user=user, copro_id=copro.id, request=request,
+                      detail=f"« {doc.libelle} » : {ancien} → {doc.fichier} (choisi par le syndic)")
+    db.commit()
+    return {"ok": True, "fichier": doc.fichier}
