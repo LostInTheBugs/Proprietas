@@ -28,6 +28,12 @@ class Copropriete(Base):
     smtp_password = Column(TexteChiffre, default="")
     email_expediteur = Column(String, default="")
     frontend_url = Column(String, default="")
+    # Drive de la copropriété (core/drive.py) : ses fichiers sur un serveur WebDAV. "" = pas de drive.
+    drive_type = Column(String, default="")          # "" | webdav
+    drive_url = Column(String, default="")
+    drive_user = Column(String, default="")
+    drive_password = Column(TexteChiffre, default="")   # chiffré en base, comme le mot de passe SMTP
+    drive_dossier = Column(String, default="")       # ex. « Proprietas/Résidence Les Tilleuls »
     # Relances automatiques (cron)
     relance_auto = Column(Boolean, default=False)
     relance_frequence = Column(String, default="hebdo")  # hebdo | mensuel

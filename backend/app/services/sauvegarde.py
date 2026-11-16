@@ -80,7 +80,9 @@ PAR_PARENT = {
 }
 # Colonnes jamais exportées.
 EXCLUES = {
-    "coproprietes": {"smtp_password"},
+    # Le drive n'est jamais exporté : la copropriété importée repart sans drive (ses fichiers,
+    # s'ils sont dans l'archive, vont dans le stockage de l'instance).
+    "coproprietes": {"smtp_password", "drive_type", "drive_url", "drive_user", "drive_password", "drive_dossier"},
     "users": {"is_instance_admin", "token_version", "last_login_at", "last_login_ip", "last_login_ua",
               "personne_id", "copropriete_id"},
 }
@@ -153,8 +155,12 @@ def _cles(table) -> dict[str, str]:
 
 # ---------------------------------------------------------------- export
 def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
-             donnees_personnelles: bool = False, fichiers: bool = False) -> dict:
-    """Écrit l'archive dans `sortie` (fichier ouvert en écriture binaire) ; renvoie le manifeste."""
+             donnees_personnelles: bool = False, fichiers: bool = False, stockage_drive=None) -> dict:
+    """Écrit l'archive dans `sortie` (fichier ouvert en écriture binaire) ; renvoie le manifeste.
+
+    `stockage_drive` : drive de la copropriété, pour les fichiers qui y sont rangés (ils entrent dans
+    l'archive comme les autres ; l'archive ne dit pas d'où ils viennent).
+    """
     if (donnees_personnelles or fichiers) and not mot_de_passe:
         raise HTTPException(422, "Les données personnelles et les fichiers des documents ne s'exportent "
                                  "qu'avec un mot de passe.")
@@ -192,9 +198,15 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
         donnees[nom] = [{k: _vers_json(v) for k, v in r.items() if k not in exclues} for r in lignes[nom]]
     if not donnees_personnelles:
         _anonymiser(donnees)
-    if not fichiers:
-        for d in donnees["documents"]:
+    # Où lire chaque fichier ; l'archive, elle, ne garde aucune trace du drive.
+    sources = [(d.get("fichier") or "", d.get("emplacement") or "") for d in donnees["documents"]]
+    for d in donnees["documents"]:
+        d["emplacement"] = ""
+        if not fichiers:
             d["fichier"] = ""
+    if fichiers and any(e == "drive" for _, e in sources) and stockage_drive is None:
+        raise HTTPException(409, "Des fichiers sont sur le drive de la copropriété, qui n'est plus branché : "
+                                 "rebranchez-le, ou sauvegardez sans les fichiers.")
 
     manifest = {
         "format": FORMAT, "version_format": VERSION_FORMAT, "version_application": VERSION,
@@ -210,16 +222,18 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
             z.setpassword(mot_de_passe.encode("utf-8"))
         z.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=1))
         z.writestr("donnees.json", json.dumps(donnees, ensure_ascii=False))
-        for d in donnees["documents"]:
-            nom = d.get("fichier") or ""
+        for nom, emplacement in sources if fichiers else []:
+            source = stockage_drive if emplacement == "drive" else stockage
             try:
-                if not nom or not stockage.existe(nom):
+                if not nom or not source.existe(nom):
                     continue
                 with z.open(f"documents/{nom}", "w") as f:
-                    for bloc in stockage.lire_par_blocs(nom):
+                    for bloc in source.lire_par_blocs(nom):
                         f.write(bloc)
             except NomInvalide:
                 continue
+            except StockageIndisponible as e:
+                raise HTTPException(503, f"Stockage des documents indisponible : {e}") from e
     return manifest
 
 

@@ -1031,6 +1031,7 @@ class DocumentOut(BaseModel):
     categorie: str = "autre"
     libelle: str
     fichier: str = ""
+    emplacement: str = ""      # "" : sur le serveur ; "drive" : sur le drive de la copropriété
     date_ajout: date
 
 
@@ -1310,3 +1311,12 @@ class NotificationsPVOut(BaseModel):
     limite_envoi: date                        # AG + 1 mois (art. 42 al. 2)
     sans_proprietaire: List[str] = []         # lots concernés sans propriétaire : non notifiables
     items: List[NotificationPVOut] = []
+
+
+# ---------- Drive de la copropriété ----------
+class DriveIn(BaseModel):
+    type: str = "webdav"                 # "webdav" ou "" (débrancher)
+    url: str = ""
+    utilisateur: str = ""
+    mot_de_passe: str = ""               # vide : garder celui qui est enregistré
+    dossier: str = ""

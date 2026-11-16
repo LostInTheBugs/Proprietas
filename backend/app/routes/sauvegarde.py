@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_syndic
 from app.core.security import hash_password
+from app.core.stockage import StockageIndisponible
 from app.models.lot import Lot
 from app.models.user import User, UserCopro
 from app.routes.copro import get_or_create_copro
@@ -25,6 +26,14 @@ from app.services import sauvegarde as svc
 
 router = APIRouter(prefix="/api/sauvegarde", tags=["sauvegarde"])
 BLOC = 1024 * 1024
+
+
+def _drive(copro):
+    from app.routes import documents
+    try:
+        return documents._drive(copro)
+    except StockageIndisponible as e:
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
 
 
 def _stockage():
@@ -41,7 +50,8 @@ def exporter(data: SauvegardeExportIn, request: Request, db: Session = Depends(g
     try:
         with os.fdopen(fd, "wb") as sortie:
             manifest = svc.exporter(db, copro, _stockage(), sortie, mot_de_passe=data.mot_de_passe,
-                                    donnees_personnelles=data.donnees_personnelles, fichiers=data.fichiers)
+                                    donnees_personnelles=data.donnees_personnelles, fichiers=data.fichiers,
+                                    stockage_drive=_drive(copro) if data.fichiers else None)
     except Exception:
         os.unlink(chemin)
         raise

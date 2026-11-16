@@ -14,6 +14,7 @@ from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.document import Document
 from app.models.mouvement import Mouvement
+from app.core import drive
 from app.core.scoping import get_owned
 from app.core.stockage import NomInvalide, StockageIndisponible, StockageLocal, stockage_depuis
 from app.routes.copro import get_or_create_copro
@@ -42,8 +43,28 @@ def _stockage():
     return stockage_depuis(settings)
 
 
-def _indisponible(e: StockageIndisponible) -> HTTPException:
+def _drive(copro):
+    """Drive de la copropriété s'il est branché (et autorisé sur l'instance), sinon None."""
+    if not settings.drive_actif:
+        return None
+    return drive.stockage_drive(copro, settings.drive_reseau_local)
+
+
+def stockage_du_document(copro, doc):
+    """Où est le fichier de ce document : drive de la copropriété ou stockage de l'instance."""
+    if doc.emplacement == "drive":
+        st = _drive(copro)
+        if st is None:
+            raise StockageIndisponible("Ce fichier est sur le drive de la copropriété, qui n'est plus branché.")
+        return st
+    return _stockage()
+
+
+def _indisponible(e: StockageIndisponible, sur_le_drive: bool = False) -> HTTPException:
     logging.getLogger("uvicorn.error").error("%s", e)
+    if sur_le_drive:
+        # Le message vient de core/drive.py : il ne contient ni mot de passe ni adresse interne.
+        return HTTPException(503, f"Drive de la copropriété indisponible : {e}")
     return HTTPException(503, "Stockage des documents indisponible, réessayez plus tard")
 
 
@@ -76,7 +97,6 @@ async def upload_document(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"Type de fichier refusé (autorisé : {', '.join(sorted(ALLOWED_EXTENSIONS))})")
     copro = get_or_create_copro(db, user)
-    nom_stocke = f"{uuid.uuid4().hex}{ext}"
     # Réception PAR BLOCS dans un fichier temporaire, avec arrêt dès que la limite est
     # franchie : jamais le fichier entier en mémoire (un gros envoi saturait la RAM d'un
     # petit serveur avant d'être refusé), et rien n'atteint le stockage avant d'être accepté.
@@ -89,15 +109,25 @@ async def upload_document(
                 raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
             tmp.write(bloc)
         tmp.seek(0)
+        sur_le_drive = False
         try:
-            _stockage().enregistrer(nom_stocke, tmp)
+            st = _drive(copro)
+            sur_le_drive = st is not None
+            if sur_le_drive:
+                # Drive branché : c'est là que va le fichier, sous un nom lisible, dans le dossier
+                # de sa catégorie (« Factures/2026-11-16 Facture d'électricité.pdf »).
+                nom_stocke = st.nom_libre(drive.DOSSIERS[categorie], drive.nom_lisible(date.today(), libelle, ext))
+            else:
+                st, nom_stocke = _stockage(), f"{uuid.uuid4().hex}{ext}"
+            st.enregistrer(nom_stocke, tmp)
         except StockageIndisponible as e:
-            raise _indisponible(e) from e
+            raise _indisponible(e, sur_le_drive) from e
     doc = Document(
         copropriete_id=copro.id,
         categorie=categorie,
         libelle=libelle,
         fichier=nom_stocke,
+        emplacement="drive" if sur_le_drive else "",
         date_ajout=date.today(),
     )
     db.add(doc)
@@ -110,9 +140,10 @@ async def upload_document(
 def download_document(doc_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
-    stockage = _stockage()
     nom_affiche = _safe_download_name(doc.libelle)
+    sur_le_drive = doc.emplacement == "drive"
     try:
+        stockage = stockage_du_document(copro, doc)
         if isinstance(stockage, StockageLocal):
             path = stockage.chemin(doc.fichier)
             if not os.path.isfile(path):
@@ -120,12 +151,13 @@ def download_document(doc_id: int, db: Session = Depends(get_db), user: User = D
             return FileResponse(path, filename=nom_affiche)
         taille = stockage.taille(doc.fichier)
         if taille is None:
-            raise HTTPException(404, "Fichier manquant sur le serveur")
+            raise HTTPException(404, "Fichier introuvable sur le drive : il a été renommé, déplacé ou supprimé."
+                                if sur_le_drive else "Fichier manquant sur le serveur")
         blocs = stockage.lire_par_blocs(doc.fichier)
     except NomInvalide:
         raise HTTPException(404, "Fichier manquant sur le serveur")
     except StockageIndisponible as e:
-        raise _indisponible(e) from e
+        raise _indisponible(e, sur_le_drive) from e
     return StreamingResponse(
         blocs,
         media_type=mimetypes.guess_type(doc.fichier)[0] or "application/octet-stream",
@@ -139,11 +171,13 @@ def delete_document(doc_id: int, db: Session = Depends(get_db), user: User = Dep
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
     try:
-        _stockage().supprimer(doc.fichier)
+        if doc.fichier:
+            stockage_du_document(copro, doc).supprimer(doc.fichier)
     except NomInvalide:
         pass                    # nom forgé : aucun fichier légitime à supprimer, la fiche part
     except StockageIndisponible as e:
-        raise _indisponible(e) from e
+        # Drive injoignable ou débranché : on ne supprime pas la fiche d'un fichier qui resterait.
+        raise _indisponible(e, doc.emplacement == "drive") from e
     # Les mouvements rattachés à ce document (facture) restent, déliés.
     db.query(Mouvement).filter(Mouvement.document_id == doc.id).update({Mouvement.document_id: None},
                                                                        synchronize_session=False)

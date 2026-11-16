@@ -58,13 +58,17 @@ def _disque(st) -> dict | None:
 def espace(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     st = _stockage()
     resultat = {"stockage": "local" if isinstance(st, StockageLocal) else "s3",
-                "documents": {"nombre": 0, "octets": 0, "introuvables": 0},
+                "documents": {"nombre": 0, "octets": 0, "introuvables": 0, "sur_le_drive": 0},
                 "instance": None, "erreur": ""}
     copro = get_or_create_copro(db, user)
-    docs = db.query(Document.fichier).filter(Document.copropriete_id == copro.id).all()
+    docs = db.query(Document.fichier, Document.emplacement).filter(Document.copropriete_id == copro.id).all()
     resultat["documents"]["nombre"] = len(docs)
     try:
-        for (fichier,) in docs:
+        for fichier, emplacement in docs:
+            if emplacement == "drive":
+                # Sur le drive de la copropriété : ne pèse pas sur le serveur (taille non interrogée).
+                resultat["documents"]["sur_le_drive"] += 1
+                continue
             if not fichier:
                 continue
             taille = st.taille(fichier)
