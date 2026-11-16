@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.026 — 2026-11-17
+
+- Drive de la copropriété : « Déplacer vers le drive » range sur le drive les fichiers déposés avant son branchement ; « Vérifier le drive » liste les fichiers introuvables et « Retrouver par le contenu » relie un fichier renommé ou déplacé sur le drive à son document (sinon, liaison à la main) ; « Rapatrier sur le serveur » ramène les fichiers pour pouvoir débrancher le drive. Migration e9f0a1b2c3d4.
+- Documents : si un fichier du drive est introuvable ou le drive éteint, la raison s'affiche dans la page.
+
 ## 2026.11.025 — 2026-11-16
 
 - Drive de la copropriété (Réglages → Sauvegarde et stockage) : le syndic peut brancher un drive WebDAV (Nextcloud, ownCloud, Synology). Les fichiers déposés ensuite y sont rangés dans un dossier par catégorie, sous un nom lisible (« Proprietas/copropriété/Factures/2026-11-16 Facture.pdf »), et ne sont pas gardés sur le serveur. Les fichiers déjà déposés restent où ils sont. Migration d8e9f0a1b2c3.
