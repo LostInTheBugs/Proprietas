@@ -15,29 +15,23 @@ from sqlalchemy.orm import Session
 
 from app.models.copropriete import Copropriete
 from app.models.user import User, UserCopro
-from app.services.emailer import EmailError, _date_fr, envoyer_email
+from app.services.emailer import EmailError, _date_fr, config_smtp, envoyer_email
 
 
 def _copro_smtp(db: Session, user: User) -> Copropriete | None:
-    """Copropriété principale du compte, si son SMTP est configuré — sinon None."""
+    """Copropriété principale du compte, si un envoi est possible (son SMTP ou celui de l'instance)."""
     lien = (db.query(UserCopro).filter(UserCopro.user_id == user.id)
             .order_by(UserCopro.principale.desc(), UserCopro.id).first())
     if not lien:
         return None
     copro = db.query(Copropriete).filter(Copropriete.id == lien.copropriete_id).first()
-    if not copro or not copro.smtp_host or not copro.email_expediteur:
+    if not copro or config_smtp(copro) is None:
         return None
     return copro
 
 
 def _cfg_smtp(copro: Copropriete) -> SimpleNamespace:
-    return SimpleNamespace(
-        smtp_host=copro.smtp_host,
-        smtp_port=copro.smtp_port,
-        smtp_user=copro.smtp_user,
-        smtp_password=copro.smtp_password,
-        email_expediteur=copro.email_expediteur,
-    )
+    return config_smtp(copro)
 
 
 def _envoyer(cfg, dest: str, sujet: str, corps: str) -> None:

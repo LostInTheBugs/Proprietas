@@ -155,7 +155,7 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   suppression de comptes, exports (compte de gestion, quittances, rapport annuel,
   CSV, registre) et envois de relances — consultable par le syndic (page
   « 🔐 Sécurité ») pour la copropriété active.
-- **Alertes email de sécurité** (best effort, via le SMTP de la copropriété) :
+- **Alertes email de sécurité** (best effort, via le SMTP de la copropriété, ou à défaut de l'instance) :
   connexion depuis une nouvelle IP, 2FA désactivée ou réinitialisée, code de
   secours utilisé.
 
@@ -330,6 +330,24 @@ défaut ; contenu décompressé : `COPRO_IMPORT_MAX_DECOMPRESSE_MB`, 2000 Mo par
 est refusé et rien n'est créé). Après l'import d'une sauvegarde sans données personnelles, **Réglages → Utilisateurs → Comptes à
 compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
 sur le serveur y rattache le compte anonyme.
+
+### Envoi des e-mails : serveur de l'instance
+
+Chaque copropriété peut saisir son serveur d'envoi dans **Réglages → E-mails et relances**. Pour le régler
+une fois pour toute l'instance, hors de l'application (rotation des secrets sans se connecter), mettez-le
+dans le `.env` :
+
+| Variable | Rôle |
+|---|---|
+| `COPRO_SMTP_HOST`, `COPRO_SMTP_PORT` | serveur et port (587 par défaut ; 465 = TLS direct) |
+| `COPRO_SMTP_USER`, `COPRO_SMTP_PASSWORD` | identifiants (vides : pas d'authentification) |
+| `COPRO_EMAIL_EXPEDITEUR` | adresse d'expédition |
+| `COPRO_FRONTEND_URL` | adresse publique de l'instance, citée dans les e-mails |
+
+Une copropriété **sans** serveur saisi utilise celui de l'instance ; une copropriété qui en a saisi un
+garde **ses** réglages, en entier (jamais de mélange). Le syndic voit dans Réglages lequel est utilisé ; le
+mot de passe de l'instance n'est jamais affiché. Sans adresse publique (ni copropriété, ni instance), les
+e-mails ne contiennent pas de lien vers l'application.
 
 ### Connexions à la base PostgreSQL
 

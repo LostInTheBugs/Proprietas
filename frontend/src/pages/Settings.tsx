@@ -30,6 +30,12 @@ export default function Settings() {
   const [error, setError] = useState("");
   const [smtpTest, setSmtpTest] = useState<{ ok: boolean; detail: string } | null>(null);
   const [smtpBusy, setSmtpBusy] = useState(false);
+  // Serveur d'envoi de l'instance (COPRO_SMTP_* dans le .env) : repli des copropriétés sans serveur.
+  const [smtpInstance, setSmtpInstance] = useState<{ configure: boolean; serveur: string; port: number; expediteur: string; adresse_publique: string } | null>(null);
+  useEffect(() => {
+    if (me?.role !== "syndic") return;
+    api.get<typeof smtpInstance>("/smtp/instance").then(setSmtpInstance).catch(() => {});
+  }, [me?.role]);
   // Nouveau mot de passe SMTP (le mot de passe actuel n'est jamais renvoyé par le backend)
   const [smtpPassword, setSmtpPassword] = useState("");
   const [prochaineDate, setProchaineDate] = useState<string | null>(null);
@@ -447,6 +453,14 @@ export default function Settings() {
             (<code className="text-slate-700">smtp.gmail.com:587</code> + mot de passe d'application), votre hébergeur,
             ou un serveur mailcow.
           </p>
+          {smtpInstance?.configure && (
+            <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-800">
+              {copro.smtp_host
+                ? <>Cette copropriété utilise son propre serveur, ci-dessous. Videz le champ « Serveur SMTP » pour revenir à celui de l'instance (<strong>{smtpInstance.serveur}</strong>).</>
+                : <>Les e-mails partent par le serveur de l'instance : <strong>{smtpInstance.serveur}:{smtpInstance.port}</strong>, expéditeur <strong>{smtpInstance.expediteur}</strong>. Rien à saisir ici, sauf pour utiliser un autre serveur.</>}
+              {!copro.frontend_url && smtpInstance.adresse_publique && <> Adresse citée dans les e-mails : <strong>{smtpInstance.adresse_publique}</strong>.</>}
+            </p>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <Input label="Serveur SMTP" value={copro.smtp_host} onChange={(e) => setCopro({ ...copro, smtp_host: e.target.value })} placeholder="smtp.example.fr" className="col-span-2" />
             <Input label="Port" type="number" value={copro.smtp_port} onChange={(e) => setCopro({ ...copro, smtp_port: Number(e.target.value) })} />

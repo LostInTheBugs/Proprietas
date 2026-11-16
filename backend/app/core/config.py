@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     # Taille maximale de cette archive une fois DÉCOMPRESSÉE (données + fichiers) : une archive très
     # compressible ne doit pas remplir la mémoire ni le disque.
     import_max_decompresse_mb: float = Field(2000.0, gt=0)
+    # Envoi des e-mails : réglages de l'INSTANCE (PR #70). Utilisés par les copropriétés qui n'ont pas
+    # saisi leur propre serveur dans Réglages → E-mails et relances (jamais de mélange : une
+    # copropriété qui a un serveur utilise ses réglages en entier). Voir services/emailer.config_smtp.
+    smtp_host: str = ""
+    smtp_port: int = Field(587, ge=0)
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_expediteur: str = ""
+    # Adresse publique de l'instance, citée dans les e-mails quand la copropriété n'a pas la sienne.
+    frontend_url: str = ""
     # Stockage des documents : « local » (dossier upload_dir) ou « s3 » (bucket compatible S3 :
     # AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…). Voir app/core/stockage.py.
     stockage: str = "local"
@@ -52,13 +62,6 @@ class Settings(BaseSettings):
     # extra=ignore : une ancienne variable restée dans un .env (ex. COPRO_INSTANCE_ADMINS)
     # ne doit pas empêcher l'application de démarrer.
     model_config = {"env_prefix": "COPRO_", "env_file": ".env", "extra": "ignore"}
-    # Smtp server config
-    smtp_host: str = ""
-    smtp_port: int = Field(587, ge=0)
-    smtp_user: str = ""
-    smtp_password: str = ""
-    email_expediteur: str = ""
-    frontend_url: str = ""
 
     @property
     def is_sqlite(self) -> bool:
