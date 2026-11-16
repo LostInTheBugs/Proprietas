@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     email_expediteur: str = ""
-    smtp_proprietas_public_url: str = ""
+    frontend_url: str = ""
 
     @property
     def is_sqlite(self) -> bool:
