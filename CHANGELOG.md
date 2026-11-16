@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.021 — 2026-11-16
+
+- Historique : tableau « Soldes au 1er janvier ». Pour chaque année et chaque compte (syndicat, fonds de travaux) : relevé de la banque, solde calculé, écart, et écart de l'année, qui désigne l'année où une opération manque. Le relevé se saisit directement, avec ou sans état de l'historique. Migration c7d8e9f0a1b2 (les soldes déjà saisis sont repris).
+
 ## 2026.11.020 — 2026-11-12
 
 - Tableau de bord : bloc « Sur les comptes » avec ce qui devrait être en banque d'après les opérations saisies (compte du syndicat, fonds de travaux, total), et d'où part le calcul.
