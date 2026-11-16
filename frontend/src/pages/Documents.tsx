@@ -48,6 +48,27 @@ export default function Documents() {
     }
   }
 
+  // Fichier sur le drive : s'il est introuvable ou si le drive est éteint, on l'explique ici plutôt que
+  // d'ouvrir une page d'erreur brute.
+  async function telechargerDuDrive(d: Document) {
+    setError("");
+    try {
+      const res = await fetch(`/api/documents/${d.id}/download`, { credentials: "include" });
+      if (!res.ok) {
+        const detail = await res.json().then((j) => j?.detail).catch(() => null);
+        throw new Error(`${d.libelle} : ${typeof detail === "string" ? detail : "téléchargement impossible"}`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = d.fichier.split("/").pop() || d.libelle;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Téléchargement impossible");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -103,12 +124,19 @@ export default function Documents() {
                 </div>
               </div>
               <div className="flex shrink-0 gap-1">
-                <a
-                  href={`/api/documents/${d.id}/download`}
-                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
-                >
-                  ↓
-                </a>
+                {d.emplacement === "drive" ? (
+                  <button onClick={() => telechargerDuDrive(d)} title="Télécharger depuis le drive"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50">
+                    ↓
+                  </button>
+                ) : (
+                  <a
+                    href={`/api/documents/${d.id}/download`}
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+                  >
+                    ↓
+                  </a>
+                )}
                 {isSyndic && (
                   <button
                     onClick={async () => { await api.del(`/documents/${d.id}`); load(); }}
