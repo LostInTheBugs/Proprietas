@@ -334,6 +334,14 @@ Dans la même carte, une fois le drive branché :
   ne sont pas touchés ;
 - **Rapatrier sur le serveur** : ramène tous les fichiers (et les retire du drive), pour pouvoir le débrancher.
 
+**Sauvegardes sur le drive.** Dans la même carte, le syndic choisit le mot de passe des sauvegardes puis
+« Sauvegarder chaque semaine » (ou « Sauvegarder maintenant ») : une archive chiffrée AES-256 de toute la
+copropriété, données personnelles comprises, est déposée dans `<dossier>/Sauvegardes/Sauvegarde AAAA-MM-JJ
+HHhMM.zip`. Elle contient les fichiers encore sur le serveur ; ceux déjà rangés sur le drive n'y sont pas
+recopiés. Les 8 plus récentes sont gardées. Un échec de la sauvegarde automatique s'affiche dans la
+carte, et un nouvel essai a lieu au plus toutes les 6 heures. **Notez le mot de passe ailleurs** : il
+n'est pas dans la sauvegarde. Deux copropriétés d'une même instance ne peuvent pas partager un dossier.
+
 À savoir : drive éteint, ses fichiers ne sont plus consultables dans Proprietas ; un fichier **modifié**
 sur le drive puis renommé ne peut plus être retrouvé automatiquement ; tant que des fichiers sont sur le
 drive, on ne peut ni le débrancher ni changer son dossier. **Sauvegardez le drive lui-même.** Une sauvegarde de la copropriété
@@ -370,6 +378,21 @@ défaut ; contenu décompressé : `COPRO_IMPORT_MAX_DECOMPRESSE_MB`, 2000 Mo par
 est refusé et rien n'est créé). Après l'import d'une sauvegarde sans données personnelles, **Réglages → Utilisateurs → Comptes à
 compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
 sur le serveur y rattache le compte anonyme.
+
+### Restaurer une copropriété (nouveau serveur, panne)
+
+1. Installer Proprietas sur le nouveau serveur et créer un compte syndic.
+2. **Réglages → Sauvegarde et stockage → Restaurer une sauvegarde** : choisir l'archive `.zip` et saisir
+   son mot de passe. La copropriété est recréée à côté des autres, sans rien écraser ; les comptes sont
+   recréés avec leurs mots de passe (la double authentification est à réactiver si la clé
+   `COPRO_SECRET_KEY` du serveur a changé).
+3. Ressaisir ce qui n'est jamais dans une sauvegarde : mot de passe SMTP, réglages du drive.
+4. Si l'archive vient du **drive** (dossier `Sauvegardes`) : rebrancher le drive sur le même dossier —
+   l'écran l'indique — et les fichiers rangés sur le drive sont de nouveau lisibles. Tant qu'il n'est pas
+   rebranché, ces documents affichent « drive plus branché ».
+
+Une sauvegarde ne vaut que si elle se restaure : essayez la restauration une fois, sur une instance de
+test, avec une vraie archive.
 
 ### Envoi des e-mails : serveur de l'instance
 
