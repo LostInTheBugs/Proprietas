@@ -4,7 +4,7 @@ import { Card } from "./ui";
 
 interface Espace {
   stockage: "local" | "s3";
-  documents: { nombre: number; octets: number | null; introuvables: number };
+  documents: { nombre: number; octets: number | null; introuvables: number; sur_le_drive?: number };
   instance: null | {
     disque: { total: number; utilise: number; libre: number } | null;
     base_octets: number | null;
@@ -56,6 +56,9 @@ export function EspaceStockageCard() {
             <div>
               <p className="mb-1 font-medium text-slate-700">Documents de la copropriété</p>
               <Ligne libelle="Nombre" valeur={e.documents.nombre} />
+              {!!e.documents.sur_le_drive && (
+                <Ligne libelle="Dont rangés sur le drive (hors serveur)" valeur={e.documents.sur_le_drive} />
+              )}
               <Ligne libelle="Place utilisée" valeur={taille(e.documents.octets)} />
               {e.documents.introuvables > 0 && (
                 <Ligne libelle="Fichiers introuvables" valeur={<span className="text-amber-700">{e.documents.introuvables}</span>} />

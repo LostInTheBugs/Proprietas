@@ -121,6 +121,10 @@ export async function uploadDocument(categorie: string, libelle: string, file: F
     body: form,
     credentials: "include",
   });
-  if (!res.ok) throw new Error("Upload échoué");
+  if (!res.ok) {
+    // Le serveur explique le refus (type de fichier, taille, drive injoignable…).
+    const detail = await res.json().then((j) => j?.detail).catch(() => null);
+    throw new Error(typeof detail === "string" ? detail : "Upload échoué");
+  }
   return res.json();
 }
