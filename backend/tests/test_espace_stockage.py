@@ -39,7 +39,7 @@ def test_syndic_voit_les_documents_de_sa_copropriete(client, db, copro_a, copro_
     assert r.status_code == 200, r.text
     e = r.json()
     assert e["stockage"] == "local"
-    assert e["documents"] == {"nombre": 2, "octets": 30, "introuvables": 0}
+    assert e["documents"] == {"nombre": 2, "octets": 30, "introuvables": 0, "sur_le_drive": 0}
     assert e["instance"] is None                          # pas administrateur de l'instance
 
 
@@ -49,7 +49,7 @@ def test_fichier_introuvable_compte_a_part(client, db, copro_a, syndic_a, token_
     db.add(Document(copropriete_id=copro_a.id, libelle="Sans fichier", fichier="", date_ajout=date.today()))
     db.commit()
     e = client.get(URL, headers=auth(token_a)).json()
-    assert e["documents"] == {"nombre": 3, "octets": 10, "introuvables": 1}
+    assert e["documents"] == {"nombre": 3, "octets": 10, "introuvables": 1, "sur_le_drive": 0}
 
 
 def test_administrateur_de_l_instance_voit_le_serveur(client, db, copro_a, copro_b, syndic_a, syndic_b,
@@ -79,7 +79,7 @@ def test_stockage_s3_espace_utilise_seulement(client, db, copro_a, syndic_a, tok
     _envoyer(client, token_a, b"x" * 42)
     e = client.get(URL, headers=auth(token_a)).json()
     assert e["stockage"] == "s3"
-    assert e["documents"] == {"nombre": 1, "octets": 42, "introuvables": 0}
+    assert e["documents"] == {"nombre": 1, "octets": 42, "introuvables": 0, "sur_le_drive": 0}
     assert e["instance"]["documents_octets"] == 42
     assert e["instance"]["base_octets"] > 0                # la base reste sur le serveur
 
