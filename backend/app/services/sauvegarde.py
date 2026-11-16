@@ -48,6 +48,7 @@ from fastapi import HTTPException
 from sqlalchemy import Boolean, Date, DateTime, Numeric, select
 from sqlalchemy.orm import Session
 
+from app.core import drive
 from app.core.config import get_settings
 from app.core.crypto import TexteChiffre, dechiffrer_secret
 from app.core.database import Base
@@ -82,7 +83,9 @@ PAR_PARENT = {
 EXCLUES = {
     # Le drive n'est jamais exporté : la copropriété importée repart sans drive (ses fichiers,
     # s'ils sont dans l'archive, vont dans le stockage de l'instance).
-    "coproprietes": {"smtp_password", "drive_type", "drive_url", "drive_user", "drive_password", "drive_dossier"},
+    "coproprietes": {"smtp_password", "drive_type", "drive_url", "drive_user", "drive_password", "drive_dossier",
+                     "drive_sauvegarde_auto", "drive_sauvegarde_password", "drive_sauvegarde_derniere",
+                     "drive_sauvegarde_tentative", "drive_sauvegarde_erreur"},
     "users": {"is_instance_admin", "token_version", "last_login_at", "last_login_ip", "last_login_ua",
               "personne_id", "copropriete_id"},
 }
@@ -155,11 +158,17 @@ def _cles(table) -> dict[str, str]:
 
 # ---------------------------------------------------------------- export
 def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
-             donnees_personnelles: bool = False, fichiers: bool = False, stockage_drive=None) -> dict:
+             donnees_personnelles: bool = False, fichiers: bool = False, stockage_drive=None,
+             liens_drive: bool = False) -> dict:
     """Écrit l'archive dans `sortie` (fichier ouvert en écriture binaire) ; renvoie le manifeste.
 
     `stockage_drive` : drive de la copropriété, pour les fichiers qui y sont rangés (ils entrent dans
     l'archive comme les autres ; l'archive ne dit pas d'où ils viennent).
+
+    `liens_drive` (sauvegarde déposée SUR le drive, services/drive_sauvegarde.py) : les fichiers déjà sur
+    le drive n'entrent pas dans l'archive ; leurs fiches gardent leur chemin, et la copropriété le dossier
+    de son drive (jamais l'adresse, l'identifiant ni le mot de passe). Après restauration, il suffit de
+    rebrancher le drive pour les retrouver.
     """
     if (donnees_personnelles or fichiers) and not mot_de_passe:
         raise HTTPException(422, "Les données personnelles et les fichiers des documents ne s'exportent "
@@ -195,12 +204,17 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
     donnees = {}
     for nom in TABLES:
         exclues = EXCLUES.get(nom, set())
+        if liens_drive and nom == "coproprietes":
+            exclues = exclues - {"drive_dossier"}
         donnees[nom] = [{k: _vers_json(v) for k, v in r.items() if k not in exclues} for r in lignes[nom]]
     if not donnees_personnelles:
         _anonymiser(donnees)
-    # Où lire chaque fichier ; l'archive, elle, ne garde aucune trace du drive.
-    sources = [(d.get("fichier") or "", d.get("emplacement") or "") for d in donnees["documents"]]
+    # Où lire chaque fichier. Hors `liens_drive`, l'archive ne garde aucune trace du drive.
+    sources = []
     for d in donnees["documents"]:
+        if liens_drive and d.get("emplacement") == "drive":
+            continue                    # reste sur le drive : la fiche garde son chemin
+        sources.append((d.get("fichier") or "", d.get("emplacement") or ""))
         d["emplacement"] = ""
         if not fichiers:
             d["fichier"] = ""
@@ -214,7 +228,7 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
         "copropriete": copro.nom, "nb_comptes": len(donnees["users"]),
         "nb_documents": len(donnees["documents"]),
         "donnees_personnelles": donnees_personnelles, "fichiers_documents": fichiers,
-        "protegee": bool(mot_de_passe),
+        "protegee": bool(mot_de_passe), "liens_drive": liens_drive,
     }
     options = {"encryption": pyzipper.WZ_AES} if mot_de_passe else {}
     with pyzipper.AESZipFile(sortie, "w", compression=pyzipper.ZIP_DEFLATED, **options) as z:
@@ -309,7 +323,7 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
     differes: list[tuple] = []          # références vers la même table : complétées après coup
     fichiers_ecrits: list[str] = []
     stats = {"comptes_crees": 0, "comptes_existants": 0, "documents": 0, "deuxfa_desactivee": 0,
-             "comptes_a_completer": 0}
+             "comptes_a_completer": 0, "documents_sur_le_drive": 0}
     # Comptes anonymes : adresse propre à cet import (deux imports de la même sauvegarde ne se mélangent pas).
     jeton = uuid.uuid4().hex[:8]
     colonnes_ignorees = set()
@@ -360,7 +374,20 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
                         valeurs.update(totp_secret="", totp_enabled=False, recovery_hashes="[]")
                         stats["deuxfa_desactivee"] += 1
                     stats["comptes_crees"] += 1
-                if nom == "documents" and valeurs.get("fichier"):
+                if nom == "coproprietes" and valeurs.get("drive_dossier"):
+                    # Sauvegarde venue d'un drive : on retient le dossier, le drive reste à rebrancher.
+                    try:
+                        drive.valider_chemin(valeurs["drive_dossier"])
+                    except NomInvalide:
+                        valeurs["drive_dossier"] = ""
+                if nom == "documents" and valeurs.get("emplacement") == "drive":
+                    # Fichier resté sur le drive : la fiche garde son chemin (retrouvé au rebranchement).
+                    try:
+                        drive.valider_chemin(valeurs.get("fichier") or "")
+                        stats["documents_sur_le_drive"] += 1
+                    except NomInvalide:
+                        valeurs.update(fichier="", emplacement="")
+                elif nom == "documents" and valeurs.get("fichier"):
                     valeurs["fichier"] = _copier_fichier(z, valeurs["fichier"], stockage, fichiers_ecrits, budget)
                     stats["documents"] += 1
                 nouvel_id = db.execute(t.insert().values(**valeurs)).inserted_primary_key[0]
@@ -394,6 +421,11 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
         raise
     if colonnes_ignorees:
         avertissements.append(f"Colonnes ignorées : {', '.join(sorted(colonnes_ignorees))}.")
+    if stats["documents_sur_le_drive"]:
+        dossier = donnees["coproprietes"][0].get("drive_dossier") or ""
+        avertissements.append(f"{stats['documents_sur_le_drive']} fichier(s) sont sur le drive de la copropriété : "
+                              "rebranchez-le dans Réglages → Sauvegarde et stockage"
+                              + (f" (dossier « {dossier} »)." if dossier else "."))
     return {"copropriete_id": nouvelle_copro, "nom": nom,
             **stats, "avertissements": avertissements}
 

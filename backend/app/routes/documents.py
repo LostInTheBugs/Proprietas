@@ -176,12 +176,16 @@ def delete_document(doc_id: int, db: Session = Depends(get_db), user: User = Dep
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
     try:
-        if doc.fichier:
+        if doc.fichier and doc.emplacement == "drive" and _drive(copro) is None:
+            # Aucun drive branché (copropriété restaurée d'une sauvegarde, par exemple) : il n'y a rien
+            # à supprimer d'ici, la fiche peut partir ; le fichier, s'il existe, reste sur le drive.
+            pass
+        elif doc.fichier:
             stockage_du_document(copro, doc).supprimer(doc.fichier)
     except NomInvalide:
         pass                    # nom forgé : aucun fichier légitime à supprimer, la fiche part
     except StockageIndisponible as e:
-        # Drive injoignable ou débranché : on ne supprime pas la fiche d'un fichier qui resterait.
+        # Drive branché mais injoignable : on ne supprime pas la fiche d'un fichier qui resterait.
         raise _indisponible(e, doc.emplacement == "drive") from e
     # Les mouvements rattachés à ce document (facture) restent, déliés.
     db.query(Mouvement).filter(Mouvement.document_id == doc.id).update({Mouvement.document_id: None},

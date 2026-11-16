@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, Boolean
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.core.crypto import TexteChiffre
@@ -34,6 +34,12 @@ class Copropriete(Base):
     drive_user = Column(String, default="")
     drive_password = Column(TexteChiffre, default="")   # chiffré en base, comme le mot de passe SMTP
     drive_dossier = Column(String, default="")       # ex. « Proprietas/Résidence Les Tilleuls »
+    # Sauvegarde automatique de la copropriété sur son drive (services/drive_sauvegarde.py).
+    drive_sauvegarde_auto = Column(Boolean, default=False)
+    drive_sauvegarde_password = Column(TexteChiffre, default="")   # mot de passe des archives, chiffré en base
+    drive_sauvegarde_derniere = Column(DateTime, nullable=True)     # dernière sauvegarde réussie
+    drive_sauvegarde_tentative = Column(DateTime, nullable=True)    # dernier essai automatique
+    drive_sauvegarde_erreur = Column(String, default="")            # raison du dernier échec ("" : aucun)
     # Relances automatiques (cron)
     relance_auto = Column(Boolean, default=False)
     relance_frequence = Column(String, default="hebdo")  # hebdo | mensuel

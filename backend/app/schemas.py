@@ -1325,3 +1325,8 @@ class DriveIn(BaseModel):
 class DriveRelierIn(BaseModel):
     document_id: int
     chemin: str
+
+
+class DriveSauvegardeIn(BaseModel):
+    auto: bool = False                   # une sauvegarde par semaine sur le drive
+    mot_de_passe: str = ""               # vide : garder celui qui est enregistré
