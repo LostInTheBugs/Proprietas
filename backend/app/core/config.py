@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     # extra=ignore : une ancienne variable restée dans un .env (ex. COPRO_INSTANCE_ADMINS)
     # ne doit pas empêcher l'application de démarrer.
     model_config = {"env_prefix": "COPRO_", "env_file": ".env", "extra": "ignore"}
+    # Smtp server config
+    smtp_host = 
+    smtp_port = 
+    smtp_user = 
+    smtp_password =
+    smtp_sender_id = 
+    smtp_proprietas_host = 
 
     @property
     def is_sqlite(self) -> bool:
