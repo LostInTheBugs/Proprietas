@@ -326,7 +326,8 @@ choisies à chaque sauvegarde :
 
 Données personnelles et fichiers ne s'exportent **qu'avec un mot de passe**. Le mot de passe SMTP n'est
 jamais exporté. L'import crée toujours une **nouvelle** copropriété (`COPRO_IMPORT_MAX_MB`, 500 Mo par
-défaut). Après l'import d'une sauvegarde sans données personnelles, **Réglages → Utilisateurs → Comptes à
+défaut ; contenu décompressé : `COPRO_IMPORT_MAX_DECOMPRESSE_MB`, 2000 Mo par défaut — au-delà, l'import
+est refusé et rien n'est créé). Après l'import d'une sauvegarde sans données personnelles, **Réglages → Utilisateurs → Comptes à
 compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
 sur le serveur y rattache le compte anonyme.
 
@@ -334,7 +335,8 @@ sur le serveur y rattache le compte anonyme.
 
 Chaque requête rend sa connexion en fin de traitement ; le **pool** garde quelques connexions ouvertes
 pour aller vite. Sur une petite base (offres de développement des hébergeurs, souvent limitées à
-quelques connexions), réglez-le dans le `.env` pour rester sous la limite :
+quelques connexions), réglez-le dans le `.env` pour rester sous la limite (avec Docker Compose, le
+conteneur lit le `.env` depuis la 2026.11.023 ; appliquer avec `docker compose up -d`) :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
@@ -478,5 +480,9 @@ et construit le backend (Python 3.11) : plus aucune manipulation manuelle du bun
 le conteneur sert le `dist/` produit au build. Le frontend est inclus dans l'image.
 
 - `.env` (racine) : `POSTGRES_PASSWORD` + `COPRO_SECRET_KEY` (jamais commités)
+- Les autres réglages `COPRO_*` (pool PostgreSQL, stockage S3, plafonds d'upload et d'import,
+  conservation du journal, 2FA par défaut…) se mettent aussi dans ce `.env` : le conteneur backend le lit
+  (`env_file`). Base, clé secrète et dossiers restent fixés par `docker-compose.yml`. Vérifier :
+  `sudo docker compose exec backend env | grep COPRO_`
 - Attention : pas de `docker` sans sudo pour l'utilisateur du serveur → toujours `sudo docker compose …`
 - Caddy redémarre automatiquement en cas d'échec de certificat (retry 60 s)

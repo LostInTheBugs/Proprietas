@@ -24,6 +24,11 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
+    # Réglages COPRO_* du .env (pool PostgreSQL, stockage S3, plafonds, journal, 2FA par défaut…) :
+    # transmis à l'application. Les variables de `environment` ci-dessous gardent la priorité.
+    env_file:
+      - path: .env
+        required: false
     environment:
       COPRO_DATABASE_URL: postgresql+psycopg2://copro:${POSTGRES_PASSWORD}@db:5432/copro
       COPRO_SECRET_KEY: ${COPRO_SECRET_KEY}
