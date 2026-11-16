@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { Controle, ControleBanque, EtatReprise, EtatRepriseDetail, ImportReprise, Lot } from "../types";
+import type { Controle, ControleBanque, EtatReprise, EtatRepriseDetail, ImportReprise, Lot, SoldesAnnuels } from "../types";
 import { fmtDate, fmtEUR } from "../types";
 import { Badge, Button, Card, Empty, Input, Select } from "../components/ui";
 
@@ -220,6 +220,8 @@ export default function Historique() {
           )}
         </Card>
       )}
+
+      {!creation && !ouvert && <SoldesAuPremierJanvier onError={setError} cle={etats.length} />}
 
       {!creation && !ouvert && (
         <ImportCsv
@@ -615,6 +617,126 @@ function SoldesBanque({ etat, onMaj, onError }: {
         </div>
       )}
     </div>
+  );
+}
+
+/** Soldes au 1er janvier : relevé de la banque, calcul d'après les opérations, écart de chaque année. */
+function SoldesAuPremierJanvier({ onError, cle }: { onError: (e: string) => void; cle: number }) {
+  const [d, setD] = useState<SoldesAnnuels | null>(null);
+  const [compte, setCompte] = useState<"syndicat" | "fonds_travaux">("syndicat");
+  const [edite, setEdite] = useState<number | null>(null);
+  const [valeur, setValeur] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get<SoldesAnnuels>("/reprise/soldes-annuels").then(setD).catch((e) => onError(e instanceof Error ? e.message : "Erreur"));
+  }, [cle]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!d) return null;
+  const autre = compte === "syndicat" ? "fonds_travaux" : "syndicat";
+  const lignes = [...d.lignes].reverse();
+  const cetteAnnee = new Date().getFullYear();
+
+  async function enregistrer(annee: number) {
+    const ligne = d!.lignes.find((l) => l.annee === annee)!;
+    const saisi = valeur.trim() === "" ? null : montantSaisi(valeur);
+    const garde = ligne[autre].releve;
+    setBusy(true);
+    onError("");
+    try {
+      setD(await api.put<SoldesAnnuels>("/reprise/soldes-bancaires", {
+        date: ligne.date,
+        solde_banque: compte === "syndicat" ? saisi : garde,
+        solde_banque_fonds: compte === "fonds_travaux" ? saisi : garde,
+      }));
+      setEdite(null);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Soldes au 1er janvier" action={
+      <div className="flex gap-1">
+        {([["syndicat", "Compte du syndicat"], ["fonds_travaux", "Fonds de travaux"]] as const).map(([k, l]) => (
+          <Button key={k} variant={compte === k ? "primary" : "secondary"} className="px-2 py-1 text-xs"
+            onClick={() => { setCompte(k); setEdite(null); }}>{l}</Button>
+        ))}
+      </div>
+    }>
+      <p className="mb-3 text-xs text-slate-500">
+        Saisissez le solde de votre relevé bancaire au 1er janvier (= au 31 décembre). L'<b>écart de l'année</b> compare la
+        variation à la banque pendant l'année écoulée aux encaissements et dépenses saisis cette année-là : s'il n'est pas
+        nul, c'est dans cette année qu'une opération manque (ou est en trop).{" "}
+        {d.ancre.source === "base" && `Le solde calculé part du solde de la base de l'historique (${fmtDate(d.ancre.date!)}).`}
+        {d.ancre.source === "releve" && `Le solde calculé part du plus ancien relevé saisi (${fmtDate(d.ancre.date!)}).`}
+        {d.ancre.source === "zero" && "Aucun relevé saisi : le solde calculé part de 0."}
+      </p>
+      {lignes.length === 0 ? (
+        <Empty text="Aucune opération ni aucun relevé pour l'instant." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+                <th className="pb-2 font-medium">Au 1er janvier</th>
+                <th className="pb-2 text-right font-medium">Relevé banque</th>
+                <th className="pb-2 text-right font-medium">Calculé</th>
+                <th className="pb-2 text-right font-medium">Écart</th>
+                <th className="pb-2 pl-4 text-right font-medium">Année écoulée</th>
+                <th className="pb-2 text-right font-medium">Écart de l'année</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lignes.map((l) => {
+                const c = l[compte];
+                const fautive = c.ecart_annee !== null && c.ecart_annee !== 0;
+                return (
+                  <tr key={l.annee} className={`border-b border-slate-50 last:border-0 ${fautive ? "bg-amber-50" : ""}`}>
+                    <td className="py-2 font-medium text-slate-800">{l.annee}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {edite === l.annee ? (
+                        <span className="inline-flex items-center gap-1">
+                          <input autoFocus inputMode="decimal" value={valeur} onChange={(e) => setValeur(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") enregistrer(l.annee); if (e.key === "Escape") setEdite(null); }}
+                            className="w-28 rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums"
+                            aria-label={`Relevé au 1er janvier ${l.annee}`} />
+                          <Button className="px-2 py-1 text-xs" disabled={busy} onClick={() => enregistrer(l.annee)}>OK</Button>
+                        </span>
+                      ) : l.annee > cetteAnnee ? null : (
+                        <button type="button" className="tabular-nums hover:underline"
+                          title="Saisir ou corriger le relevé"
+                          onClick={() => { setEdite(l.annee); setValeur(c.releve !== null ? String(c.releve).replace(".", ",") : ""); }}>
+                          {c.releve !== null ? fmtEUR(c.releve) : <span className="text-indigo-600">Saisir</span>}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-slate-600">{fmtEUR(c.calcule)}</td>
+                    <td className={`py-2 text-right tabular-nums ${c.ecart ? "text-amber-700" : "text-slate-400"}`}>
+                      {c.ecart === null ? "—" : fmtEUR(c.ecart)}
+                    </td>
+                    <td className="py-2 pl-4 text-right text-xs tabular-nums text-slate-500">
+                      {l.annee - 1} : +{fmtEUR(c.encaissements)} / −{fmtEUR(c.depenses)}
+                    </td>
+                    <td className={`py-2 text-right tabular-nums ${fautive ? "font-semibold text-amber-800" : "text-slate-400"}`}>
+                      {c.ecart_annee === null ? "—" : c.ecart_annee === 0 ? "✓" : fmtEUR(c.ecart_annee)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {lignes.some((l) => l[compte].ecart_annee) && (
+        <p className="mt-2 text-xs text-amber-800">
+          Écart de l'année négatif : la banque a moins bougé que les opérations saisies (dépense non saisie, encaissement en
+          trop ou pas encore crédité). Positif : l'inverse (encaissement non saisi, dépense en trop ou chèque pas encore débité).
+        </p>
+      )}
+    </Card>
   );
 }
 
