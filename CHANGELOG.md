@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.022 — 2026-11-16
+
+- Base PostgreSQL : pool de connexions réglable dans le .env (COPRO_DB_POOL_SIZE, COPRO_DB_MAX_OVERFLOW, COPRO_DB_POOL_TIMEOUT, COPRO_DB_POOL_RECYCLE ; 0 = sans pool), pour rester sous la limite des petites bases (issue #66).
+
 ## 2026.11.021 — 2026-11-16
 
 - Historique : tableau « Soldes au 1er janvier ». Pour chaque année et chaque compte (syndicat, fonds de travaux) : relevé de la banque, solde calculé, écart, et écart de l'année, qui désigne l'année où une opération manque. Le relevé se saisit directement, avec ou sans état de l'historique. Migration c7d8e9f0a1b2 (les soldes déjà saisis sont repris).
