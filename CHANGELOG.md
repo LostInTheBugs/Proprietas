@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.025 — 2026-11-16
+
+- Drive de la copropriété (Réglages → Sauvegarde et stockage) : le syndic peut brancher un drive WebDAV (Nextcloud, ownCloud, Synology). Les fichiers déposés ensuite y sont rangés dans un dossier par catégorie, sous un nom lisible (« Proprietas/copropriété/Factures/2026-11-16 Facture.pdf »), et ne sont pas gardés sur le serveur. Les fichiers déjà déposés restent où ils sont. Migration d8e9f0a1b2c3.
+
 ## 2026.11.024 — 2026-11-16
 
 - E-mails : serveur d'envoi de l'instance. Les variables COPRO_SMTP_HOST, COPRO_SMTP_PORT, COPRO_SMTP_USER, COPRO_SMTP_PASSWORD et COPRO_EMAIL_EXPEDITEUR du .env servent aux copropriétés qui n'ont pas saisi leur propre serveur ; Réglages → E-mails et relances indique lequel est utilisé (PR #70 et issue #69, merci à zorglube).
