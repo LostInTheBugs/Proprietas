@@ -67,6 +67,10 @@ def _tick_relances() -> None:
         stats_ag = run_rappels_ag(db)
         if stats_ag["ag_rappel"] > 0:
             log.info("Rappels AG : %s", stats_ag)
+        from app.services.drive_sauvegarde import run_sauvegardes_drive
+        stats_drive = run_sauvegardes_drive(db)
+        if stats_drive["sauvegardes"] or stats_drive["echecs"]:
+            log.info("Sauvegardes sur le drive : %s", stats_drive)
     except Exception:
         log.exception("Erreur pendant les tâches automatiques")
     finally:

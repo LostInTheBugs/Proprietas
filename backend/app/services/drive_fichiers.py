@@ -104,7 +104,9 @@ def verifier(db: Session, copro, st_drive) -> dict:
         "verifies": len(docs),
         "introuvables": [{"id": d.id, "libelle": d.libelle, "categorie": d.categorie, "fichier": d.fichier,
                           "retrouvable": bool(d.empreinte)} for d in docs if d.fichier not in sur_le_drive],
-        "non_rattaches": [{"chemin": c, "taille": t} for c, t in sorted(sur_le_drive.items()) if c not in attendus],
+        # Le dossier des sauvegardes (services/drive_sauvegarde.py) n'est pas un dossier de documents.
+        "non_rattaches": [{"chemin": c, "taille": t} for c, t in sorted(sur_le_drive.items())
+                          if c not in attendus and not c.startswith("Sauvegardes/")],
     }
 
 

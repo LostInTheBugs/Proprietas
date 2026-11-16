@@ -23,14 +23,37 @@ from app.models.document import Document
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
 from app.core.scoping import get_owned
-from app.schemas import DriveIn, DriveRelierIn
-from app.services import drive_fichiers
+from app.models.copropriete import Copropriete
+from app.schemas import DriveIn, DriveRelierIn, DriveSauvegardeIn
+from app.services import drive_fichiers, drive_sauvegarde
+from app.services.sauvegarde import MDP_MIN
 
 router = APIRouter(prefix="/api/drive", tags=["drive"])
 
 
 def _sur_le_drive(db: Session, copro) -> int:
     return db.query(Document).filter(Document.copropriete_id == copro.id, Document.emplacement == "drive").count()
+
+
+def _iso(d):
+    return d.isoformat(timespec="minutes") if d else None
+
+
+def _etat_sauvegarde(copro) -> dict:
+    return {"auto": bool(copro.drive_sauvegarde_auto), "mot_de_passe_defini": bool(copro.drive_sauvegarde_password),
+            "derniere": _iso(copro.drive_sauvegarde_derniere), "prochaine": _iso(drive_sauvegarde.prochaine(copro)),
+            "erreur": copro.drive_sauvegarde_erreur or "", "gardees": drive_sauvegarde.GARDER}
+
+
+def _dossier_deja_pris(db: Session, copro, url: str, dossier: str):
+    """Autre copropriété de l'instance branchée sur le même dossier du même drive (ou l'un dans l'autre) :
+    deux copropriétés se supprimeraient leurs fichiers."""
+    for autre in db.query(Copropriete).filter(Copropriete.id != copro.id, Copropriete.drive_type == "webdav",
+                                              Copropriete.drive_url == url).all():
+        a, b = (autre.drive_dossier or "") + "/", dossier + "/"
+        if a.startswith(b) or b.startswith(a):
+            return autre
+    return None
 
 
 def _etat(db: Session, copro) -> dict:
@@ -40,7 +63,8 @@ def _etat(db: Session, copro) -> dict:
             "documents_sur_le_drive": _sur_le_drive(db, copro),
             "documents_sur_le_serveur": db.query(Document).filter(
                 Document.copropriete_id == copro.id, Document.emplacement == "", Document.fichier != "").count(),
-            "dossier_propose": drive.dossier_propose(copro.nom)}
+            "dossier_propose": drive.dossier_propose(copro.nom),
+            "sauvegarde": _etat_sauvegarde(copro)}
 
 
 def _autorise() -> None:
@@ -95,6 +119,7 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
             audit.enregistrer(db, "drive_debranche", user=user, copro_id=copro.id, request=request,
                               detail=copro.drive_url or "")
         copro.drive_type = copro.drive_url = copro.drive_user = copro.drive_password = copro.drive_dossier = ""
+        copro.drive_sauvegarde_auto = False
         db.commit()
         return _etat(db, copro)
     st = _preparer(data, copro)
@@ -102,6 +127,9 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
     if n and dossier != (copro.drive_dossier or ""):
         raise HTTPException(409, f"{n} document(s) sont rangés dans « {copro.drive_dossier} » : "
                                  "le dossier du drive ne peut plus changer.")
+    if _dossier_deja_pris(db, copro, st.url, dossier):
+        raise HTTPException(409, "Ce dossier du drive est déjà celui d'une autre copropriété de cette instance : "
+                                 "choisissez-en un autre.")
     try:
         st.verifier_ecriture()
     except StockageIndisponible as e:
@@ -202,3 +230,50 @@ def relier(data: DriveRelierIn, request: Request, db: Session = Depends(get_db),
                       detail=f"« {doc.libelle} » : {ancien} → {doc.fichier} (choisi par le syndic)")
     db.commit()
     return {"ok": True, "fichier": doc.fichier}
+
+
+# ---------------------------------------------------------------- sauvegardes sur le drive
+@router.put("/sauvegarde")
+def regler_sauvegarde(data: DriveSauvegardeIn, request: Request, db: Session = Depends(get_db),
+                      user: User = Depends(require_syndic)):
+    """Mot de passe des sauvegardes déposées sur le drive, et sauvegarde automatique chaque semaine."""
+    copro = get_or_create_copro(db, user)
+    _branche(copro)
+    if data.mot_de_passe:
+        if len(data.mot_de_passe) < MDP_MIN:
+            raise HTTPException(422, f"Mot de passe trop court ({MDP_MIN} caractères minimum).")
+        copro.drive_sauvegarde_password = data.mot_de_passe
+    if data.auto and not copro.drive_sauvegarde_password:
+        raise HTTPException(422, "Choisissez d'abord le mot de passe des sauvegardes.")
+    if bool(copro.drive_sauvegarde_auto) != data.auto or data.mot_de_passe:
+        audit.enregistrer(db, "drive_sauvegarde_reglee", user=user, copro_id=copro.id, request=request,
+                          detail=("automatique chaque semaine" if data.auto else "à la demande seulement")
+                          + (" ; mot de passe changé" if data.mot_de_passe else ""))
+    copro.drive_sauvegarde_auto = data.auto
+    copro.drive_sauvegarde_tentative = None
+    db.commit()
+    return _etat(db, copro)
+
+
+@router.post("/sauvegarde/maintenant")
+def sauvegarder_maintenant(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    copro = get_or_create_copro(db, user)
+    st = _branche(copro)
+    try:
+        bilan = drive_sauvegarde.sauvegarder(db, copro, _instance(), st)
+    except StockageIndisponible as e:
+        db.rollback()
+        raise HTTPException(503, f"Sauvegarde impossible : {e}") from e
+    audit.enregistrer(db, "drive_sauvegarde", user=user, copro_id=copro.id, request=request,
+                      detail=f"{bilan['fichier']} ({bilan['taille']} octets)")
+    db.commit()
+    return {**bilan, "etat": _etat(db, copro)}
+
+
+@router.get("/sauvegardes")
+def sauvegardes(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    copro = get_or_create_copro(db, user)
+    try:
+        return drive_sauvegarde.lister(_branche(copro))
+    except StockageIndisponible as e:
+        raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
