@@ -328,6 +328,22 @@ défaut). Après l'import d'une sauvegarde sans données personnelles, **Réglag
 compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
 sur le serveur y rattache le compte anonyme.
 
+### Connexions à la base PostgreSQL
+
+Chaque requête rend sa connexion en fin de traitement ; le **pool** garde quelques connexions ouvertes
+pour aller vite. Sur une petite base (offres de développement des hébergeurs, souvent limitées à
+quelques connexions), réglez-le dans le `.env` pour rester sous la limite :
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `COPRO_DB_POOL_SIZE` | 5 | connexions gardées ouvertes ; **0 = aucun pool** (une connexion par requête) |
+| `COPRO_DB_MAX_OVERFLOW` | 5 | connexions en plus, aux pointes |
+| `COPRO_DB_POOL_TIMEOUT` | 30 | secondes d'attente d'une connexion libre avant erreur |
+| `COPRO_DB_POOL_RECYCLE` | 1800 | secondes avant de renouveler une connexion (-1 : jamais) |
+
+Maximum de connexions ouvertes par l'application = `POOL_SIZE + MAX_OVERFLOW` (+ 1 au démarrage,
+pour les migrations). Une connexion coupée par l'hébergeur est détectée et remplacée (`pre_ping`).
+
 ### Migrations Alembic
 
 Le schéma est géré par **Alembic** (`backend/alembic/`, URL lue depuis `COPRO_DATABASE_URL` —
