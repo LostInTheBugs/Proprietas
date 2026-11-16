@@ -629,3 +629,23 @@ export interface Repartition {
     propose: number; propose_charges: number; propose_travaux: number;
   }[];
 }
+
+// Soldes au 1er janvier (Historique) : relevé saisi au 31/12, calcul, écarts.
+export interface SoldeAnnuelCompte {
+  releve: number | null;
+  encaissements: number;     // opérations de l'année écoulée
+  depenses: number;
+  calcule: number;
+  ecart: number | null;      // relevé − calculé
+  ecart_annee: number | null; // (relevé − relevé de l'année d'avant) − (encaissements − dépenses de l'année)
+}
+export interface SoldeAnnuel {
+  annee: number;             // au 1er janvier de cette année
+  date: string;              // 31/12 de l'année précédente
+  syndicat: SoldeAnnuelCompte;
+  fonds_travaux: SoldeAnnuelCompte;
+}
+export interface SoldesAnnuels {
+  ancre: { date: string | null; source: "base" | "releve" | "zero" };
+  lignes: SoldeAnnuel[];
+}
