@@ -91,7 +91,9 @@ def test_brancher_le_drive(client, db, copro_a, syndic_a, token_a, serveur):
     assert avant == {"autorise": True, "type": "", "url": "", "utilisateur": "", "dossier": "",
                      "mot_de_passe_defini": False, "documents_sur_le_drive": 0,
                      "documents_sur_le_serveur": 0,
-                     "dossier_propose": drive.dossier_propose(copro_a.nom)}
+                     "dossier_propose": drive.dossier_propose(copro_a.nom),
+                     "sauvegarde": {"auto": False, "mot_de_passe_defini": False, "derniere": None, "prochaine": None,
+                                    "erreur": "", "gardees": 8}}
     etat = _brancher(client, token_a)
     assert (etat["type"], etat["url"], etat["utilisateur"], etat["dossier"], etat["mot_de_passe_defini"]) == \
         ("webdav", URL, "syndic", DOSSIER, True)
