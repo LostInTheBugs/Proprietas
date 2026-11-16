@@ -2,7 +2,8 @@
 ownCloud 10.16 (tâche 57) : MKCOL 201 / 405 si le dossier existe / 409 si le parent manque, PUT 201
 puis 204, PROPFIND 207 / 404, GET 200 / 404, DELETE 204 / 404, 401 sans le bon mot de passe."""
 import base64
-from urllib.parse import unquote
+import re
+from urllib.parse import quote, unquote
 
 import httpx
 
@@ -20,12 +21,27 @@ class FauxWebDAV:
         self.panne = False          # serveur injoignable
         self.plein = False          # quota atteint
         self.redirige = False
+        self.href_minuscules = True     # Nextcloud et ownCloud encodent en %c3%a9 (minuscules)
+        self.href_complet = False       # certains serveurs renvoient l'adresse complète
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._repondre)
 
     def chemins(self) -> list[str]:
         return sorted(self.fichiers)
+
+    def _href(self, chemin: str, dossier: bool) -> str:
+        href = quote(f"{BASE}/{chemin}".rstrip("/")) + ("/" if dossier else "")
+        if self.href_minuscules:
+            href = re.sub(r"%[0-9A-F]{2}", lambda m: m.group(0).lower(), href)
+        return ("https://cloud.exemple.fr" if self.href_complet else "") + href
+
+    def renommer(self, ancien: str, nouveau: str) -> None:
+        """Comme un utilisateur du drive : renomme ou déplace un fichier (dossiers créés au besoin)."""
+        morceaux = nouveau.split("/")[:-1]
+        for n in range(1, len(morceaux) + 1):
+            self.dossiers.add("/".join(morceaux[:n]))
+        self.fichiers[nouveau] = self.fichiers.pop(ancien)
 
     def _repondre(self, requete: httpx.Request) -> httpx.Response:
         if self.panne:
@@ -56,6 +72,18 @@ class FauxWebDAV:
             code = 204 if chemin in self.fichiers else 201
             self.fichiers[chemin] = requete.read()
             return httpx.Response(code)
+        if m == "PROPFIND" and requete.headers.get("depth") == "1":
+            if chemin not in self.dossiers:
+                return httpx.Response(404)
+            enfants = [(d, None) for d in sorted(self.dossiers) if d and d.rpartition("/")[0] == chemin]
+            enfants += [(f, len(c)) for f, c in sorted(self.fichiers.items()) if f.rpartition("/")[0] == chemin]
+            corps = '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">'
+            for nom, taille in [(chemin, None)] + enfants:
+                corps += (f"<d:response><d:href>{self._href(nom, taille is None)}</d:href><d:propstat><d:prop>"
+                          + ("<d:resourcetype><d:collection/></d:resourcetype>" if taille is None else
+                             f"<d:getcontentlength>{taille}</d:getcontentlength><d:resourcetype/>")
+                          + "</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
+            return httpx.Response(207, content=(corps + "</d:multistatus>").encode())
         if m == "PROPFIND":
             if chemin in self.fichiers:
                 corps = (f'<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:propstat><d:prop>'
