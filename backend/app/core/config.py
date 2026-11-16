@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     upload_max_mb: float = 25.0
     # Taille maximale d'une sauvegarde de copropriété importée (archive ZIP, documents compris).
     import_max_mb: float = 500.0
+    # Taille maximale de cette archive une fois DÉCOMPRESSÉE (données + fichiers) : une archive très
+    # compressible ne doit pas remplir la mémoire ni le disque.
+    import_max_decompresse_mb: float = Field(2000.0, gt=0)
     # Stockage des documents : « local » (dossier upload_dir) ou « s3 » (bucket compatible S3 :
     # AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…). Voir app/core/stockage.py.
     stockage: str = "local"

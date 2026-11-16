@@ -27,13 +27,16 @@ passe (haché). Le secret de double authentification n'est gardé que s'il se d�
 du serveur (même serveur ou même COPRO_SECRET_KEY) ; sinon la double authentification du compte est
 désactivée, à réactiver. Les fichiers reçoivent de nouveaux noms. Colonnes ou tables inconnues
 (archive plus récente) : ignorées et signalées.
+
+Tailles à l'import : l'archive reçue est bornée par la route (COPRO_IMPORT_MAX_MB) ; son contenu
+DÉCOMPRESSÉ l'est ici, à la lecture (une taille annoncée dans un ZIP peut mentir) : manifest.json
+1 Mo, donnees.json 50 Mo, total COPRO_IMPORT_MAX_DECOMPRESSE_MB. Dépassement : 413, rien n'est créé.
 """
 from __future__ import annotations
 
 import io
 import json
 import os
-import shutil
 import tempfile
 import uuid
 import zipfile
@@ -45,6 +48,7 @@ from fastapi import HTTPException
 from sqlalchemy import Boolean, Date, DateTime, Numeric, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.crypto import TexteChiffre, dechiffrer_secret
 from app.core.database import Base
 from app.core.stockage import NomInvalide, StockageIndisponible
@@ -220,7 +224,40 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
 
 
 # ---------------------------------------------------------------- import
+MAX_MANIFEST = 1024 * 1024
+MAX_DONNEES = 50 * 1024 * 1024
+BLOC_LECTURE = 1024 * 1024
+
+
+class _Budget:
+    """Octets décompressés encore permis pour cet import."""
+
+    def __init__(self, octets: int):
+        self.total = self.restant = octets
+
+    def consommer(self, n: int) -> None:
+        self.restant -= n
+        if self.restant < 0:
+            raise HTTPException(413, "Sauvegarde trop volumineuse une fois décompressée "
+                                     f"(maximum {self.total / 1024 / 1024:g} Mo).")
+
+
+def _lire_borne(z: zipfile.ZipFile, membre: str, limite: int, budget: _Budget) -> bytes:
+    """Contenu décompressé d'un membre, lu par blocs : 413 au-delà de `limite` ou du budget."""
+    morceaux, taille = [], 0
+    with z.open(membre) as f:
+        while bloc := f.read(BLOC_LECTURE):
+            taille += len(bloc)
+            if taille > limite:
+                raise HTTPException(413, f"Sauvegarde invalide : {membre} est trop volumineux une fois décompressé "
+                                         f"(maximum {limite / 1024 / 1024:g} Mo).")
+            budget.consommer(len(bloc))
+            morceaux.append(bloc)
+    return b"".join(morceaux)
+
+
 def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_de_passe: str = "") -> dict:
+    budget = _Budget(int(get_settings().import_max_decompresse_mb * 1024 * 1024))
     try:
         z = pyzipper.AESZipFile(contenu)
         protegee = any(i.flag_bits & 0x1 for i in z.infolist())
@@ -228,8 +265,11 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
             raise HTTPException(422, "Cette sauvegarde est protégée par un mot de passe : saisissez-le.")
         if mot_de_passe:
             z.setpassword(mot_de_passe.encode("utf-8"))
-        manifest = json.loads(z.read("manifest.json"))
-        donnees = json.loads(z.read("donnees.json"))
+        # Rejet rapide d'après les tailles annoncées ; la vraie limite est appliquée à la lecture.
+        budget_annonce = _Budget(budget.total)
+        budget_annonce.consommer(sum(i.file_size for i in z.infolist()))
+        manifest = json.loads(_lire_borne(z, "manifest.json", MAX_MANIFEST, budget))
+        donnees = json.loads(_lire_borne(z, "donnees.json", MAX_DONNEES, budget))
     except RuntimeError:             # pyzipper : mot de passe incorrect
         raise HTTPException(422, "Mot de passe incorrect.")
     except (zipfile.BadZipFile, pyzipper.BadZipFile, KeyError, ValueError):
@@ -307,7 +347,7 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
                         stats["deuxfa_desactivee"] += 1
                     stats["comptes_crees"] += 1
                 if nom == "documents" and valeurs.get("fichier"):
-                    valeurs["fichier"] = _copier_fichier(z, valeurs["fichier"], stockage, fichiers_ecrits)
+                    valeurs["fichier"] = _copier_fichier(z, valeurs["fichier"], stockage, fichiers_ecrits, budget)
                     stats["documents"] += 1
                 nouvel_id = db.execute(t.insert().values(**valeurs)).inserted_primary_key[0]
                 remap[nom][ancien_id] = nouvel_id
@@ -358,7 +398,7 @@ def _soldes_des_anciennes_sauvegardes(donnees: dict) -> None:
     donnees["soldes_bancaires"] = lignes
 
 
-def _copier_fichier(z: zipfile.ZipFile, ancien: str, stockage, ecrits: list[str]) -> str:
+def _copier_fichier(z: zipfile.ZipFile, ancien: str, stockage, ecrits: list[str], budget: _Budget) -> str:
     """Copie documents/<ancien> sous un nouveau nom ; nom vide si le fichier manque dans l'archive."""
     membre = f"documents/{ancien}"
     if membre not in z.namelist():
@@ -368,7 +408,9 @@ def _copier_fichier(z: zipfile.ZipFile, ancien: str, stockage, ecrits: list[str]
     try:
         # Copie intermédiaire : le flux d'un membre ZIP ne se rembobine pas (S3 peut relire).
         with z.open(membre) as f, tempfile.SpooledTemporaryFile(max_size=1024 * 1024) as tmp:
-            shutil.copyfileobj(f, tmp)
+            while bloc := f.read(BLOC_LECTURE):
+                budget.consommer(len(bloc))
+                tmp.write(bloc)
             tmp.seek(0)
             stockage.enregistrer(nouveau, tmp)
     except StockageIndisponible as e:
