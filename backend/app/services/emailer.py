@@ -1,46 +1,80 @@
-"""Envoi d'emails (convocations AG, tests SMTP) via smtplib (stdlib)."""
+"""Envoi d'emails (convocations AG, tests SMTP) via smtplib (stdlib).
+
+Réglages d'envoi : ceux de la copropriété si elle a saisi un serveur (Réglages → E-mails et relances),
+sinon ceux de l'instance (COPRO_SMTP_*, COPRO_EMAIL_EXPEDITEUR). Jamais de mélange entre les deux.
+"""
 import smtplib
 from datetime import date
 from email.message import EmailMessage
+from types import SimpleNamespace
+
+from app.core.config import get_settings
 
 
 class EmailError(Exception):
     pass
 
 
+def config_smtp(copro) -> SimpleNamespace | None:
+    """Réglages d'envoi effectifs pour cette copropriété, ou None s'il n'y en a pas de complets.
+
+    - la copropriété a saisi un serveur : SES réglages, en entier (None s'il manque l'expéditeur) ;
+    - sinon ceux de l'instance, s'ils ont un serveur et un expéditeur.
+    `source` vaut « copropriete » ou « instance ». Le résultat ne contient aucun objet SQLAlchemy.
+    """
+    if getattr(copro, "smtp_host", ""):
+        if not copro.email_expediteur:
+            return None
+        return SimpleNamespace(source=getattr(copro, "source", "copropriete"), smtp_host=copro.smtp_host,
+                               smtp_port=copro.smtp_port, smtp_user=copro.smtp_user,
+                               smtp_password=copro.smtp_password, email_expediteur=copro.email_expediteur)
+    s = get_settings()
+    if s.smtp_host and s.email_expediteur:
+        return SimpleNamespace(source="instance", smtp_host=s.smtp_host, smtp_port=s.smtp_port,
+                               smtp_user=s.smtp_user, smtp_password=s.smtp_password,
+                               email_expediteur=s.email_expediteur)
+    return None
+
+
+def adresse_publique(copro) -> str:
+    """Adresse de l'application à citer dans les e-mails : copropriété, sinon instance, sinon rien."""
+    return (getattr(copro, "frontend_url", "") or get_settings().frontend_url or "").strip()
+
+
 def envoyer_email(copro, destinataire: str, sujet: str, corps: str,
                   pieces_jointes: list[tuple[str, bytes, str]] | None = None) -> None:
-    """Envoie un email via la config SMTP de la copropriété.
+    """Envoie un email avec les réglages de la copropriété, ou à défaut ceux de l'instance.
 
     pieces_jointes : liste de (nom_fichier, contenu_bytes, mime_type).
     Lève EmailError si la config est incomplète ou l'envoi échoue.
     """
-    if not copro.smtp_host or not copro.email_expediteur:
+    cfg = config_smtp(copro)
+    if cfg is None:
         raise EmailError(
             "Configuration SMTP incomplète : renseignez le serveur et l'expéditeur "
             "dans Réglages → Envoi des emails."
         )
     msg = EmailMessage()
-    msg["From"] = copro.email_expediteur
+    msg["From"] = cfg.email_expediteur
     msg["To"] = destinataire
     msg["Subject"] = sujet
     msg.set_content(corps, charset="utf-8")
     for nom, contenu, mime in (pieces_jointes or []):
         msg.add_attachment(contenu, maintype=mime.split("/")[0], subtype=mime.split("/")[1], filename=nom)
 
-    port = copro.smtp_port or 587
+    port = cfg.smtp_port or 587
     try:
         if port == 465:
-            with smtplib.SMTP_SSL(copro.smtp_host, port, timeout=20) as server:
-                _auth(server, copro)
+            with smtplib.SMTP_SSL(cfg.smtp_host, port, timeout=20) as server:
+                _auth(server, cfg)
                 server.send_message(msg)
         else:
-            with smtplib.SMTP(copro.smtp_host, port, timeout=20) as server:
+            with smtplib.SMTP(cfg.smtp_host, port, timeout=20) as server:
                 server.ehlo()
                 if port == 587:
                     server.starttls()
                     server.ehlo()
-                _auth(server, copro)
+                _auth(server, cfg)
                 server.send_message(msg)
     except EmailError:
         raise
@@ -48,10 +82,10 @@ def envoyer_email(copro, destinataire: str, sujet: str, corps: str,
         raise EmailError(f"Échec de l'envoi : {e}") from e
 
 
-def _auth(server, copro):
-    if copro.smtp_user:
+def _auth(server, cfg):
+    if cfg.smtp_user:
         try:
-            server.login(copro.smtp_user, copro.smtp_password or "")
+            server.login(cfg.smtp_user, cfg.smtp_password or "")
         except smtplib.SMTPAuthenticationError as e:
             raise EmailError(f"Authentification SMTP refusée ({e.smtp_code})") from e
 
@@ -197,10 +231,10 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
             lignes.append(f"  {r.numero}. {r.libelle}")
     else:
         lignes.append("  (à compléter)")
+    url = adresse_publique(copro)
+    if url:
+        lignes += ["", "Vous pouvez consulter les détails et répondre en ligne :", url]
     lignes += [
-        "",
-        "Vous pouvez consulter les détails et répondre en ligne :",
-        copro.frontend_url or "https://proprietas.cloudfr.net",
         "",
         "Cordialement,",
         syndic_nom or "Le syndic",
