@@ -309,6 +309,36 @@ La commande ne copie que les fichiers référencés en base, ne supprime jamais 
 (gardez le volume `uploads` jusqu'à vérification) et sort en erreur si une copie échoue.
 Sens inverse : `--sens s3-vers-local`.
 
+### Drive de la copropriété (Nextcloud, ownCloud, Synology… en WebDAV)
+
+Dans **Réglages → Sauvegarde et stockage → Drive de la copropriété**, le syndic peut brancher un drive
+WebDAV : les fichiers déposés ensuite y sont rangés dans un dossier par catégorie, sous un nom lisible —
+`Proprietas/<copropriété>/Factures/2026-11-16 Facture d'électricité.pdf` — et ne sont **pas** gardés sur le
+serveur. Les fichiers déposés avant le branchement restent où ils sont.
+
+| Service | Adresse WebDAV |
+|---|---|
+| Nextcloud, ownCloud | `https://cloud.exemple.fr/remote.php/dav/files/<identifiant>/` |
+| Synology (paquet « WebDAV Server ») | `https://nas.exemple.fr:5006/` (ou `http://…:5005/` sur le réseau local) |
+
+Utilisez de préférence un **mot de passe d'application** : il est chiffré en base et n'est jamais réaffiché.
+Les réglages ne sont enregistrés que si l'essai réussit (dossier créé, fichier témoin écrit, relu, supprimé).
+
+À savoir : drive éteint, ses fichiers ne sont plus consultables dans Proprietas ; un fichier renommé ou
+supprimé sur le drive y devient introuvable ; tant que des fichiers sont sur le drive, on ne peut ni le
+débrancher ni changer son dossier. **Sauvegardez le drive lui-même.** Une sauvegarde de la copropriété
+« avec les fichiers » inclut ceux du drive ; ses réglages ne sont jamais exportés.
+
+Réglages d'instance : `COPRO_DRIVE_ACTIF=false` retire la fonction ; `COPRO_DRIVE_RESEAU_LOCAL=false`
+refuse les adresses du réseau privé (instance hébergée pour des tiers). Dans tous les cas, l'adresse du
+serveur lui-même et les adresses de lien local sont refusées, et aucune redirection n'est suivie.
+Essai en ligne de commande, sans toucher à la base :
+
+```bash
+DRIVE_MOT_DE_PASSE=… python -m app.cli.tester_drive --url https://cloud.exemple.fr/remote.php/dav/files/syndic/ \
+    --utilisateur syndic --dossier "Proprietas/Essai"
+```
+
 ### Sauvegarde d'une copropriété (changement de serveur, panne)
 
 **Réglages → Sauvegarde et stockage** (syndic) : archive `.zip` de la copropriété active (lots, comptes,

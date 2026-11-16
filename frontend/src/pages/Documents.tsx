@@ -99,6 +99,7 @@ export default function Documents() {
                 <div className="mt-1.5 flex items-center gap-2">
                   <Badge color="indigo">{CAT_LABELS[d.categorie] ?? d.categorie}</Badge>
                   <span className="text-xs text-slate-500">{fmtDate(d.date_ajout)}</span>
+                  {d.emplacement === "drive" && <span title={d.fichier}><Badge color="green">Drive</Badge></span>}
                 </div>
               </div>
               <div className="flex shrink-0 gap-1">

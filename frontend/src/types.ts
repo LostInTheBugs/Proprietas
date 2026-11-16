@@ -354,6 +354,7 @@ export interface Document {
   categorie: string;
   libelle: string;
   fichier: string;
+  emplacement?: "" | "drive";   // "drive" : rangé sur le drive de la copropriété
   date_ajout: string;
 }
 

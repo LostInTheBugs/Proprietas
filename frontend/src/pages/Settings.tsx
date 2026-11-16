@@ -9,6 +9,7 @@ import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
 import { ComptesACompleterCard, SauvegardeCard } from "../components/Sauvegarde";
 import { EspaceStockageCard } from "../components/EspaceStockage";
+import { DriveCard } from "../components/Drive";
 
 export default function Settings() {
   const { user: me, refresh } = useUser();
@@ -566,6 +567,8 @@ export default function Settings() {
 
       {onglet === "sauvegarde" && (<>
       {isSyndic && <SauvegardeCard />}
+
+      {isSyndic && <DriveCard />}
 
       {isSyndic && <EspaceStockageCard />}
       </>)}
