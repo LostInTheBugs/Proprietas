@@ -324,9 +324,19 @@ serveur. Les fichiers déposés avant le branchement restent où ils sont.
 Utilisez de préférence un **mot de passe d'application** : il est chiffré en base et n'est jamais réaffiché.
 Les réglages ne sont enregistrés que si l'essai réussit (dossier créé, fichier témoin écrit, relu, supprimé).
 
-À savoir : drive éteint, ses fichiers ne sont plus consultables dans Proprietas ; un fichier renommé ou
-supprimé sur le drive y devient introuvable ; tant que des fichiers sont sur le drive, on ne peut ni le
-débrancher ni changer son dossier. **Sauvegardez le drive lui-même.** Une sauvegarde de la copropriété
+Dans la même carte, une fois le drive branché :
+
+- **Déplacer vers le drive** : les fichiers déposés avant le branchement y sont rangés comme les nouveaux
+  (copie, contrôle, puis suppression de l'original : une panne ne perd rien) ;
+- **Vérifier le drive** : liste les documents dont le fichier manque. **Retrouver par le contenu** relie
+  chacun au fichier du drive qui a exactement le même contenu, même renommé ou déplacé dans un autre
+  sous-dossier ; sinon on choisit le fichier à la main. Les fichiers déposés directement sur le drive
+  ne sont pas touchés ;
+- **Rapatrier sur le serveur** : ramène tous les fichiers (et les retire du drive), pour pouvoir le débrancher.
+
+À savoir : drive éteint, ses fichiers ne sont plus consultables dans Proprietas ; un fichier **modifié**
+sur le drive puis renommé ne peut plus être retrouvé automatiquement ; tant que des fichiers sont sur le
+drive, on ne peut ni le débrancher ni changer son dossier. **Sauvegardez le drive lui-même.** Une sauvegarde de la copropriété
 « avec les fichiers » inclut ceux du drive ; ses réglages ne sont jamais exportés.
 
 Réglages d'instance : `COPRO_DRIVE_ACTIF=false` retire la fonction ; `COPRO_DRIVE_RESEAU_LOCAL=false`
