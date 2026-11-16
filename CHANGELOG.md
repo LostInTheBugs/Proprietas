@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.023 — 2026-11-16
+
+- Docker Compose : le conteneur de l'application lit maintenant le .env. Les réglages COPRO_* (pool PostgreSQL, stockage S3, plafonds d'upload et d'import, conservation du journal, 2FA par défaut) n'étaient pas transmis ; ils le sont, après `docker compose up -d`.
+- Import d'une sauvegarde : la taille une fois décompressée est plafonnée (COPRO_IMPORT_MAX_DECOMPRESSE_MB, 2000 Mo par défaut) ; une archive qui dépasse est refusée et rien n'est créé.
+
 ## 2026.11.022 — 2026-11-16
 
 - Base PostgreSQL : pool de connexions réglable dans le .env (COPRO_DB_POOL_SIZE, COPRO_DB_MAX_OVERFLOW, COPRO_DB_POOL_TIMEOUT, COPRO_DB_POOL_RECYCLE ; 0 = sans pool), pour rester sous la limite des petites bases (issue #66).
