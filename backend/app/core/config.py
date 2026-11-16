@@ -50,12 +50,12 @@ class Settings(BaseSettings):
     # ne doit pas empêcher l'application de démarrer.
     model_config = {"env_prefix": "COPRO_", "env_file": ".env", "extra": "ignore"}
     # Smtp server config
-    smtp_host = 
-    smtp_port = 
-    smtp_user = 
-    smtp_password =
-    smtp_sender_id = 
-    smtp_proprietas_host = 
+    smtp_host: str = ""
+    smtp_port: int = Field(587, ge=0)
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_sender_id: str = ""
+    smtp_proprietas_public_url: str = ""
 
     @property
     def is_sqlite(self) -> bool:
