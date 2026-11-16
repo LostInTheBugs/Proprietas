@@ -20,14 +20,8 @@ class Copropriete(Base):
     fonds_travaux_taux_pct = Column(Numeric(7, 4), default=5.0)
     fonds_travaux_compte = Column(String, default="")
     compte_bancaire_separe = Column(String, default="")
-    # Envoi des convocations par email
-    smtp_host = Column(String, default="")
-    smtp_port = Column(Integer, default=587)
-    smtp_user = Column(String, default="")
-    # Chiffré en base (core.crypto.TexteChiffre) ; le code lit et écrit du clair.
-    smtp_password = Column(TexteChiffre, default="")
-    email_expediteur = Column(String, default="")
-    frontend_url = Column(String, default="")
+    # Smtp serveur pour evois de mails
+    smtp = relationship("Smtp", back_populates="copropriete")
     # Relances automatiques (cron)
     relance_auto = Column(Boolean, default=False)
     relance_frequence = Column(String, default="hebdo")  # hebdo | mensuel
