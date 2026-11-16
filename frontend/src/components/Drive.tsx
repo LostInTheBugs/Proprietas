@@ -12,7 +12,10 @@ interface EtatDrive {
   documents_sur_le_drive: number;
   documents_sur_le_serveur: number;
   dossier_propose: string;
+  sauvegarde: { auto: boolean; mot_de_passe_defini: boolean; derniere: string | null; prochaine: string | null; erreur: string; gardees: number };
 }
+
+const dateHeure = (iso: string | null) => iso ? new Date(iso).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }) : "—";
 
 interface Lot { deplaces: number; restants: number; introuvables: { id: number; libelle: string }[] }
 interface Verification {
@@ -33,6 +36,8 @@ export function DriveCard() {
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
   const [verif, setVerif] = useState<Verification | null>(null);
   const [choix, setChoix] = useState<Record<number, string>>({});
+  const [mdpSauvegarde, setMdpSauvegarde] = useState("");
+  const [archives, setArchives] = useState<{ fichier: string; taille: number }[] | null>(null);
 
   function afficher(e: EtatDrive) {
     setEtat(e);
@@ -107,6 +112,23 @@ export function DriveCard() {
     return { ok: true, texte: "Fichier relié." };
   });
 
+  const reglerSauvegarde = (auto: boolean) => lancer(async () => {
+    afficher(await api.put<EtatDrive>("/drive/sauvegarde", { auto, mot_de_passe: mdpSauvegarde }));
+    setMdpSauvegarde("");
+    return { ok: true, texte: auto ? "Sauvegarde automatique activée : une par semaine, sur le drive." : "Réglages de la sauvegarde enregistrés." };
+  });
+  const sauvegarderMaintenant = () => lancer(async () => {
+    const r = await api.post<{ fichier: string; etat: EtatDrive }>("/drive/sauvegarde/maintenant");
+    afficher(r.etat);
+    setArchives(await api.get<{ fichier: string; taille: number }[]>("/drive/sauvegardes"));
+    return { ok: true, texte: `Sauvegarde déposée sur le drive : ${r.fichier}` };
+  });
+  const voirSauvegardes = () => lancer(async () => {
+    const liste = await api.get<{ fichier: string; taille: number }[]>("/drive/sauvegardes");
+    setArchives(liste);
+    return { ok: true, texte: `${liste.length} sauvegarde(s) sur le drive.` };
+  });
+
   return (
     <Card title="Drive de la copropriété">
       <div className="space-y-3">
@@ -119,6 +141,12 @@ export function DriveCard() {
         {branche ? (
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             Drive branché : <strong>{etat.documents_sur_le_drive}</strong> fichier(s) y sont rangés, dans « {etat.dossier} ».
+          </p>
+        ) : etat.documents_sur_le_drive > 0 ? (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <strong>{etat.documents_sur_le_drive}</strong> fichier(s) de cette copropriété sont sur un drive qui n'est pas
+            branché ici (copropriété restaurée d'une sauvegarde). Rebranchez le drive ci-dessous, sur le dossier
+            « {etat.dossier} », pour les retrouver.
           </p>
         ) : (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
@@ -195,6 +223,59 @@ export function DriveCard() {
               <p className="text-xs text-slate-500">
                 {verif.non_rattaches.length} fichier(s) du dossier ne sont rattachés à aucun document (déposés directement sur le drive) : Proprietas n'y touche pas.
               </p>
+            )}
+          </div>
+        )}
+        {branche && (
+          <div className="space-y-2 border-t border-slate-100 pt-3">
+            <p className="text-sm font-medium text-slate-700">Sauvegardes sur le drive</p>
+            <p className="text-xs leading-relaxed text-slate-600">
+              Une archive chiffrée de toute la copropriété (comptes et données personnelles compris), déposée dans
+              « {etat.dossier}/Sauvegardes ». Avec les fichiers déjà rangés sur le drive, elle permet de repartir sur un
+              autre serveur. Les {etat.sauvegarde.gardees} plus récentes sont gardées.
+            </p>
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              <strong>Notez ce mot de passe ailleurs</strong> (gestionnaire de mots de passe, papier) : il n'est pas dans la
+              sauvegarde, et sans lui elle est illisible.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label={etat.sauvegarde.mot_de_passe_defini ? "Nouveau mot de passe des sauvegardes" : "Mot de passe des sauvegardes (10 caractères min.)"}
+                type="password" value={mdpSauvegarde} onChange={(e) => setMdpSauvegarde(e.target.value)}
+                placeholder={etat.sauvegarde.mot_de_passe_defini ? "Laisser vide pour conserver" : ""} autoComplete="new-password" />
+              <div className="text-sm text-slate-600">
+                <p>Dernière : <strong>{dateHeure(etat.sauvegarde.derniere)}</strong></p>
+                <p>Prochaine : <strong>{etat.sauvegarde.auto ? dateHeure(etat.sauvegarde.prochaine) : "à la demande"}</strong></p>
+              </div>
+            </div>
+            {etat.sauvegarde.erreur && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Dernière sauvegarde automatique en échec — {etat.sauvegarde.erreur}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {etat.sauvegarde.auto ? (
+                <Button variant="secondary" onClick={() => reglerSauvegarde(false)} disabled={occupe}>Arrêter la sauvegarde automatique</Button>
+              ) : (
+                <Button onClick={() => reglerSauvegarde(true)} disabled={occupe || (!etat.sauvegarde.mot_de_passe_defini && mdpSauvegarde.length < 10)}>
+                  Sauvegarder chaque semaine
+                </Button>
+              )}
+              {mdpSauvegarde && etat.sauvegarde.auto === true && (
+                <Button variant="secondary" onClick={() => reglerSauvegarde(true)} disabled={occupe || mdpSauvegarde.length < 10}>Changer le mot de passe</Button>
+              )}
+              {mdpSauvegarde && !etat.sauvegarde.auto && (
+                <Button variant="secondary" onClick={() => reglerSauvegarde(false)} disabled={occupe || mdpSauvegarde.length < 10}>Enregistrer le mot de passe</Button>
+              )}
+              <Button variant="secondary" onClick={sauvegarderMaintenant} disabled={occupe || !etat.sauvegarde.mot_de_passe_defini}>Sauvegarder maintenant</Button>
+              <Button variant="ghost" onClick={voirSauvegardes} disabled={occupe}>Voir les sauvegardes</Button>
+            </div>
+            {archives && archives.length > 0 && (
+              <ul className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                {archives.map((a) => (
+                  <li key={a.fichier} className="flex justify-between gap-4 py-0.5">
+                    <span className="truncate">{a.fichier}</span>
+                    <span className="shrink-0">{(a.taille / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} Ko</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}
