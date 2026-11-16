@@ -1,5 +1,7 @@
 # Proprietas
 
+[![CI](https://github.com/LostInTheBugs/Proprietas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LostInTheBugs/Proprietas/actions/workflows/ci.yml)
+
 <img src="frontend/public/proprietas-lockup.png" alt="Proprietas — Data Sovereignty" width="170">
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
