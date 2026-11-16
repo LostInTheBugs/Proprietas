@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.024 — 2026-11-16
+
+- E-mails : serveur d'envoi de l'instance. Les variables COPRO_SMTP_HOST, COPRO_SMTP_PORT, COPRO_SMTP_USER, COPRO_SMTP_PASSWORD et COPRO_EMAIL_EXPEDITEUR du .env servent aux copropriétés qui n'ont pas saisi leur propre serveur ; Réglages → E-mails et relances indique lequel est utilisé (PR #70 et issue #69, merci à zorglube).
+- E-mails : l'adresse citée dans les convocations est celle de la copropriété, sinon COPRO_FRONTEND_URL ; sans adresse réglée, plus de lien (l'adresse de la démo n'est plus utilisée par défaut).
+
 ## 2026.11.023 — 2026-11-16
 
 - Docker Compose : le conteneur de l'application lit maintenant le .env. Les réglages COPRO_* (pool PostgreSQL, stockage S3, plafonds d'upload et d'import, conservation du journal, 2FA par défaut) n'étaient pas transmis ; ils le sont, après `docker compose up -d`.
