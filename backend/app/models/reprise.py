@@ -25,11 +25,8 @@ class EtatReprise(Base):
     valide_le = Column(DateTime, nullable=True)
     commentaire = Column(String, nullable=False, default="")
     created_at = Column(DateTime, default=datetime.now)
-    # Soldes bancaires à la date de l'état (facultatifs, NULL = non saisi) : compte du syndicat et
-    # compte du fonds de travaux. Ils contrôlent les opérations saisies entre deux états et donnent
-    # le solde de départ de la trésorerie (base).
-    solde_banque = Column(Numeric(12, 2), nullable=True)
-    solde_banque_fonds = Column(Numeric(12, 2), nullable=True)
+    # Les soldes bancaires à la date de l'état sont dans SoldeBancaire (même date) : une seule saisie,
+    # partagée entre l'état et le tableau des soldes au 1er janvier.
 
     lignes = relationship("EtatRepriseLigne", back_populates="etat", cascade="all, delete-orphan",
                           order_by="EtatRepriseLigne.id")
@@ -52,3 +49,20 @@ class EtatRepriseLigne(Base):
 
     etat = relationship("EtatReprise", back_populates="lignes")
     lot = relationship("Lot")
+
+
+class SoldeBancaire(Base):
+    """Solde des comptes bancaires au 31 décembre (= au 1er janvier suivant), relevé saisi par le syndic.
+
+    Sert au contrôle bancaire entre deux états, au tableau des soldes au 1er janvier (trouver
+    l'année où une opération manque) et au point de départ de la trésorerie (base de l'historique).
+    NULL = non saisi pour ce compte.
+    """
+    __tablename__ = "soldes_bancaires"
+    __table_args__ = (UniqueConstraint("copropriete_id", "date", name="uq_soldes_bancaires_copro_date"),)
+
+    id = Column(Integer, primary_key=True)
+    copropriete_id = Column(Integer, ForeignKey("coproprietes.id"), nullable=False, index=True)
+    date = Column(Date, nullable=False)              # toujours un 31 décembre
+    solde_syndicat = Column(Numeric(12, 2), nullable=True)
+    solde_fonds = Column(Numeric(12, 2), nullable=True)

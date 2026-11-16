@@ -25,7 +25,7 @@ from app.models.appel import AppelFonds, AppelLot
 from app.models.exercice import Exercice
 from app.models.lot import Lot
 from app.models.mouvement import Mouvement
-from app.models.reprise import EtatReprise
+from app.models.reprise import EtatReprise, SoldeBancaire
 from app.models.user import UserCopro
 from app.services import ensembles
 
@@ -120,7 +120,8 @@ def controles(db: Session, copro_id: int, etat: EtatReprise) -> list[dict]:
 
 
 # ---------------------------------------------------------------- banque
-COMPTES = (("syndicat", "solde_banque"), ("fonds_travaux", "solde_banque_fonds"))
+# Comptes bancaires : nom dans les réponses → colonne de SoldeBancaire.
+COMPTES = (("syndicat", "solde_syndicat"), ("fonds_travaux", "solde_fonds"))
 
 
 def _compte(m: Mouvement) -> str:
@@ -142,13 +143,38 @@ def _flux(db: Session, copro_id: int, apres: date | None, jusqu_a: date | None) 
     return flux
 
 
+def soldes_banque(db: Session, copro_id: int, jour: date) -> dict:
+    """Relevé saisi au `jour` (31/12) : {"syndicat": Decimal | None, "fonds_travaux": Decimal | None}."""
+    s = (db.query(SoldeBancaire)
+         .filter(SoldeBancaire.copropriete_id == copro_id, SoldeBancaire.date == jour).first())
+    return {compte: (getattr(s, col) if s is not None else None) for compte, col in COMPTES}
+
+
+def ecrire_soldes_banque(db: Session, copro_id: int, jour: date, syndicat, fonds) -> dict:
+    """Saisit (ou efface, si les deux sont None) le relevé au `jour`. Renvoie l'ancien relevé."""
+    avant = soldes_banque(db, copro_id, jour)
+    s = (db.query(SoldeBancaire)
+         .filter(SoldeBancaire.copropriete_id == copro_id, SoldeBancaire.date == jour).first())
+    if syndicat is None and fonds is None:
+        if s is not None:
+            db.delete(s)
+    else:
+        if s is None:
+            s = SoldeBancaire(copropriete_id=copro_id, date=jour)
+            db.add(s)
+        s.solde_syndicat, s.solde_fonds = syndicat, fonds
+    db.flush()
+    return avant
+
+
 def controle_banque(db: Session, copro_id: int, depart: EtatReprise, cible: EtatReprise) -> list[dict]:
     """Pour chaque compte dont le solde est saisi aux deux dates : départ + encaissements − dépenses
     de la période, comparé au solde saisi. Un écart avertit, il ne bloque pas la validation."""
     flux = _flux(db, copro_id, depart.date, cible.date)
+    sd, sc = soldes_banque(db, copro_id, depart.date), soldes_banque(db, copro_id, cible.date)
     out = []
-    for compte, champ in COMPTES:
-        d, saisi = getattr(depart, champ), getattr(cible, champ)
+    for compte, _ in COMPTES:
+        d, saisi = sd[compte], sc[compte]
         if d is None or saisi is None:
             continue
         f = flux[compte]
@@ -168,14 +194,72 @@ def tresorerie(db: Session, copro_id: int) -> dict:
     """Solde actuel de chaque compte : solde saisi dans la base + mouvements datés après elle ; sans
     solde de base pour ce compte, somme de tous ses mouvements (comme avant la reprise)."""
     b = base(db, copro_id)
+    sb = soldes_banque(db, copro_id, b.date) if b is not None else {c: None for c, _ in COMPTES}
     out = {}
-    for compte, champ in COMPTES:
-        depart = getattr(b, champ) if b is not None else None
+    for compte, _ in COMPTES:
+        depart = sb[compte]
         f = _flux(db, copro_id, b.date if depart is not None else None, None)[compte]
         out[compte] = arrondi(D(depart or 0) + f["encaissement"] - f["depense"])
     # Date du solde bancaire de départ (None : aucun saisi, la trésorerie part de 0).
-    out["depuis"] = b.date if b is not None and (b.solde_banque is not None or b.solde_banque_fonds is not None) else None
+    out["depuis"] = b.date if b is not None and any(v is not None for v in sb.values()) else None
     return out
+
+
+def soldes_annuels(db: Session, copro_id: int) -> dict:
+    """Une ligne par 1er janvier (relevé au 31/12 de l'année précédente), de la première année utile
+    à l'année en cours. Pour chaque compte : relevé, opérations de l'année écoulée, solde calculé
+    depuis le point d'ancrage, écart, et écart de l'année (variation à la banque − opérations
+    saisies), qui désigne l'année où il manque quelque chose."""
+    releves = {s.date: s for s in db.query(SoldeBancaire).filter(SoldeBancaire.copropriete_id == copro_id)}
+    etats = db.query(EtatReprise.date).filter(EtatReprise.copropriete_id == copro_id).all()
+    premiere = db.query(Mouvement.date).filter(Mouvement.copropriete_id == copro_id).order_by(Mouvement.date).first()
+    candidats = ([premiere[0].year] if premiere else []) + [d.year + 1 for d in releves] + [d.year + 1 for (d,) in etats]
+    if not candidats:
+        return {"ancre": {"date": None, "source": "zero"}, "lignes": []}
+    annees = range(min(candidats), date.today().year + 1)
+
+    # Point d'ancrage : base de l'historique avec relevé, sinon le plus ancien relevé, sinon 0.
+    b = base(db, copro_id)
+    if b is not None and b.date in releves:
+        ancre, source = b.date, "base"
+    elif releves:
+        ancre, source = min(releves), "releve"
+    else:
+        ancre, source = None, "zero"
+
+    def valeur(s, col):
+        v = getattr(s, col) if s is not None else None
+        return None if v is None else D(v)
+
+    lignes = []
+    for a in annees:
+        jour, veille = date(a - 1, 12, 31), date(a - 2, 12, 31)
+        annee_ecoulee = _flux(db, copro_id, veille, jour)
+        if ancre is None:
+            jusque = _flux(db, copro_id, None, jour)
+        elif jour >= ancre:
+            jusque = _flux(db, copro_id, ancre, jour)
+        else:
+            jusque = _flux(db, copro_id, jour, ancre)
+        ligne = {"annee": a, "date": jour}
+        for compte, col in COMPTES:
+            base_ancre = valeur(releves.get(ancre), col) if ancre is not None else None
+            f = jusque[compte]
+            net = f["encaissement"] - f["depense"]
+            calcule = D(base_ancre or 0) + (net if ancre is None or jour >= ancre else -net)
+            releve = valeur(releves.get(jour), col)
+            precedent = valeur(releves.get(veille), col)
+            fa = annee_ecoulee[compte]
+            ligne[compte] = {
+                "releve": arrondi(releve) if releve is not None else None,
+                "encaissements": arrondi(fa["encaissement"]), "depenses": arrondi(fa["depense"]),
+                "calcule": arrondi(calcule),
+                "ecart": arrondi(releve - calcule) if releve is not None else None,
+                "ecart_annee": (arrondi((releve - precedent) - (fa["encaissement"] - fa["depense"]))
+                                if releve is not None and precedent is not None else None),
+            }
+        lignes.append(ligne)
+    return {"ancre": {"date": ancre, "source": source}, "lignes": lignes}
 
 
 def _message_ecarts(ctrls: list[dict]) -> str:

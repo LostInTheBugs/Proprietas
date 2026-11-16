@@ -3,6 +3,8 @@
 Réservé au syndic ; chaque création, modification, suppression et validation est auditée.
 Règles : services/reprise.py.
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -16,7 +18,7 @@ from app.models.reprise import EtatReprise, EtatRepriseLigne
 from app.models.user import User
 from app.routes.copro import get_or_create_copro
 from app.schemas import (EtatRepriseDetail, EtatRepriseIn, EtatRepriseOut, ImportRepriseIn,
-                         ImportRepriseOut, SoldesBanqueIn)
+                         ImportRepriseOut, SoldeBancaireIn, SoldesBanqueIn)
 from app.services import reprise as svc
 from app.services import reprise_import
 
@@ -25,6 +27,7 @@ router = APIRouter(prefix="/api/reprise", tags=["reprise"])
 
 def _out(db: Session, copro_id: int, etat: EtatReprise, b, detail: bool = False):
     ctrls = svc.controles(db, copro_id, etat)
+    sb = svc.soldes_banque(db, copro_id, etat.date)
     banque = svc.controles_banque(db, copro_id, etat)
     champs = dict(
         id=etat.id, date=etat.date, valide=bool(etat.valide), valide_le=etat.valide_le,
@@ -33,7 +36,7 @@ def _out(db: Session, copro_id: int, etat: EtatReprise, b, detail: bool = False)
         total_fonds_travaux=arrondi(somme(D(l.montant_fonds_travaux or 0) for l in etat.lignes)),
         nb_lignes=len(etat.lignes),
         controle_ok=all(c["ok"] for c in ctrls) if ctrls else None,
-        solde_banque=etat.solde_banque, solde_banque_fonds=etat.solde_banque_fonds,
+        solde_banque=sb["syndicat"], solde_banque_fonds=sb["fonds_travaux"],
         banque_ok=all(c["ok"] for c in banque) if banque else None,
     )
     if not detail:
@@ -50,8 +53,9 @@ def _etat(db: Session, etat_id: int, copro) -> EtatReprise:
 
 
 def _remplir(db: Session, etat: EtatReprise, data: EtatRepriseIn) -> None:
-    etat.solde_banque = data.solde_banque
-    etat.solde_banque_fonds = data.solde_banque_fonds
+    # Soldes bancaires : saisie commune avec le tableau des soldes au 1er janvier (même date).
+    if "solde_banque" in data.model_fields_set or "solde_banque_fonds" in data.model_fields_set:
+        svc.ecrire_soldes_banque(db, etat.copropriete_id, data.date, data.solde_banque, data.solde_banque_fonds)
     proprietaires = {l.id: l.proprietaire_id for l in db.query(Lot).filter(Lot.copropriete_id == etat.copropriete_id)}
     etat.lignes = [EtatRepriseLigne(
         lot_id=l.lot_id, exercice_origine=l.exercice_origine,
@@ -132,15 +136,39 @@ def modifier_banque(etat_id: int, data: SoldesBanqueIn, request: Request, db: Se
     des copropriétaires ni les appels de reprise (seulement le contrôle bancaire et la trésorerie)."""
     copro = get_or_create_copro(db, user)
     etat = _etat(db, etat_id, copro)
-    avant = (etat.solde_banque, etat.solde_banque_fonds)
-    etat.solde_banque = data.solde_banque
-    etat.solde_banque_fonds = data.solde_banque_fonds
+    a = svc.ecrire_soldes_banque(db, copro.id, etat.date, data.solde_banque, data.solde_banque_fonds)
+    avant = (a["syndicat"], a["fonds_travaux"])
     audit.enregistrer(db, "reprise_banque_modifiee", user=user, copro_id=copro.id, request=request,
                       detail=(f"État au {etat.date:%d/%m/%Y} : syndicat {_eur(avant[0])} → {_eur(data.solde_banque)}, "
                               f"fonds de travaux {_eur(avant[1])} → {_eur(data.solde_banque_fonds)}"))
     db.commit()
     db.refresh(etat)
     return _out(db, copro.id, etat, svc.base(db, copro.id), detail=True)
+
+
+@router.put("/soldes-bancaires")
+def saisir_solde_bancaire(data: SoldeBancaireIn, request: Request, db: Session = Depends(get_db),
+                          user: User = Depends(require_syndic)):
+    """Relevé bancaire au 31 décembre (= au 1er janvier suivant), avec ou sans état à cette date.
+    Les deux soldes à null effacent le relevé."""
+    copro = get_or_create_copro(db, user)
+    if (data.date.month, data.date.day) != (12, 31):
+        raise HTTPException(422, "Le solde se saisit au 31 décembre (il vaut pour le 1er janvier suivant).")
+    if data.date >= date.today():
+        raise HTTPException(422, "Ce 31 décembre n'est pas encore passé.")
+    a = svc.ecrire_soldes_banque(db, copro.id, data.date, data.solde_banque, data.solde_banque_fonds)
+    audit.enregistrer(db, "solde_bancaire_saisi", user=user, copro_id=copro.id, request=request,
+                      detail=(f"Au {data.date:%d/%m/%Y} : syndicat {_eur(a['syndicat'])} → {_eur(data.solde_banque)}, "
+                              f"fonds de travaux {_eur(a['fonds_travaux'])} → {_eur(data.solde_banque_fonds)}"))
+    db.commit()
+    return svc.soldes_annuels(db, copro.id)
+
+
+@router.get("/soldes-annuels")
+def soldes_annuels(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Soldes au 1er janvier de chaque année : relevé, calcul, écart et écart de l'année."""
+    copro = get_or_create_copro(db, user)
+    return svc.soldes_annuels(db, copro.id)
 
 
 @router.delete("/etats/{etat_id}")
