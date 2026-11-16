@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     s3_access_key_id: str = ""         # vides : variables AWS_* / rôle (chaîne standard boto3)
     s3_secret_access_key: str = ""
     s3_prefix: str = "documents/"
+    # Drive des copropriétés (WebDAV : Nextcloud, ownCloud, Synology… ; core/drive.py).
+    # drive_actif=false : la fonction est retirée de l'instance. drive_reseau_local=false : refuse
+    # les adresses du réseau privé (à régler ainsi sur une instance hébergée pour des tiers).
+    drive_actif: bool = True
+    drive_reseau_local: bool = True
     # RGPD : durée de conservation du journal d'audit et des infos de dernière connexion
     # (IP, navigateur), en mois. 0 = jamais purgé. CNIL : 6 mois à 1 an pour la journalisation.
     retention_journal_mois: int = 12

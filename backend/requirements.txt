@@ -18,3 +18,5 @@ qrcode==8.2
 boto3==1.43.116
 pyzipper==0.4.0
 pycryptodomex==3.24.1
+# Drive des copropriétés (WebDAV) : core/drive.py
+httpx==0.28.1
