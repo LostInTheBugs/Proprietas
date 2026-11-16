@@ -1,10 +1,17 @@
 from functools import lru_cache
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     app_name: str = "Proprietas"
     database_url: str = "sqlite:///./copro.db"
+    # Pool de connexions PostgreSQL (issue #66) : à régler sous la limite de connexions de la base
+    # (petites offres d'hébergeur). db_pool_size = 0 : aucun pool, une connexion par requête.
+    db_pool_size: int = Field(5, ge=0)          # connexions gardées ouvertes
+    db_max_overflow: int = Field(5, ge=0)       # connexions en plus, aux pointes
+    db_pool_timeout: int = Field(30, ge=1)      # secondes d'attente d'une connexion libre
+    db_pool_recycle: int = Field(1800, ge=-1)   # secondes avant de renouveler une connexion (-1 : jamais)
     secret_key: str = "change-me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 30
