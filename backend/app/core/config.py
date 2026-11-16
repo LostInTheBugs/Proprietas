@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     smtp_port: int = Field(587, ge=0)
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_sender_id: str = ""
+    email_expediteur: str = ""
     smtp_proprietas_public_url: str = ""
 
     @property
