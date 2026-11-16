@@ -56,7 +56,7 @@ VERSION_FORMAT = 1
 # Ordre d'export et d'import : chaque table après celles qu'elle référence.
 TABLES = [
     "coproprietes", "users", "user_coproprietes", "contacts", "contrats", "lots", "exercices",
-    "budget_lines", "etats_reprise", "etats_reprise_lignes", "appels_fonds", "appels_lots", "documents",
+    "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
     "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
     "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
 ]
@@ -242,6 +242,7 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
     if len(donnees.get("coproprietes") or []) != 1:
         raise HTTPException(422, "Sauvegarde invalide : elle doit contenir exactement une copropriété.")
 
+    _soldes_des_anciennes_sauvegardes(donnees)
     avertissements = []
     inconnues = sorted(set(donnees) - set(TABLES))
     if inconnues:
@@ -341,6 +342,20 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
         avertissements.append(f"Colonnes ignorées : {', '.join(sorted(colonnes_ignorees))}.")
     return {"copropriete_id": nouvelle_copro, "nom": nom,
             **stats, "avertissements": avertissements}
+
+
+def _soldes_des_anciennes_sauvegardes(donnees: dict) -> None:
+    """Sauvegardes d'avant la 2026.11.021 : les soldes bancaires étaient des colonnes des états de
+    reprise (solde_banque, solde_banque_fonds). Ils deviennent des lignes de soldes_bancaires."""
+    if "soldes_bancaires" in donnees:
+        return
+    lignes = []
+    for i, e in enumerate(donnees.get("etats_reprise") or []):
+        syndicat, fonds = e.pop("solde_banque", None), e.pop("solde_banque_fonds", None)
+        if syndicat is not None or fonds is not None:
+            lignes.append({"id": -(i + 1), "copropriete_id": e.get("copropriete_id"), "date": e.get("date"),
+                           "solde_syndicat": syndicat, "solde_fonds": fonds})
+    donnees["soldes_bancaires"] = lignes
 
 
 def _copier_fichier(z: zipfile.ZipFile, ancien: str, stockage, ecrits: list[str]) -> str:

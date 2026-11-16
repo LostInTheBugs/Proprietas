@@ -535,6 +535,11 @@ class SoldesBanqueIn(BaseModel):
     solde_banque_fonds: Optional[Montant] = None
 
 
+class SoldeBancaireIn(SoldesBanqueIn):
+    """Relevé bancaire au 31 décembre, saisi depuis le tableau des soldes au 1er janvier."""
+    date: date
+
+
 class ControleBanque(BaseModel):
     """Solde de départ + encaissements − dépenses saisis entre deux états, comparé à la banque."""
     compte: str                     # syndicat | fonds_travaux
