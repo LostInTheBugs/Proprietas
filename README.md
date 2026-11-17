@@ -552,7 +552,9 @@ En stratégie « pull », ne lancez jamais `docker compose up -d --build` ni `do
 sur une image absente : Compose construirait l'image sur place.
 
 **Espace disque et ménage.** Avant toute mise à jour, l'applicateur vérifie l'espace libre :
-1,5 Go en « build », 0,5 Go en « pull » (réglable par `PROPRIETAS_MIN_FREE_GB` dans le `.env`).
+1,5 Go en « build », 0,5 Go en « pull » (réglable par `PROPRIETAS_MIN_FREE_GB` dans le `.env`). En « pull », le téléchargement de l'image est retenté deux fois (après 15 s puis
+45 s) en cas de coupure réseau ; s'il échoue malgré tout, le dépôt et le `.env` reviennent à la version en
+service, et la mise à jour peut simplement être relancée.
 S'il manque de la place, il refuse sans rien modifier et l'indique dans l'interface. Après une
 mise à jour réussie, il supprime les images orphelines (`docker image prune -f`) et, en
 « build », le cache de construction (`docker builder prune -af`). Les valeurs du `.env` peuvent
