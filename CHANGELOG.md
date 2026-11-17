@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.028 — 2026-11-17
+
+- Drive de la copropriété : Google Drive, à l'essai (pas encore vérifié sur le vrai service). Proposé quand l'instance a déclaré son application Google (COPRO_GOOGLE_CLIENT_ID, COPRO_GOOGLE_CLIENT_SECRET ; guide dans le README). Le syndic se connecte à Google Drive depuis Réglages ; ensuite rangement, déplacement, vérification et sauvegardes fonctionnent comme avec WebDAV. Aucune migration.
+
 ## 2026.11.027 — 2026-11-17
 
 - Drive de la copropriété : sauvegarde chiffrée déposée sur le drive (dossier Sauvegardes), chaque semaine ou à la demande, avec un mot de passe choisi dans Réglages ; les 8 plus récentes sont gardées ; un échec de la sauvegarde automatique s'affiche dans Réglages. Migration f0a1b2c3d4e5.

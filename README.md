@@ -6,7 +6,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.11.027**.
+> Version courante : **2026.11.028**.
 
 ![Tableau de bord de la démo (copropriété fictive)](docs/screenshot.png)
 
@@ -441,7 +441,7 @@ e-mails ne contiennent pas de lien vers l'application.
 Chaque requête rend sa connexion en fin de traitement ; le **pool** garde quelques connexions ouvertes
 pour aller vite. Sur une petite base (offres de développement des hébergeurs, souvent limitées à
 quelques connexions), réglez-le dans le `.env` pour rester sous la limite (avec Docker Compose, le
-conteneur lit le `.env` depuis la 2026.11.027 ; appliquer avec `docker compose up -d`) :
+conteneur lit le `.env` depuis la 2026.11.028 ; appliquer avec `docker compose up -d`) :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
@@ -544,7 +544,7 @@ et peut faire tomber un petit VPS. À chaque release, GitHub publie l'image tout
 
 ```bash
 echo 'PROPRIETAS_UPDATE_STRATEGY=pull' >> .env      # l'applicateur télécharge au lieu de construire
-echo 'PROPRIETAS_VERSION=2026.11.027' >> .env       # version de l'image (mise à jour par l'applicateur)
+echo 'PROPRIETAS_VERSION=2026.11.028' >> .env       # version de l'image (mise à jour par l'applicateur)
 docker compose pull backend && docker compose up -d --no-build
 ```
 
