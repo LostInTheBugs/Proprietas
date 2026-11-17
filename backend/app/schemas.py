@@ -1330,3 +1330,7 @@ class DriveRelierIn(BaseModel):
 class DriveSauvegardeIn(BaseModel):
     auto: bool = False                   # une sauvegarde par semaine sur le drive
     mot_de_passe: str = ""               # vide : garder celui qui est enregistré
+
+
+class DriveGoogleIn(BaseModel):
+    dossier: str = ""                    # dossier du Google Drive, ex. « Proprietas/Ma copropriété »

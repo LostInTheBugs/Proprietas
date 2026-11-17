@@ -11,7 +11,12 @@ Réservé au syndic. Règles (voir aussi core/drive.py) :
   (services/drive_fichiers.py) ; vérification du drive, fichier renommé retrouvé par son contenu ou
   relié à la main.
 """
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
+
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core import audit, drive
@@ -20,11 +25,11 @@ from app.core.database import get_db
 from app.core.deps import require_syndic
 from app.core.stockage import NomInvalide, StockageIndisponible
 from app.models.document import Document
-from app.models.user import User
+from app.models.user import User, UserCopro
 from app.routes.copro import get_or_create_copro
 from app.core.scoping import get_owned
 from app.models.copropriete import Copropriete
-from app.schemas import DriveIn, DriveRelierIn, DriveSauvegardeIn
+from app.schemas import DriveGoogleIn, DriveIn, DriveRelierIn, DriveSauvegardeIn
 from app.services import drive_fichiers, drive_sauvegarde
 from app.services.sauvegarde import MDP_MIN
 
@@ -45,19 +50,25 @@ def _etat_sauvegarde(copro) -> dict:
             "erreur": copro.drive_sauvegarde_erreur or "", "gardees": drive_sauvegarde.GARDER}
 
 
-def _dossier_deja_pris(db: Session, copro, url: str, dossier: str):
+def _dossier_deja_pris(db: Session, copro, type_: str, compte: str, dossier: str):
     """Autre copropriété de l'instance branchée sur le même dossier du même drive (ou l'un dans l'autre) :
-    deux copropriétés se supprimeraient leurs fichiers."""
-    for autre in db.query(Copropriete).filter(Copropriete.id != copro.id, Copropriete.drive_type == "webdav",
-                                              Copropriete.drive_url == url).all():
+    deux copropriétés se supprimeraient leurs fichiers. `compte` : adresse WebDAV, ou compte Google."""
+    filtre = Copropriete.drive_url == compte if type_ == "webdav" else Copropriete.drive_user == compte
+    for autre in db.query(Copropriete).filter(Copropriete.id != copro.id, Copropriete.drive_type == type_, filtre).all():
         a, b = (autre.drive_dossier or "") + "/", dossier + "/"
         if a.startswith(b) or b.startswith(a):
             return autre
     return None
 
 
+def _google_disponible() -> bool:
+    s = get_settings()
+    return bool(s.drive_actif and s.google_client_id and s.google_client_secret)
+
+
 def _etat(db: Session, copro) -> dict:
-    return {"autorise": get_settings().drive_actif, "type": copro.drive_type or "", "url": copro.drive_url or "",
+    return {"autorise": get_settings().drive_actif, "google_disponible": _google_disponible(),
+            "type": copro.drive_type or "", "url": copro.drive_url or "",
             "utilisateur": copro.drive_user or "", "dossier": copro.drive_dossier or "",
             "mot_de_passe_defini": bool(copro.drive_password),
             "documents_sur_le_drive": _sur_le_drive(db, copro),
@@ -74,8 +85,16 @@ def _autorise() -> None:
 
 def _preparer(data: DriveIn, copro) -> drive.StockageWebDAV:
     """Le drive décrit par le formulaire (mot de passe enregistré si le champ est vide) ; 422 sinon."""
+    if data.type == "google":
+        # Google Drive : on n'essaie que la connexion déjà autorisée (le formulaire n'a pas de secret).
+        if copro.drive_type != "google":
+            raise HTTPException(422, "Connectez d'abord Google Drive (bouton « Se connecter à Google Drive »).")
+        try:
+            return drive.stockage_drive(copro)
+        except StockageIndisponible as e:
+            raise HTTPException(422, str(e)) from e
     if data.type != "webdav":
-        raise HTTPException(422, "Type de drive inconnu (seul « webdav » est proposé).")
+        raise HTTPException(422, "Type de drive inconnu.")
     dossier = "/".join(drive.assainir(s, "") for s in data.dossier.replace("\\", "/").split("/") if s.strip())
     try:
         url = drive.verifier_adresse(data.url, get_settings().drive_reseau_local)
@@ -115,19 +134,26 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
     if data.type == "":
         if n:
             raise HTTPException(409, f"{n} document(s) sont sur le drive : il ne peut pas être débranché.")
+        if copro.drive_type == "google" and copro.drive_password:
+            from app.core.drive_google import revoquer
+            revoquer(copro.drive_password)          # l'autorisation est aussi retirée chez Google
         if copro.drive_type:
             audit.enregistrer(db, "drive_debranche", user=user, copro_id=copro.id, request=request,
-                              detail=copro.drive_url or "")
+                              detail=copro.drive_url or f"Google Drive {copro.drive_user or ''}".strip())
         copro.drive_type = copro.drive_url = copro.drive_user = copro.drive_password = copro.drive_dossier = ""
         copro.drive_sauvegarde_auto = False
         db.commit()
         return _etat(db, copro)
+    if data.type == "google":
+        raise HTTPException(422, "Google Drive se branche par le bouton « Se connecter à Google Drive ».")
+    if n and copro.drive_type == "google":
+        raise HTTPException(409, f"{n} document(s) sont sur Google Drive : rapatriez-les avant de changer de drive.")
     st = _preparer(data, copro)
     dossier = "/".join(st.dossier)
     if n and dossier != (copro.drive_dossier or ""):
         raise HTTPException(409, f"{n} document(s) sont rangés dans « {copro.drive_dossier} » : "
                                  "le dossier du drive ne peut plus changer.")
-    if _dossier_deja_pris(db, copro, st.url, dossier):
+    if _dossier_deja_pris(db, copro, "webdav", st.url, dossier):
         raise HTTPException(409, "Ce dossier du drive est déjà celui d'une autre copropriété de cette instance : "
                                  "choisissez-en un autre.")
     try:
@@ -277,3 +303,94 @@ def sauvegardes(db: Session = Depends(get_db), user: User = Depends(require_synd
         return drive_sauvegarde.lister(_branche(copro))
     except StockageIndisponible as e:
         raise HTTPException(503, f"Drive de la copropriété indisponible : {e}") from e
+
+
+# ---------------------------------------------------------------- Google Drive (OAuth)
+ETAT_MINUTES = 15
+
+
+def _retour(request: Request) -> str:
+    """Adresse de retour déclarée chez Google : adresse publique de l'instance, sinon celle de la requête."""
+    base = get_settings().frontend_url or str(request.base_url)
+    return base.rstrip("/") + "/api/drive/google/retour"
+
+
+def _etat_signe(user, copro, dossier: str) -> str:
+    """Jeton d'état OAuth (anti-falsification) : signé, de courte durée, inutilisable comme jeton d'accès."""
+    s = get_settings()
+    return jwt.encode({"scope": "drive_google", "sub": str(user.id), "copro": copro.id, "dossier": dossier,
+                       "exp": datetime.now(timezone.utc) + timedelta(minutes=ETAT_MINUTES)},
+                      s.secret_key, algorithm=s.algorithm)
+
+
+@router.post("/google/connecter")
+def google_connecter(data: DriveGoogleIn, request: Request, db: Session = Depends(get_db),
+                     user: User = Depends(require_syndic)):
+    """Adresse de la page Google où le syndic autorise Proprietas. Le dossier est choisi avant."""
+    _autorise()
+    if not _google_disponible():
+        raise HTTPException(409, "Google Drive n'est pas configuré sur cette instance (voir le README).")
+    copro = get_or_create_copro(db, user)
+    dossier = "/".join(drive.assainir(x, "") for x in data.dossier.replace("\\", "/").split("/") if x.strip())
+    try:
+        drive.valider_chemin(dossier)
+    except NomInvalide as e:
+        raise HTTPException(422, "Dossier du drive invalide (exemple : Proprietas/Ma copropriété).") from e
+    n = _sur_le_drive(db, copro)
+    if n and (copro.drive_type != "google" or dossier != copro.drive_dossier):
+        raise HTTPException(409, f"{n} document(s) sont sur le drive actuel : rapatriez-les d'abord, "
+                                 "ou gardez le même drive et le même dossier.")
+    from app.core.drive_google import adresse_autorisation
+    return {"adresse": adresse_autorisation(get_settings().google_client_id, _retour(request),
+                                            _etat_signe(user, copro, dossier))}
+
+
+def _vers_reglages(message: str, ok: bool) -> RedirectResponse:
+    return RedirectResponse(f"/settings?onglet=sauvegarde&drive_{'ok' if ok else 'erreur'}={quote(message)}", 303)
+
+
+@router.get("/google/retour")
+def google_retour(request: Request, state: str = "", code: str = "", error: str = "",
+                  db: Session = Depends(get_db)):
+    """Retour de Google après autorisation : le drive n'est branché que si l'essai d'écriture réussit."""
+    s = get_settings()
+    try:
+        etat = jwt.decode(state, s.secret_key, algorithms=[s.algorithm])
+        if etat.get("scope") != "drive_google":
+            raise jwt.InvalidTokenError("portée")
+    except jwt.InvalidTokenError:
+        return _vers_reglages("Lien de connexion Google expiré ou invalide : recommencez.", False)
+    if error or not code:
+        return _vers_reglages("Connexion à Google Drive annulée." if error == "access_denied"
+                              else "Google n'a pas donné l'autorisation : recommencez.", False)
+    user = db.get(User, int(etat["sub"]))
+    copro = db.get(Copropriete, int(etat["copro"]))
+    lien = user and copro and db.query(UserCopro).filter(UserCopro.user_id == user.id,
+                                                        UserCopro.copropriete_id == copro.id).first()
+    if not (_google_disponible() and user and copro and lien and user.role == "syndic"):
+        return _vers_reglages("Connexion refusée.", False)
+    dossier = etat["dossier"]
+    n = _sur_le_drive(db, copro)
+    if n and (copro.drive_type != "google" or dossier != copro.drive_dossier):
+        return _vers_reglages("Des documents sont sur le drive actuel : rapatriez-les d'abord.", False)
+    from app.core.drive_google import StockageGoogleDrive, echanger_code, revoquer
+    try:
+        jeton = echanger_code(s.google_client_id, s.google_client_secret, code, _retour(request))
+        st = StockageGoogleDrive(s.google_client_id, s.google_client_secret, jeton, dossier)
+        compte = st.compte()
+        if _dossier_deja_pris(db, copro, "google", compte, dossier):
+            revoquer(jeton)
+            return _vers_reglages("Ce dossier de ce Google Drive est déjà celui d'une autre copropriété de cette "
+                                  "instance : choisissez-en un autre.", False)
+        st.verifier_ecriture()
+    except StockageIndisponible as e:
+        return _vers_reglages(f"Google Drive non branché : {e}", False)
+    ancien = copro.drive_password if copro.drive_type == "google" else ""
+    copro.drive_type, copro.drive_url, copro.drive_user, copro.drive_dossier = "google", "", compte, dossier
+    copro.drive_password = jeton
+    audit.enregistrer(db, "drive_branche", user=user, copro_id=copro.id, request=request,
+                      detail=f"Google Drive {compte} — dossier « {dossier} »")
+    db.commit()
+    if ancien and ancien != jeton:
+        revoquer(ancien)
+    return _vers_reglages(f"Google Drive branché ({compte}) : les nouveaux fichiers y seront rangés.", True)

@@ -29,7 +29,7 @@ class Copropriete(Base):
     email_expediteur = Column(String, default="")
     frontend_url = Column(String, default="")
     # Drive de la copropriété (core/drive.py) : ses fichiers sur un serveur WebDAV. "" = pas de drive.
-    drive_type = Column(String, default="")          # "" | webdav
+    drive_type = Column(String, default="")          # "" | webdav | google (drive_password = jeton OAuth)
     drive_url = Column(String, default="")
     drive_user = Column(String, default="")
     drive_password = Column(TexteChiffre, default="")   # chiffré en base, comme le mot de passe SMTP

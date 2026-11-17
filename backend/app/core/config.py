@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # les adresses du réseau privé (à régler ainsi sur une instance hébergée pour des tiers).
     drive_actif: bool = True
     drive_reseau_local: bool = True
+    # Google Drive comme drive d'une copropriété (core/drive_google.py) : application OAuth « Web »
+    # déclarée par l'administrateur de l'instance dans la console Google Cloud, portée drive.file,
+    # adresse de retour <adresse de l'instance>/api/drive/google/retour. Vides : Google Drive n'est pas proposé.
+    google_client_id: str = ""
+    google_client_secret: str = ""
     # RGPD : durée de conservation du journal d'audit et des infos de dernière connexion
     # (IP, navigateur), en mois. 0 = jamais purgé. CNIL : 6 mois à 1 an pour la journalisation.
     retention_journal_mois: int = 12
