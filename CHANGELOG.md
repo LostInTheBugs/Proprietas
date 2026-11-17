@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.029 — 2026-11-17
+
+- Mises à jour : le téléchargement de la nouvelle image est retenté deux fois en cas de coupure réseau (vu sur un serveur : « TLS handshake timeout » vers ghcr.io). Après un échec, le dépôt revient sur la version en service, ce qui préserve la version précédente gardée pour le retour arrière.
+
 ## 2026.11.028 — 2026-11-17
 
 - Drive de la copropriété : Google Drive, à l'essai (pas encore vérifié sur le vrai service). Proposé quand l'instance a déclaré son application Google (COPRO_GOOGLE_CLIENT_ID, COPRO_GOOGLE_CLIENT_SECRET ; guide dans le README). Le syndic se connecte à Google Drive depuis Réglages ; ensuite rangement, déplacement, vérification et sauvegardes fonctionnent comme avec WebDAV. Aucune migration.
