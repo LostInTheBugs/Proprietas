@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.11.027 — 2026-11-17
+
+- Drive de la copropriété : sauvegarde chiffrée déposée sur le drive (dossier Sauvegardes), chaque semaine ou à la demande, avec un mot de passe choisi dans Réglages ; les 8 plus récentes sont gardées ; un échec de la sauvegarde automatique s'affiche dans Réglages. Migration f0a1b2c3d4e5.
+- Restauration : une sauvegarde prise sur le drive recrée la copropriété ; ses fichiers du drive redeviennent lisibles une fois le drive rebranché. README : section « Restaurer une copropriété ».
+- Deux copropriétés d'une même instance ne peuvent pas partager un dossier du drive.
+
 ## 2026.11.026 — 2026-11-17
 
 - Drive de la copropriété : « Déplacer vers le drive » range sur le drive les fichiers déposés avant son branchement ; « Vérifier le drive » liste les fichiers introuvables et « Retrouver par le contenu » relie un fichier renommé ou déplacé sur le drive à son document (sinon, liaison à la main) ; « Rapatrier sur le serveur » ramène les fichiers pour pouvoir débrancher le drive. Migration e9f0a1b2c3d4.
