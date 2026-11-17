@@ -69,6 +69,9 @@ KEEP_BACKUPS = 10
 IMAGE = "ghcr.io/lostinthebugs/proprietas"
 ACTIONS = ("update", "rollback", "oublier_precedente")
 HEALTH_TIMEOUT_S = int(os.environ.get("PROPRIETAS_HEALTH_TIMEOUT_S") or 180)
+# Pauses (s) entre les essais de `docker compose pull` : une coupure réseau passagère vers ghcr.io
+# (« TLS handshake timeout », vu sur ionos02 le 17/11/2026) ne doit pas faire échouer la mise à jour.
+PULL_PAUSES = [int(x) for x in (os.environ.get("PROPRIETAS_PULL_PAUSES") or "15,45").split(",") if x.strip()]
 # Espace disque minimal avant une mise à jour (Go). Cas réel du 24/10/2026 : ionos01 à 99 %
 # (cache de construction accumulé), `npm ci` échouait sans message clair.
 MIN_FREE_GB = {"build": 1.5, "pull": 0.5}
@@ -179,6 +182,20 @@ def set_env(path: Path, key: str, value: str):
         os.chmod(tmp, path.stat().st_mode)
     tmp.replace(path)
     return old
+
+
+def pull_avec_essais() -> None:
+    """`docker compose pull backend`, retenté après chaque pause de PULL_PAUSES."""
+    for n, pause in enumerate(PULL_PAUSES + [None], 1):
+        try:
+            run(["docker", "compose", "pull", "backend"])
+            return
+        except RuntimeError as exc:
+            if pause is None:
+                raise
+            log(f"téléchargement de l'image en échec (essai {n}) : {str(exc)[-200:]} — nouvel essai dans {pause} s")
+            if not DRY:
+                time.sleep(pause)
 
 
 def version_installee() -> str:
@@ -380,20 +397,25 @@ def main() -> int:
     avant = version_installee()
     env_restore = False
     old_version = None
+    depot_change = False         # git checkout fait
+    redemarre = False            # conteneurs relancés sur la nouvelle version
     try:
         run(["git", "fetch", "--tags", "--quiet", "origin"], as_owner=True)
         run(["git", "rev-parse", "--verify", f"refs/tags/{version}"], as_owner=True, capture=True)
         verifier_espace(strategy, env)
         dump = backup()
         run(["git", "checkout", "--quiet", version], as_owner=True)
+        depot_change = True
         if strategy == "pull":
             log(f".env : PROPRIETAS_VERSION={version}")
             if not DRY:
                 old_version = set_env(ENV, "PROPRIETAS_VERSION", version)
                 env_restore = True
-            run(["docker", "compose", "pull", "backend"])
+            pull_avec_essais()
+            redemarre = True
             run(["docker", "compose", "up", "-d", "--no-build"])
         else:
+            redemarre = True
             run(["docker", "compose", "up", "-d", "--build"])
         wait_version(version)
     except Exception as exc:  # noqa: BLE001 — on note l'échec ; la demande est retirée pour ne pas boucler
@@ -405,6 +427,14 @@ def main() -> int:
             else:
                 set_env(ENV, "PROPRIETAS_VERSION", old_version)
             log(f".env : PROPRIETAS_VERSION remis à {old_version or 'latest'}")
+        if depot_change and not redemarre and avant and VERSION_RE.match(avant) and not DRY:
+            # Rien n'a été redémarré : le dépôt revient sur la version en service (sinon la mise à jour
+            # suivante prendrait la version demandée pour la version « d'avant »).
+            try:
+                run(["git", "checkout", "--quiet", avant], as_owner=True)
+                log(f"dépôt remis sur {avant}")
+            except Exception as exc2:  # noqa: BLE001
+                log(f"dépôt NON remis sur {avant} : {exc2}")
         REQ.unlink(missing_ok=True)
         status(result=f"échec : {exc}"[:300], running="", backup=dump, at=time.time())
         return 1
