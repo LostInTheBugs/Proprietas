@@ -276,20 +276,38 @@ class StockageWebDAV:
 
 
 # ---------------------------------------------------------------- copropriété
+TYPES = ("webdav", "google")          # coproprietes.drive_type ; "" = pas de drive
+
+
 def reglages(copro) -> SimpleNamespace | None:
     """Réglages du drive de la copropriété, ou None s'il n'est pas branché."""
-    if getattr(copro, "drive_type", "") != "webdav" or not copro.drive_url or not copro.drive_dossier:
+    type_ = getattr(copro, "drive_type", "")
+    if type_ not in TYPES or not copro.drive_dossier or (type_ == "webdav" and not copro.drive_url):
         return None
-    return SimpleNamespace(url=copro.drive_url, utilisateur=copro.drive_user or "",
+    return SimpleNamespace(type=type_, url=copro.drive_url or "", utilisateur=copro.drive_user or "",
                            mot_de_passe=copro.drive_password or "", dossier=copro.drive_dossier)
 
 
-def stockage_drive(copro, reseau_local: bool = True) -> StockageWebDAV | None:
-    """Le drive de la copropriété, prêt à servir, ou None s'il n'est pas branché."""
+def stockage_drive(copro, reseau_local: bool = True, reglages_instance=None):
+    """Le drive de la copropriété, prêt à servir, ou None s'il n'est pas branché.
+
+    WebDAV : `drive_url`, `drive_user`, `drive_password`. Google Drive (core/drive_google.py) : le jeton de
+    renouvellement est dans `drive_password`, l'application OAuth dans les réglages de l'instance.
+    """
     r = reglages(copro)
     if r is None:
         return None
     try:
+        if r.type == "google":
+            from app.core.config import get_settings
+            from app.core.drive_google import StockageGoogleDrive
+            s = reglages_instance or get_settings()
+            if not (s.google_client_id and s.google_client_secret):
+                raise StockageIndisponible("Google Drive n'est plus configuré sur cette instance "
+                                           "(COPRO_GOOGLE_CLIENT_ID / COPRO_GOOGLE_CLIENT_SECRET).")
+            if not r.mot_de_passe:
+                raise StockageIndisponible("L'autorisation Google est absente : reconnectez Google Drive dans Réglages.")
+            return StockageGoogleDrive(s.google_client_id, s.google_client_secret, r.mot_de_passe, r.dossier)
         verifier_adresse(r.url, reseau_local)
         return StockageWebDAV(r.url, r.utilisateur, r.mot_de_passe, r.dossier)
     except (AdresseRefusee, NomInvalide) as e:

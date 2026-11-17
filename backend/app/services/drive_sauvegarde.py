@@ -79,7 +79,7 @@ def sauvegarder(db: Session, copro, instance, st_drive, maintenant: datetime | N
 
 def prochaine(copro) -> datetime | None:
     """Date de la prochaine sauvegarde automatique (None si elle n'est pas activée)."""
-    if not copro.drive_sauvegarde_auto or copro.drive_type != "webdav":
+    if not copro.drive_sauvegarde_auto or copro.drive_type not in drive.TYPES:
         return None
     return copro.drive_sauvegarde_derniere + INTERVALLE if copro.drive_sauvegarde_derniere else datetime.now()
 
@@ -92,7 +92,7 @@ def run_sauvegardes_drive(db: Session, maintenant: datetime | None = None) -> di
     if not reglages.drive_actif:
         return stats
     from app.routes import documents      # stockage de l'instance, au même endroit que les documents
-    copros = db.query(Copropriete).filter(Copropriete.drive_type == "webdav",
+    copros = db.query(Copropriete).filter(Copropriete.drive_type.in_(drive.TYPES),
                                           Copropriete.drive_sauvegarde_auto.is_(True)).all()
     for copro in copros:
         if copro.drive_sauvegarde_derniere and maintenant - copro.drive_sauvegarde_derniere < INTERVALLE:
