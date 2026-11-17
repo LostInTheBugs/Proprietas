@@ -4,7 +4,8 @@ import { Button, Card, Input } from "./ui";
 
 interface EtatDrive {
   autorise: boolean;
-  type: "" | "webdav";
+  google_disponible: boolean;
+  type: "" | "webdav" | "google";
   url: string;
   utilisateur: string;
   dossier: string;
@@ -39,18 +40,38 @@ export function DriveCard() {
   const [mdpSauvegarde, setMdpSauvegarde] = useState("");
   const [archives, setArchives] = useState<{ fichier: string; taille: number }[] | null>(null);
 
+  const [service, setService] = useState<"webdav" | "google">("webdav");
+
   function afficher(e: EtatDrive) {
     setEtat(e);
+    if (e.type) setService(e.type);
     setUrl(e.url);
     setUtilisateur(e.utilisateur);
     setDossier(e.dossier || e.dossier_propose);
     setMotDePasse("");
   }
-  useEffect(() => { api.get<EtatDrive>("/drive").then(afficher).catch(() => {}); }, []);
+  useEffect(() => {
+    api.get<EtatDrive>("/drive").then(afficher).catch(() => {});
+    // Retour de la page de Google : le serveur renvoie ici avec le résultat dans l'adresse.
+    const params = new URLSearchParams(window.location.search);
+    const ok = params.get("drive_ok"), erreur = params.get("drive_erreur");
+    if (ok || erreur) {
+      setMessage({ ok: !!ok, texte: ok || erreur || "" });
+      params.delete("drive_ok");
+      params.delete("drive_erreur");
+      window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+    }
+  }, []);
 
   if (!etat || !etat.autorise) return null;
-  const branche = etat.type === "webdav";
-  const corps = { type: "webdav", url, utilisateur, mot_de_passe: motDePasse, dossier };
+  const branche = etat.type !== "";
+  const google = service === "google";
+  const corps = google ? { type: "google" } : { type: "webdav", url, utilisateur, mot_de_passe: motDePasse, dossier };
+  const connecterGoogle = () => lancer(async () => {
+    const r = await api.post<{ adresse: string }>("/drive/google/connecter", { dossier });
+    window.location.href = r.adresse;           // page de Google, puis retour dans Réglages
+    return { ok: true, texte: "Redirection vers Google…" };
+  });
 
   async function lancer(action: () => Promise<{ ok: boolean; texte: string }>) {
     setOccupe(true);
@@ -145,7 +166,7 @@ export function DriveCard() {
         ) : etat.documents_sur_le_drive > 0 ? (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <strong>{etat.documents_sur_le_drive}</strong> fichier(s) de cette copropriété sont sur un drive qui n'est pas
-            branché ici (copropriété restaurée d'une sauvegarde). Rebranchez le drive ci-dessous, sur le dossier
+            branché ici (copropriété restaurée d'une sauvegarde). Rebranchez le drive ci-dessous (même service, même compte), sur le dossier
             « {etat.dossier} », pour les retrouver.
           </p>
         ) : (
@@ -155,20 +176,46 @@ export function DriveCard() {
             dans Proprietas. Pensez à sauvegarder le drive lui-même.
           </p>
         )}
+        {etat.google_disponible && !(branche && etat.documents_sur_le_drive > 0) && (
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="tablist" aria-label="Service du drive">
+            {([["webdav", "Nextcloud, ownCloud, Synology (WebDAV)"], ["google", "Google Drive"]] as const).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={service === k} onClick={() => setService(k)}
+                className={`flex-1 rounded-md px-3 py-1.5 font-medium ${service === k ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600"}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
+        {google ? (
+          <p className="text-sm text-slate-600">
+            {etat.type === "google"
+              ? <>Compte Google : <strong>{etat.utilisateur}</strong>. Proprietas ne voit que les dossiers et fichiers qu'il a créés lui-même.</>
+              : <>Vous serez envoyé sur la page de Google pour autoriser Proprietas. Il n'aura accès qu'aux dossiers et fichiers qu'il crée lui-même.</>}
+          </p>
+        ) : (<>
         <Input label="Adresse WebDAV" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://cloud.exemple.fr/remote.php/dav/files/identifiant/" />
         <div className="grid grid-cols-2 gap-3">
           <Input label="Identifiant" value={utilisateur} onChange={(e) => setUtilisateur(e.target.value)} autoComplete="off" />
           <Input label={etat.mot_de_passe_defini ? "Nouveau mot de passe" : "Mot de passe (d'application, de préférence)"} type="password" value={motDePasse}
             onChange={(e) => setMotDePasse(e.target.value)} placeholder={etat.mot_de_passe_defini ? "Laisser vide pour conserver" : ""} autoComplete="new-password" />
         </div>
+        </>)}
         <Input label="Dossier sur le drive" value={dossier} onChange={(e) => setDossier(e.target.value)}
           disabled={etat.documents_sur_le_drive > 0} placeholder={etat.dossier_propose} />
         {etat.documents_sur_le_drive > 0 && (
           <p className="text-xs text-slate-500">Le dossier ne peut plus changer tant que des fichiers y sont rangés.</p>
         )}
         <div className="flex flex-wrap gap-2">
-          <Button onClick={enregistrer} disabled={occupe || !url || !dossier}>{branche ? "Enregistrer" : "Brancher le drive"}</Button>
-          <Button variant="secondary" onClick={tester} disabled={occupe || !url || !dossier}>{occupe ? "Essai…" : "Tester la connexion"}</Button>
+          {google ? (
+            <Button onClick={connecterGoogle} disabled={occupe || !dossier}>
+              {etat.type === "google" ? "Reconnecter Google Drive" : "Se connecter à Google Drive"}
+            </Button>
+          ) : (
+            <Button onClick={enregistrer} disabled={occupe || !url || !dossier}>{etat.type === "webdav" ? "Enregistrer" : "Brancher le drive"}</Button>
+          )}
+          {(!google || etat.type === "google") && (
+            <Button variant="secondary" onClick={tester} disabled={occupe || (!google && !url) || !dossier}>{occupe ? "Essai…" : "Tester la connexion"}</Button>
+          )}
           {branche && etat.documents_sur_le_drive === 0 && (
             <Button variant="ghost" onClick={debrancher} disabled={occupe}>Débrancher</Button>
           )}

@@ -379,6 +379,30 @@ est refusé et rien n'est créé). Après l'import d'une sauvegarde sans donnée
 compléter** : nom, e-mail, téléphone, adresse et mot de passe de chaque compte ; un e-mail qui a déjà un compte
 sur le serveur y rattache le compte anonyme.
 
+### Google Drive comme drive de la copropriété
+
+Même fonctionnement que le drive WebDAV ci-dessus (rangement par catégorie, déplacement, vérification,
+sauvegardes), avec un Google Drive. **À l'essai** : écrit d'après la documentation de Google et testé sur un
+faux serveur ; l'essai sur le vrai service reste à faire.
+
+L'administrateur de l'instance déclare une fois une application chez Google (gratuit) :
+
+1. <https://console.cloud.google.com/> → créer un projet (ex. « Proprietas ») ;
+2. **API et services → Bibliothèque** : activer **Google Drive API** ;
+3. **Écran de consentement OAuth** (Google Auth Platform) : type **Externe**, nom de l'application, adresse
+   de contact ; portée `https://www.googleapis.com/auth/drive.file` (non sensible) ; tant que l'application
+   est en mode **Test**, ajouter les adresses Gmail des syndics comme utilisateurs de test (et l'autorisation
+   expire au bout de 7 jours : passer l'application **En production** pour un usage réel) ;
+4. **Identifiants → Créer → ID client OAuth → Application Web** ; URI de redirection autorisé :
+   `https://<adresse de l'instance>/api/drive/google/retour` (https obligatoire, sauf `http://localhost`) ;
+5. dans le `.env` : `COPRO_GOOGLE_CLIENT_ID`, `COPRO_GOOGLE_CLIENT_SECRET`, et `COPRO_FRONTEND_URL` =
+   adresse publique de l'instance (sert à construire l'adresse de retour), puis `docker compose up -d`.
+
+Le syndic choisit ensuite **Google Drive** dans la carte « Drive de la copropriété », puis **Se connecter à
+Google Drive**. Proprietas ne voit que les dossiers et fichiers qu'il a créés (portée `drive.file`) : un
+fichier déposé à la main dans Google Drive ne lui est pas visible. Une suppression met le fichier à la
+corbeille de Google Drive. Débrancher le drive retire aussi l'autorisation chez Google.
+
 ### Restaurer une copropriété (nouveau serveur, panne)
 
 1. Installer Proprietas sur le nouveau serveur et créer un compte syndic.
