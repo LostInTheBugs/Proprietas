@@ -126,6 +126,16 @@ def tester(data: DriveIn, db: Session = Depends(get_db), user: User = Depends(re
     return {"ok": True, "detail": f"Connexion réussie : le dossier « {'/'.join(st.dossier)} » est prêt."}
 
 
+def _rendre_autorisation(db: Session, jeton: str, compte: str) -> None:
+    """Rend à Google une autorisation qui ne sert plus. Google la retire pour le compte entier : tant qu'une
+    copropriété de l'instance est branchée sur ce compte Google, le jeton est seulement oublié."""
+    from app.core.drive_google import oublier, revoquer
+    if db.query(Copropriete).filter(Copropriete.drive_type == "google", Copropriete.drive_user == compte).first():
+        oublier(jeton)
+    else:
+        revoquer(jeton)
+
+
 @router.put("")
 def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
                 user: User = Depends(require_syndic)):
@@ -135,15 +145,15 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
     if data.type == "":
         if n:
             raise HTTPException(409, f"{n} document(s) sont sur le drive : il ne peut pas être débranché.")
-        if copro.drive_type == "google" and copro.drive_password:
-            from app.core.drive_google import revoquer
-            revoquer(copro.drive_password)          # l'autorisation est aussi retirée chez Google
+        rendre = (copro.drive_password, copro.drive_user) if copro.drive_type == "google" and copro.drive_password else None
         if copro.drive_type:
             audit.enregistrer(db, "drive_debranche", user=user, copro_id=copro.id, request=request,
                               detail=copro.drive_url or f"Google Drive {copro.drive_user or ''}".strip())
         copro.drive_type = copro.drive_url = copro.drive_user = copro.drive_password = copro.drive_dossier = ""
         copro.drive_sauvegarde_auto = False
         db.commit()
+        if rendre:
+            _rendre_autorisation(db, *rendre)       # l'autorisation est aussi retirée chez Google
         return _etat(db, copro)
     if data.type == "google":
         raise HTTPException(422, "Google Drive se branche par le bouton « Se connecter à Google Drive ».")
@@ -384,24 +394,24 @@ def google_retour(request: Request, state: str = "", code: str = "", error: str 
     n = _sur_le_drive(db, copro)
     if n and (copro.drive_type != "google" or dossier != copro.drive_dossier):
         return _vers_reglages("Des documents sont sur le drive actuel : rapatriez-les d'abord.", False)
-    from app.core.drive_google import StockageGoogleDrive, echanger_code, revoquer
+    from app.core.drive_google import StockageGoogleDrive, echanger_code
     try:
         jeton = echanger_code(s.google_client_id, s.google_client_secret, code, _retour(request))
         st = StockageGoogleDrive(s.google_client_id, s.google_client_secret, jeton, dossier)
         compte = st.compte()
         if _dossier_deja_pris(db, copro, "google", compte, dossier):
-            revoquer(jeton)
+            _rendre_autorisation(db, jeton, compte)
             return _vers_reglages("Ce dossier de ce Google Drive est déjà celui d'une autre copropriété de cette "
                                   "instance : choisissez-en un autre.", False)
         st.verifier_ecriture()
     except StockageIndisponible as e:
         return _vers_reglages(f"Google Drive non branché : {e}", False)
-    ancien = copro.drive_password if copro.drive_type == "google" else ""
+    ancien, ancien_compte = (copro.drive_password, copro.drive_user) if copro.drive_type == "google" else ("", "")
     copro.drive_type, copro.drive_url, copro.drive_user, copro.drive_dossier = "google", "", compte, dossier
     copro.drive_password = jeton
     audit.enregistrer(db, "drive_branche", user=user, copro_id=copro.id, request=request,
                       detail=f"Google Drive {compte} — dossier « {dossier} »")
     db.commit()
     if ancien and ancien != jeton:
-        revoquer(ancien)
+        _rendre_autorisation(db, ancien, ancien_compte)   # même compte : seulement oublié (sinon tout serait coupé)
     return _vers_reglages(f"Google Drive branché ({compte}) : les nouveaux fichiers y seront rangés.", True)
