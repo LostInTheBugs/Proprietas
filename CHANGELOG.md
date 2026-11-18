@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.031 — 2026-11-18
+
+- Google Drive : « Reconnecter Google Drive » ne coupe plus l'accès (Google retirait l'autorisation du compte entier, nouveau jeton compris) ; le résultat d'un test ou du retour de Google s'affiche à l'écran
+
 ## 2026.11.030 — 2026-11-18
 
 - Google Drive : après l'autorisation, Google ramène le syndic sur le nom par lequel il est venu (instance servie sous plusieurs noms) ; derrière un proxy TLS, l'adresse de retour est bien en https.
