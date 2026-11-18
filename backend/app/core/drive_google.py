@@ -83,14 +83,20 @@ def echanger_code(client_id: str, client_secret: str, code: str, retour: str) ->
     return corps["refresh_token"]
 
 
+def oublier(jeton: str) -> None:
+    """Oublie le jeton d'accès gardé en mémoire pour ce jeton de renouvellement."""
+    _jetons.pop(hashlib.sha256(jeton.encode()).hexdigest(), None)
+
+
 def revoquer(jeton: str) -> None:
-    """Retire l'autorisation chez Google (au débranchement). Sans effet si Google ne répond pas."""
+    """Retire l'autorisation chez Google. Attention : Google la retire pour le compte entier (tous les jetons
+    accordés à cette application par ce compte), pas seulement pour ce jeton. Sans effet si Google ne répond pas."""
     try:
         with _client() as client:
             client.post(REVOCATION, data={"token": jeton})
     except httpx.HTTPError:
         pass
-    _jetons.pop(hashlib.sha256(jeton.encode()).hexdigest(), None)
+    oublier(jeton)
 
 
 def _q(texte: str) -> str:

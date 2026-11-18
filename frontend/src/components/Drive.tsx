@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { Button, Card, Input } from "./ui";
 
@@ -35,6 +35,7 @@ export function DriveCard() {
   const [dossier, setDossier] = useState("");
   const [occupe, setOccupe] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; texte: string } | null>(null);
+  const zoneMessage = useRef<HTMLParagraphElement>(null);
   const [verif, setVerif] = useState<Verification | null>(null);
   const [choix, setChoix] = useState<Record<number, string>>({});
   const [mdpSauvegarde, setMdpSauvegarde] = useState("");
@@ -62,6 +63,12 @@ export function DriveCard() {
       window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
     }
   }, []);
+
+  // Le résultat s'affiche en bas de la carte : on l'amène à l'écran (sinon, après « Tester la connexion »
+  // ou au retour de Google, rien ne semble se passer).
+  useEffect(() => {
+    if (message) zoneMessage.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [message, etat]);
 
   if (!etat || !etat.autorise) return null;
   const branche = etat.type !== "";
@@ -327,7 +334,7 @@ export function DriveCard() {
           </div>
         )}
         {message && (
-          <p className={`rounded-lg px-3 py-2 text-sm ${message.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+          <p ref={zoneMessage} className={`rounded-lg px-3 py-2 text-sm ${message.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
             {message.ok ? "✓ " : "✗ "}{message.texte}
           </p>
         )}
