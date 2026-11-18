@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.032 — 2026-11-18
+
+- Démarrage : pendant la migration de la base, /api/health répond déjà (phase « migration ») et le journal est daté (étapes et durées, battement toutes les 15 s, connexion qui bloque la migration sur PostgreSQL) — issue #79.
+
 ## 2026.11.031 — 2026-11-18
 
 - Google Drive : « Reconnecter Google Drive » ne coupe plus l'accès (Google retirait l'autorisation du compte entier, nouveau jeton compris) ; le résultat d'un test ou du retour de Google s'affiche à l'écran
