@@ -29,5 +29,6 @@ COPY --from=frontend-build /src/frontend/dist ./frontend_dist
 RUN mkdir -p /app/uploads
 
 EXPOSE 8000
-# Migration explicite au démarrage (Alembic, idempotent) puis serveur.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Migration explicite au démarrage (Alembic, idempotent) puis serveur. Pendant la migration,
+# /api/health répond déjà (phase « migration ») et le journal dit où elle en est (app/demarrage.py).
+CMD ["python", "-m", "app.demarrage"]
