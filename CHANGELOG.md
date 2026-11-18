@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.030 — 2026-11-18
+
+- Google Drive : après l'autorisation, Google ramène le syndic sur le nom par lequel il est venu (instance servie sous plusieurs noms) ; derrière un proxy TLS, l'adresse de retour est bien en https.
+
 ## 2026.11.029 — 2026-11-17
 
 - Mises à jour : le téléchargement de la nouvelle image est retenté deux fois en cas de coupure réseau (vu sur un serveur : « TLS handshake timeout » vers ghcr.io). Après un échec, le dépôt revient sur la version en service, ce qui préserve la version précédente gardée pour le retour arrière.
