@@ -382,28 +382,23 @@ sur le serveur y rattache le compte anonyme.
 ### Google Drive comme drive de la copropriété
 
 Même fonctionnement que le drive WebDAV ci-dessus (rangement par catégorie, déplacement, vérification,
-sauvegardes), avec un Google Drive. **À l'essai** : écrit d'après la documentation de Google et testé sur un
-faux serveur ; l'essai sur le vrai service reste à faire.
+sauvegardes), avec un Google Drive. Essayé sur le vrai service le 18 novembre 2026.
 
-L'administrateur de l'instance déclare une fois une application chez Google (gratuit) :
+**Guide pas à pas avec captures d'écran : [docs/google-drive.md](docs/google-drive.md).** En résumé :
 
-1. <https://console.cloud.google.com/> → créer un projet (ex. « Proprietas ») ;
-2. **API et services → Bibliothèque** : activer **Google Drive API** ;
-3. **Écran de consentement OAuth** (Google Auth Platform) : type **Externe**, nom de l'application, adresse
-   de contact ; portée `https://www.googleapis.com/auth/drive.file` (non sensible) ; tant que l'application
-   est en mode **Test**, ajouter les adresses Gmail des syndics comme utilisateurs de test (et l'autorisation
-   expire au bout de 7 jours : passer l'application **En production** pour un usage réel) ;
-4. **Identifiants → Créer → ID client OAuth → Application Web** ; URI de redirection autorisé :
-   `https://<adresse de l'instance>/api/drive/google/retour` (https obligatoire, sauf `http://localhost`) ;
-   une instance servie sous plusieurs noms déclare une adresse par nom (le retour se fait sur le nom
-   utilisé par le syndic) ;
-5. dans le `.env` : `COPRO_GOOGLE_CLIENT_ID`, `COPRO_GOOGLE_CLIENT_SECRET`, et `COPRO_FRONTEND_URL` =
-   adresse publique de l'instance (sert à construire l'adresse de retour), puis `docker compose up -d`.
+1. l'administrateur de l'instance déclare une fois une application chez Google (gratuit) : projet,
+   **Google Drive API** activée, écran de consentement **Externe** avec la portée
+   `https://www.googleapis.com/auth/drive.file`, utilisateurs tests (tant que l'application est en mode
+   **Test**, la connexion expire au bout de 7 jours), client **Application Web** avec l'URI de redirection
+   `https://<adresse de l'instance>/api/drive/google/retour` (une adresse par nom si l'instance en a
+   plusieurs : le retour se fait sur le nom utilisé) ;
+2. il ajoute au `.env` `COPRO_GOOGLE_CLIENT_ID` et `COPRO_GOOGLE_CLIENT_SECRET`, puis `docker compose up -d` ;
+3. le syndic choisit **Google Drive** dans la carte « Drive de la copropriété », puis **Se connecter à
+   Google Drive**.
 
-Le syndic choisit ensuite **Google Drive** dans la carte « Drive de la copropriété », puis **Se connecter à
-Google Drive**. Proprietas ne voit que les dossiers et fichiers qu'il a créés (portée `drive.file`) : un
-fichier déposé à la main dans Google Drive ne lui est pas visible. Une suppression met le fichier à la
-corbeille de Google Drive. Débrancher le drive retire aussi l'autorisation chez Google.
+Proprietas ne voit que les dossiers et fichiers qu'il a créés (portée `drive.file`) : un fichier déposé à la
+main dans Google Drive ne lui est pas visible. Une suppression met le fichier à la corbeille de Google Drive.
+Débrancher le drive retire aussi l'autorisation chez Google.
 
 ### Restaurer une copropriété (nouveau serveur, panne)
 
