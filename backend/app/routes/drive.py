@@ -23,6 +23,7 @@ from app.core import audit, drive
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import require_syndic
+from app.core.httpinfo import requete_https
 from app.core.stockage import NomInvalide, StockageIndisponible
 from app.models.document import Document
 from app.models.user import User, UserCopro
@@ -310,8 +311,18 @@ ETAT_MINUTES = 15
 
 
 def _retour(request: Request) -> str:
-    """Adresse de retour déclarée chez Google : adresse publique de l'instance, sinon celle de la requête."""
-    base = get_settings().frontend_url or str(request.base_url)
+    """Adresse de retour déclarée chez Google.
+
+    Requête en https (directe ou derrière le proxy TLS) : l'adresse par laquelle le syndic est venu, pour
+    qu'une instance servie sous plusieurs noms (ex. copro.exemple.fr et demo.exemple.fr) le ramène sur le
+    même nom, là où il est connecté. Sinon : COPRO_FRONTEND_URL, puis l'adresse de la requête (localhost).
+    Google refuse toute adresse qui n'est pas déclarée dans l'application : un nom forgé échoue chez lui.
+    """
+    hote = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    if requete_https(request) and hote:
+        base = f"https://{hote}"
+    else:
+        base = get_settings().frontend_url or str(request.base_url)
     return base.rstrip("/") + "/api/drive/google/retour"
 
 

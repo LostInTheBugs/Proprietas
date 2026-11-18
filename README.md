@@ -395,6 +395,8 @@ L'administrateur de l'instance déclare une fois une application chez Google (gr
    expire au bout de 7 jours : passer l'application **En production** pour un usage réel) ;
 4. **Identifiants → Créer → ID client OAuth → Application Web** ; URI de redirection autorisé :
    `https://<adresse de l'instance>/api/drive/google/retour` (https obligatoire, sauf `http://localhost`) ;
+   une instance servie sous plusieurs noms déclare une adresse par nom (le retour se fait sur le nom
+   utilisé par le syndic) ;
 5. dans le `.env` : `COPRO_GOOGLE_CLIENT_ID`, `COPRO_GOOGLE_CLIENT_SECRET`, et `COPRO_FRONTEND_URL` =
    adresse publique de l'instance (sert à construire l'adresse de retour), puis `docker compose up -d`.
 
