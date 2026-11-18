@@ -415,6 +415,19 @@ Débrancher le drive retire aussi l'autorisation chez Google.
 Une sauvegarde ne vaut que si elle se restaure : essayez la restauration une fois, sur une instance de
 test, avec une vraie archive.
 
+**Exercice de reprise automatisé** (`backend/scripts/exercice_reprise.py`, bibliothèque standard seulement) :
+sur deux instances de test vides (A, le serveur « perdu », et B, le serveur neuf) et un drive WebDAV de
+test, il dépose des documents sur A, branche le drive, y déplace les fichiers, fait une sauvegarde
+chiffrée, détruit A, récupère l'archive sur le drive, l'importe sur B, rebranche le drive et compare
+chaque document à l'original (SHA-256) ; puis il coupe le drive pendant une lecture, un dépôt, une
+sauvegarde et un passage du planificateur, le rallume et vérifie le retour à la normale. Réglages et
+commandes en tête du script. Joué le 19 novembre 2026 sur Proprietas 2026.11.032 avec Nextcloud :
+43 vérifications, aucun écart (compte rendu : [docs/exercice-reprise.md](docs/exercice-reprise.md)).
+
+Quand la **sauvegarde automatique échoue** (drive injoignable, autorisation Google expirée…), les syndics
+de la copropriété reçoivent un e-mail au premier échec, puis un autre quand elle fonctionne de nouveau
+(il faut un serveur d'envoi : celui de la copropriété ou celui de l'instance).
+
 ### Envoi des e-mails : serveur de l'instance
 
 Chaque copropriété peut saisir son serveur d'envoi dans **Réglages → E-mails et relances**. Pour le régler
@@ -432,6 +445,13 @@ Une copropriété **sans** serveur saisi utilise celui de l'instance ; une copro
 garde **ses** réglages, en entier (jamais de mélange). Le syndic voit dans Réglages lequel est utilisé ; le
 mot de passe de l'instance n'est jamais affiché. Sans adresse publique (ni copropriété, ni instance), les
 e-mails ne contiennent pas de lien vers l'application.
+
+### Fuseau horaire
+
+Le conteneur de l'application est à l'heure de Paris (`TZ: ${TZ:-Europe/Paris}` dans `docker-compose.yml`) :
+noms des sauvegardes, journal, heures citées dans les e-mails. Autre fuseau : `TZ=…` dans le `.env`
+(par exemple `TZ=Europe/Luxembourg`). Avant la 2026.11.033, le conteneur était en UTC : les heures déjà
+enregistrées (journal, dates d'envoi) restent une heure en arrière (deux l'été).
 
 ### Connexions à la base PostgreSQL
 
