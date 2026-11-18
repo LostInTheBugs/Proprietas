@@ -16,11 +16,14 @@ from app import models  # noqa: F401 — enregistre tous les modèles sur Base.m
 
 config = context.config
 
-if config.config_file_name is not None:
+# `python -m app.demarrage` règle lui-même le journal (heures, suivi des étapes).
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 # URL unique : celle de l'application (env COPRO_DATABASE_URL / .env)
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# (app.demarrage peut passer une autre URL dans config.attributes, utile aux tests)
+URL = config.attributes.get("url") or get_settings().database_url
+config.set_main_option("sqlalchemy.url", URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -46,6 +49,8 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # Nom visible dans pg_stat_activity : app.demarrage y retrouve la migration pour dire qui la bloque.
+        **({"connect_args": {"application_name": "proprietas-migration"}} if URL.startswith("postgresql") else {}),
     )
 
     with connectable.connect() as connection:
@@ -54,7 +59,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             # SQLite ne supporte pas ALTER/DROP directement :
             # Alembic régénère la table (batch mode).
-            render_as_batch=bool(get_settings().database_url.startswith("sqlite")),
+            render_as_batch=bool(URL.startswith("sqlite")),
         )
 
         with context.begin_transaction():

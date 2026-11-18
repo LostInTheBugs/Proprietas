@@ -454,8 +454,20 @@ pour les migrations). Une connexion coupée par l'hébergeur est détectée et r
 
 Le schéma est géré par **Alembic** (`backend/alembic/`, URL lue depuis `COPRO_DATABASE_URL` —
 aucune duplication dans `alembic.ini`). Les migrations tournent **explicitement**, jamais au
-démarrage de l'application : le `CMD` du conteneur backend exécute `alembic upgrade head` puis
-lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
+démarrage de l'application : le `CMD` du conteneur backend (`python -m app.demarrage`) applique
+les migrations puis lance uvicorn (idempotent ; un seul conteneur backend dans le compose actuel).
+
+Pendant la migration, le conteneur n'est pas muet :
+- `/api/health` répond déjà **200** avec `"phase": "migration"` (les autres adresses : 503 et
+  `Retry-After`) ; `/api/version` ne répond qu'une fois l'application lancée ;
+- le journal (`docker compose logs backend`) est daté : révision actuelle → cible et nombre
+  d'étapes, durée de chaque étape, puis toutes les 15 s « Migration en cours depuis … s ».
+  Sur PostgreSQL, si la migration attend un verrou, la ligne dit **quelle connexion la bloque**
+  (nom d'application, état, durée, requête) : en général l'ancienne version encore branchée sur la
+  même base, ou une transaction restée ouverte (`idle in transaction`). La migration repart dès que
+  cette connexion se termine.
+
+Réglages : `PROPRIETAS_MIGRATION_BATTEMENT_S` (15), `PROPRIETAS_PORT` (8000), `PROPRIETAS_HOTE` (0.0.0.0).
 
 - **Installation neuve** (nouveau serveur / base vide) : rien à faire, le conteneur migre seul.
 - **Base existante créée par l'ancien `create_all` + `_MIGRATIONS`** (cas de l'instance

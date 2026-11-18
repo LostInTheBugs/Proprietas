@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -39,8 +40,11 @@ async def lifespan(app: FastAPI):
     # Stockage des documents vérifié AU DÉMARRAGE (écriture, relecture, suppression d'un
     # fichier témoin) : une mauvaise configuration S3 ou un dossier en lecture seule empêche
     # de démarrer, avec un message clair, au lieu d'échouer au premier document déposé.
+    journal = logging.getLogger("uvicorn.error")
+    debut = time.monotonic()
     from app.core.stockage import stockage_depuis
     stockage_depuis(documents.settings).verifier_ecriture()
+    journal.info("Démarrage : stockage des documents vérifié en %.1f s", time.monotonic() - debut)
     # Les migrations sont gérées par Alembic (`alembic upgrade head`),
     # étape explicite au démarrage du conteneur / en dev — pas ici :
     # un démarrage qui migre est dangereux quand plusieurs conteneurs
@@ -48,6 +52,7 @@ async def lifespan(app: FastAPI):
     _rechiffrer_smtp()
     from app.core.scheduler import start_scheduler, stop_scheduler
     start_scheduler()
+    journal.info("Démarrage : application prête en %.1f s (version %s)", time.monotonic() - debut, VERSION)
     yield
     stop_scheduler()
 
