@@ -23,6 +23,7 @@ class FauxGoogle:
         self.n = itertools.count(1)
         self.fichiers: dict[str, dict] = {}         # id → {name, parent, mimeType, data, trashed}
         self.renouvellements: set[str] = set()
+        self.titulaires: dict[str, str] = {}        # jeton de renouvellement → compte Google qui l'a accordé
         self.acces: dict[str, str] = {}             # jeton d'accès → jeton de renouvellement
         self.revoques: list[str] = []
         self.requetes: list[tuple[str, str]] = []
@@ -114,8 +115,12 @@ class FauxGoogle:
     def _oauth(self, r: httpx.Request) -> httpx.Response:
         champs = {k: v[0] for k, v in parse_qs(r.content.decode()).items()}
         if r.url.path == "/revoke":
-            self.revoques.append(champs.get("token", ""))
-            self.renouvellements.discard(champs.get("token", ""))
+            jeton = champs.get("token", "")
+            self.revoques.append(jeton)
+            # Comme Google : révoquer un jeton retire l'autorisation entière (ce compte, cette application),
+            # donc aussi les autres jetons de renouvellement accordés par le même compte.
+            compte = self.titulaires.get(jeton)
+            self.renouvellements -= {rt for rt, c in self.titulaires.items() if c == compte} | {jeton}
             return httpx.Response(200)
         assert r.url.path == "/token"
         self.jetons_demandes += 1
@@ -126,6 +131,7 @@ class FauxGoogle:
                 return httpx.Response(400, json={"error": "invalid_grant"})
             rt = f"rt-{next(self.n)}"
             self.renouvellements.add(rt)
+            self.titulaires[rt] = self.compte
             return httpx.Response(200, json={"access_token": self._acces(rt), "expires_in": 3599, "refresh_token": rt,
                                              "scope": "openid" if self.portee_refusee else
                                              "https://www.googleapis.com/auth/drive.file", "token_type": "Bearer"})
