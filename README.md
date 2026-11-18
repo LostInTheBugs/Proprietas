@@ -438,7 +438,7 @@ e-mails ne contiennent pas de lien vers l'application.
 Chaque requête rend sa connexion en fin de traitement ; le **pool** garde quelques connexions ouvertes
 pour aller vite. Sur une petite base (offres de développement des hébergeurs, souvent limitées à
 quelques connexions), réglez-le dans le `.env` pour rester sous la limite (avec Docker Compose, le
-conteneur lit le `.env` depuis la 2026.11.032 ; appliquer avec `docker compose up -d`) :
+conteneur lit le `.env` depuis la 2026.11.023 ; appliquer avec `docker compose up -d`) :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
