@@ -288,3 +288,17 @@ def test_sauvegarde_exportee_sans_secret_google(client, db, copro_a, syndic_a, t
     _deposer(client, token_a)
     donnees = json.loads(_ouvrir(_export(client, token_a, COMPLETE)).read("donnees.json"))
     assert "rt-" not in json.dumps(donnees) and "syndic@exemple.fr" not in json.dumps(donnees["coproprietes"])
+
+
+def test_adresse_de_retour_selon_le_nom_utilise(client, db, copro_a, syndic_a, token_a, google):
+    """Instance servie sous deux noms derrière un proxy TLS (cas de la démo et de la production sur le
+    même serveur) : le retour se fait sur le nom par lequel le syndic est venu, pas sur COPRO_FRONTEND_URL."""
+    def retour(entetes):
+        r = client.post("/api/drive/google/connecter", json={"dossier": DOSSIER}, headers={**auth(token_a), **entetes})
+        return parse_qs(urlsplit(r.json()["adresse"]).query)["redirect_uri"][0]
+    assert retour({"X-Forwarded-Proto": "https", "Host": "demo.exemple.fr"}) == \
+        "https://demo.exemple.fr/api/drive/google/retour"
+    assert retour({"X-Forwarded-Proto": "https", "X-Forwarded-Host": "copro.exemple.fr"}) == \
+        "https://copro.exemple.fr/api/drive/google/retour"
+    # Sans https (accès direct, réseau local) : l'adresse publique réglée.
+    assert retour({}) == "https://copro.exemple.fr/api/drive/google/retour"
