@@ -263,20 +263,45 @@ def test_pas_de_changement_de_drive_avec_des_documents(client, db, copro_a, synd
     assert client.put("/api/drive", json={"type": "google", "dossier": DOSSIER}, headers=auth(token_a)).status_code == 422
 
 
-def test_reconnexion_remplace_et_retire_l_ancienne_autorisation(client, db, copro_a, syndic_a, token_a, google):
+def test_reconnexion_du_meme_compte_garde_l_autorisation(client, db, copro_a, syndic_a, token_a, google):
+    """Révoquer l'ancien jeton retirerait chez Google l'autorisation entière du compte, nouveau jeton compris."""
     _brancher(client, token_a, google)
     db.expire_all()
     ancien = db.get(Copropriete, copro_a.id).drive_password
     _brancher(client, token_a, google)
     db.expire_all()
-    assert db.get(Copropriete, copro_a.id).drive_password != ancien and google.revoques == [ancien]
+    assert db.get(Copropriete, copro_a.id).drive_password != ancien and google.revoques == []
+    r = _deposer(client, token_a)
+    assert r.status_code == 200 and r.json()["emplacement"] == "drive", r.text
+    assert client.post("/api/drive/test", json={"type": "google"}, headers=auth(token_a)).json()["ok"] is True
+
+
+def test_reconnexion_avec_un_autre_compte_rend_l_ancien(client, db, copro_a, syndic_a, token_a, google):
+    _brancher(client, token_a, google)
+    db.expire_all()
+    ancien = db.get(Copropriete, copro_a.id).drive_password
+    google.compte = "autre@exemple.fr"
+    _brancher(client, token_a, google)
+    assert google.revoques == [ancien]
+    assert client.post("/api/drive/test", json={"type": "google"}, headers=auth(token_a)).json()["ok"] is True
+
+
+def test_debrancher_garde_le_compte_d_une_autre_copropriete(client, db, copro_a, copro_b, syndic_a, syndic_b,
+                                                             token_a, token_b, google):
+    """Même compte Google pour deux copropriétés (dossiers différents) : débrancher l'une ne coupe pas l'autre."""
+    _brancher(client, token_a, google)
+    _brancher(client, token_b, google, dossier="Proprietas/Autre résidence")
+    assert client.put("/api/drive", json={"type": ""}, headers=auth(token_b)).status_code == 200
+    assert google.revoques == []
+    assert client.post("/api/drive/test", json={"type": "google"}, headers=auth(token_a)).json()["ok"] is True
 
 
 def test_dossier_partage_refuse(client, db, copro_a, copro_b, syndic_a, syndic_b, token_a, token_b, google):
     _brancher(client, token_a, google)
     res = _retour(client, _connecter(client, token_b, "Proprietas"))
     assert "autre copropriété" in res["drive_erreur"]
-    assert len(google.revoques) == 1                    # l'autorisation qui ne sert pas est rendue
+    assert google.revoques == []                        # le compte sert à A : le rendre couperait A
+    assert client.post("/api/drive/test", json={"type": "google"}, headers=auth(token_a)).json()["ok"] is True
     # Même dossier, mais un autre compte Google : permis.
     google.compte = "autre@exemple.fr"
     assert "drive_ok" in _retour(client, _connecter(client, token_b, DOSSIER))
