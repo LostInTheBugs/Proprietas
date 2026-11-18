@@ -128,7 +128,7 @@ class StockageGoogleDrive:
         try:
             r = client.request(methode, adresse, headers=entetes, **kw)
         except httpx.HTTPError as e:
-            raise StockageIndisponible(f"Google Drive injoignable ({type(e).__name__}).") from e
+            raise StockageIndisponible(f"Google Drive injoignable ({type(e).__name__}) : réessayez plus tard ; les fichiers déjà rangés ne sont pas perdus.") from e
         self._controler(r, attendus)
         return r
 
@@ -253,7 +253,7 @@ class StockageGoogleDrive:
                         self._controler(r, (200,))
                         yield from r.iter_bytes(BLOC)
                 except httpx.HTTPError as e:
-                    raise StockageIndisponible(f"Google Drive injoignable ({type(e).__name__}).") from e
+                    raise StockageIndisponible(f"Google Drive injoignable ({type(e).__name__}) : réessayez plus tard ; les fichiers déjà rangés ne sont pas perdus.") from e
         return blocs()
 
     def supprimer(self, nom: str) -> None:
