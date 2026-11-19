@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.035 — 2026-11-19
+
+- Drive : dépôts en attente activés par défaut, 50 Mo de place réservée (COPRO_DRIVE_ATTENTE_MO, réglable dans le .env ; 0 les désactive).
+
 ## 2026.11.034 — 2026-11-19
 
 - Drive : option d'instance COPRO_DRIVE_ATTENTE_MO (Mo, 0 = désactivée par défaut) : un document déposé pendant une panne du drive est gardé sur le serveur (« En attente du drive ») et rangé sur le drive dès son retour (toutes les 5 minutes, ou bouton « Ranger maintenant »). Au-delà de la place fixée, le dépôt est refusé comme avant.
