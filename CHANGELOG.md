@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.039 — 2026-11-19
+
+- Connexions (Réglages → Sécurité) : par défaut, la dernière connexion et le dernier échec de chaque compte ; historique complet activable (les copropriétés existantes l'ont activé). Blocage activable après des échecs d'affilée : 5 → 15 min, 10 → jusqu'au déblocage (réglable), comptes avec double authentification exemptés sauf réglage contraire. Déblocage par le syndic, l'administrateur de l'instance (Réglages → Serveur) ou `python -m app.cli.debloquer`. Migration c9d0e1f2a3b4.
+
 ## 2026.11.038 — 2026-11-19
 
 - AG : l'e-mail d'information contient un lien personnel « J'ai bien reçu ce message » ; l'écran de l'AG montre qui a confirmé (ce n'est pas un accusé de réception de recommandé ; pas d'image de suivi). La mention sur la convocation officielle tient en une ligne, en bas du message. Migration b8c9d0e1f2a3.
