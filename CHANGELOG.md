@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.11.033 — 2026-11-19
+
+- Sauvegarde automatique sur le drive en échec : les syndics sont prévenus par e-mail (au premier échec, puis quand elle refonctionne) ; Google Drive : autorisation expirée expliquée.
+- Heure : le conteneur est à l'heure de Paris (TZ=${TZ:-Europe/Paris}, réglable dans le .env) ; il était en UTC.
+- Exercice de reprise (perte du serveur, restauration depuis le drive, panne du drive) joué sur 2026.11.032 : 43 vérifications, aucun écart ; script backend/scripts/exercice_reprise.py, compte rendu docs/exercice-reprise.md.
+- Google Drive vérifié sur le vrai service (18/11/2026).
+
 ## 2026.11.032 — 2026-11-18
 
 - Démarrage : pendant la migration de la base, /api/health répond déjà (phase « migration ») et le journal est daté (étapes et durées, battement toutes les 15 s, connexion qui bloque la migration sur PostgreSQL) — issue #79.
