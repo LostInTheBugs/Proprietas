@@ -57,7 +57,8 @@ disparaît à la première sauvegarde réussie.
 
 L'exercice a montré qu'un document déposé pendant la panne était refusé. Une option d'instance permet
 désormais de le garder sur le serveur et de le ranger sur le drive à son retour : `COPRO_DRIVE_ATTENTE_MO`,
-place maximale en Mo. Elle est désactivée par défaut, pour les serveurs avec peu d'espace (voir le README).
+place maximale en Mo. Désactivée par défaut en 2026.11.034, elle est réglée sur 50 Mo depuis la 2026.11.035 ;
+`0` la désactive, pour les serveurs avec peu d'espace (voir le README).
 Le script de l'exercice vérifie les deux comportements : dépôt refusé, ou dépôt en attente lisible puis rangé.
 
 ## Google Drive
