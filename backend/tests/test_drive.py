@@ -92,6 +92,7 @@ def test_brancher_le_drive(client, db, copro_a, syndic_a, token_a, serveur):
                      "mot_de_passe_defini": False, "documents_sur_le_drive": 0,
                      "documents_sur_le_serveur": 0,
                      "dossier_propose": drive.dossier_propose(copro_a.nom),
+                     "en_attente": {"nombre": 0, "octets": 0, "plafond_mo": 0},
                      "sauvegarde": {"auto": False, "mot_de_passe_defini": False, "derniere": None, "prochaine": None,
                                     "erreur": "", "gardees": 8}}
     etat = _brancher(client, token_a)
