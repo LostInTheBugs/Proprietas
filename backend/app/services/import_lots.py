@@ -209,10 +209,21 @@ def importer(db: Session, copro_id: int, nom: str, contenu: bytes, simuler: bool
         lus.append({"ligne": n, "numero": numero, "tantiemes": tant, "designation": val("designation").strip(),
                     "type": type_, "surface": surface, "proprietaire": proprio, "cles": par_cle,
                     "existe": numero in existants})
+    cles_existantes = {c.nom: c for c in db.query(CleRepartition).filter(CleRepartition.copropriete_id == copro_id)}
+    # Chaque clé du fichier doit garder au moins un lot avec des millièmes (ceux du fichier, ou pour une clé
+    # existante, ceux des lots absents du fichier) : vérifié ici pour que « Vérifier » le signale aussi.
+    numeros = {l["numero"] for l in lus}
+    for nom_cle in cles_col.values():
+        if any(l["cles"][nom_cle] > 0 for l in lus):
+            continue
+        cle = cles_existantes.get(nom_cle)
+        if cle is None or not any(cl.tantiemes > 0 and cl.lot_id in {x.id for x in existants.values()
+                                                                    if x.numero not in numeros}
+                                  for cl in cle.lots):
+            erreurs.append(f"Ligne 1 : la clé « {nom_cle} » n'aurait aucun lot avec des millièmes.")
     if erreurs:
         return _refus(erreurs, simuler)
 
-    cles_existantes = {c.nom: c for c in db.query(CleRepartition).filter(CleRepartition.copropriete_id == copro_id)}
     resume = {"erreurs": [], "crees": [l["numero"] for l in lus if not l["existe"]],
               "modifies": [l["numero"] for l in lus if l["existe"]],
               "cles_creees": [c for c in cles_col.values() if c not in cles_existantes],
@@ -249,11 +260,6 @@ def importer(db: Session, copro_id: int, nom: str, contenu: bytes, simuler: bool
             if l["cles"][nom_cle] > 0:
                 db.add(CleLot(cle_id=cle.id, lot_id=lot.id, tantiemes=l["cles"][nom_cle]))
     db.flush()
-    vides = [c.nom for c in db.query(CleRepartition).filter(CleRepartition.copropriete_id == copro_id)
-             if c.nom in cles_col.values() and not db.query(CleLot).filter(CleLot.cle_id == c.id, CleLot.tantiemes > 0).first()]
-    if vides:
-        db.rollback()
-        raise HTTPException(422, " ; ".join(f"La clé « {v} » n'aurait aucun lot avec des millièmes." for v in vides))
     return resume
 
 

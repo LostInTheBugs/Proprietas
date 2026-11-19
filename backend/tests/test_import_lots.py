@@ -123,3 +123,11 @@ def test_formats_et_droits(client, db, copro_a, syndic_a, token_a):
     texte = "\n".join(";".join(c if i != 5 else "" for i, c in enumerate(l.split(";")))
                       for l in modele.content.decode("utf-8-sig").splitlines())
     assert _envoyer(client, token_a, "modele.csv", texte.encode(), True).json()["erreurs"] == []
+
+
+def test_cle_sans_aucun_millieme_signalee_des_la_verification(client, db, copro_a, syndic_a, token_a):
+    texte = "numero;tantiemes;clé : Ascenseur\n1;600;\n2;400;0\n"
+    r = _envoyer(client, token_a, "lots.csv", texte.encode(), True)
+    assert r.json()["erreurs"] == ["Ligne 1 : la clé « Ascenseur » n'aurait aucun lot avec des millièmes."]
+    assert _envoyer(client, token_a, "lots.csv", texte.encode(), False).status_code == 422
+    assert db.query(Lot).count() == 0
