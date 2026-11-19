@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.core.money import D
 from app.core.database import get_db
@@ -151,3 +152,26 @@ def lots_soldes(db: Session = Depends(get_db), user: User = Depends(get_current_
         ))
     return result
 
+# ---------- Import depuis un tableur (services/import_lots.py) ----------
+@router.post("/lots/import")
+async def importer_lots(request: Request, fichier: UploadFile = File(...), simuler: bool = Form(True),
+                        db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """CSV, Excel (.xlsx) ou LibreOffice (.ods) : lots créés ou mis à jour, propriétaires, clés de répartition."""
+    from app.core import audit
+    from app.services import import_lots
+    copro = get_or_create_copro(db, user)
+    contenu = await fichier.read(import_lots.MAX_OCTETS + 1)
+    resume = import_lots.importer(db, copro.id, fichier.filename or "", contenu, simuler)
+    if not simuler:
+        audit.enregistrer(db, "lots_importes", user=user, copro_id=copro.id, request=request,
+                          detail=f"{fichier.filename} : {len(resume['crees'])} lot(s) créé(s), "
+                                 f"{len(resume['modifies'])} mis à jour")
+        db.commit()
+    return resume
+
+
+@router.get("/lots/import/modele.csv")
+def modele_import_lots(user: User = Depends(require_syndic)):
+    from app.services import import_lots
+    return Response(import_lots.modele_csv().encode("utf-8-sig"), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="modele-import-lots.csv"'})

@@ -66,6 +66,8 @@ a = Analysis(
         'email_validator', 'multipart',
         'bcrypt', 'jwt',
         'sqlalchemy.dialects.sqlite',
+        # import des lots depuis Excel (importé à la demande, dans la route)
+        'app.services.import_lots', 'openpyxl',
     ],
     hookspath=[],
     hooksconfig={},

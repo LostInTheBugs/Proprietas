@@ -128,3 +128,16 @@ export async function uploadDocument(categorie: string, libelle: string, file: F
   }
   return res.json();
 }
+
+/** Envoi d'un formulaire avec fichier (multipart), même authentification que les autres appels. */
+export async function envoyerFormulaire<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const legacy = localStorage.getItem(TOKEN_KEY);
+  if (legacy) headers["Authorization"] = `Bearer ${legacy}`;
+  const res = await fetch("/api" + path, { method: "POST", headers, body: form, credentials: "include" });
+  if (!res.ok) {
+    const detail = await res.json().then((j) => j?.detail).catch(() => null);
+    throw new Error(typeof detail === "string" ? detail : `Erreur ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}

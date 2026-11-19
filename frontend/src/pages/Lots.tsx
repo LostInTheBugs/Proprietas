@@ -4,6 +4,7 @@ import { useUser } from "../auth";
 import type { Lot, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import { ClesCard } from "../components/Cles";
+import { ImportLotsModal } from "../components/ImportLots";
 
 export default function Lots() {
   const { user } = useUser();
@@ -14,6 +15,7 @@ export default function Lots() {
   const [comptes, setComptes] = useState<User[]>([]);
   const [modal, setModal] = useState<null | { item?: Lot }>(null);
   const [error, setError] = useState("");
+  const [importer, setImporter] = useState(false);
 
   async function load() {
     const l = await api.get<Lot[]>("/lots");
@@ -54,7 +56,12 @@ export default function Lots() {
             )}
           </p>
         </div>
-        {isSyndic && <Button onClick={() => setModal({})}>+ Ajouter un lot</Button>}
+        {isSyndic && (
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setImporter(true)}>Importer un tableur</Button>
+            <Button onClick={() => setModal({})}>+ Ajouter un lot</Button>
+          </div>
+        )}
       </div>
 
       <Card title="Lots">
@@ -115,7 +122,8 @@ export default function Lots() {
         </p>
       </Card>
 
-      <ClesCard lots={lots} isSyndic={isSyndic} onError={setError} />
+      <ClesCard key={lots.map((l) => l.id).join(",")} lots={lots} isSyndic={isSyndic} onError={setError} />
+      {importer && <ImportLotsModal onClose={() => setImporter(false)} onDone={() => { load(); }} />}
 
       {modal && (
         <LotModal
