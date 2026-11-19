@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.036 — 2026-11-19
+
+- RGPD : l'ancienne table « personnes » (écran « Lots & occupants » d'avant le modèle « zéro fiche ») est supprimée avec ses données, qui ne servaient plus (noms, e-mails, téléphones, adresses). Migration a7b8c9d0e1f2.
+- README : feuille de route (charges spéciales et clés de répartition, OneDrive, envoi des recommandés).
+
 ## 2026.11.035 — 2026-11-19
 
 - Drive : dépôts en attente activés par défaut, 50 Mo de place réservée (COPRO_DRIVE_ATTENTE_MO, réglable dans le .env ; 0 les désactive).
