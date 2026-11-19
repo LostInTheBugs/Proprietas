@@ -88,7 +88,11 @@ def test_noms_lisibles_et_surs():
 # ---------------------------------------------------------------- réglages
 def test_brancher_le_drive(client, db, copro_a, syndic_a, token_a, serveur):
     avant = client.get("/api/drive", headers=auth(token_a)).json()
-    assert avant == {"autorise": True, "google_disponible": False, "type": "", "url": "", "utilisateur": "", "dossier": "",
+    assert avant["google"] == {"source": "", "instance": False, "client_id": "", "secret_defini": False,
+                               "retour": avant["google"]["retour"]}
+    assert avant["google"]["retour"].endswith("/api/drive/google/retour")
+    del avant["google"]
+    assert avant == {"autorise": True, "type": "", "url": "", "utilisateur": "", "dossier": "",
                      "mot_de_passe_defini": False, "documents_sur_le_drive": 0,
                      "documents_sur_le_serveur": 0,
                      "dossier_propose": drive.dossier_propose(copro_a.nom),

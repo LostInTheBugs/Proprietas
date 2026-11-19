@@ -32,6 +32,9 @@ class FauxGoogle:
         self.panne = False
         self.plein = False
         self.portee_refusee = False
+        # Applications Google déclarées (identifiant client → code secret) et identifiants utilisés.
+        self.applications = {"appli.apps.googleusercontent.com": "secret-appli"}
+        self.clients: list[str] = []
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._repondre)
@@ -124,7 +127,8 @@ class FauxGoogle:
             return httpx.Response(200)
         assert r.url.path == "/token"
         self.jetons_demandes += 1
-        if champs.get("client_secret") != "secret-appli":
+        self.clients.append(champs.get("client_id", ""))
+        if self.applications.get(champs.get("client_id", "")) != champs.get("client_secret"):
             return httpx.Response(401, json={"error": "invalid_client"})
         if champs.get("grant_type") == "authorization_code":
             if champs.get("code") != CODE:

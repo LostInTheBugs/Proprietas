@@ -4,7 +4,8 @@ Choix de Fred (17/11/2026) : construire d'abord sur un faux Google, essai réel 
 sur vm-test) ; Google Drive avant OneDrive.
 
 Règles :
-- proposé seulement si l'instance a déclaré son application Google (COPRO_GOOGLE_CLIENT_ID / _SECRET) ;
+- application Google : celle de la copropriété (Réglages → Drive, depuis la 2026.11.040,
+  tests/test_drive_google_application.py), sinon celle de l'instance (COPRO_GOOGLE_CLIENT_ID / _SECRET) ;
 - le syndic choisit le dossier, puis « Se connecter à Google Drive » : page de Google (portée drive.file,
   accès hors connexion), retour sur /api/drive/google/retour avec un état signé (15 min) ;
 - au retour : échange du code, essai d'écriture, compte Google relevé ; le drive n'est branché que si
@@ -73,14 +74,14 @@ def _brancher(client, token, google, dossier=DOSSIER):
 
 
 # ---------------------------------------------------------------- disponibilité, connexion
-def test_pas_propose_sans_application(client, db, copro_a, syndic_a, token_a):
-    assert client.get("/api/drive", headers=auth(token_a)).json()["google_disponible"] is False
+def test_sans_application_il_faut_ses_codes(client, db, copro_a, syndic_a, token_a):
+    assert client.get("/api/drive", headers=auth(token_a)).json()["google"]["source"] == ""
     r = client.post("/api/drive/google/connecter", json={"dossier": DOSSIER}, headers=auth(token_a))
-    assert r.status_code == 409 and "README" in r.json()["detail"]
+    assert r.status_code == 422 and "identifiant client et le code secret" in r.json()["detail"]
 
 
 def test_adresse_de_connexion(client, db, copro_a, syndic_a, token_a, google):
-    assert client.get("/api/drive", headers=auth(token_a)).json()["google_disponible"] is True
+    assert client.get("/api/drive", headers=auth(token_a)).json()["google"]["source"] == "instance"
     adresse = _connecter(client, token_a)
     u = urlsplit(adresse)
     p = {k: v[0] for k, v in parse_qs(u.query).items()}
@@ -168,7 +169,8 @@ def test_apostrophes_dans_les_noms(google, monkeypatch):
     assert drive_google._q("l'été \\ x") == "'l\\'été \\\\ x'"
     g = google
     g.renouvellements.add("rt-x")
-    st = drive_google.StockageGoogleDrive("c", "secret-appli", "rt-x", "Proprietas/L'Orée du bois")
+    st = drive_google.StockageGoogleDrive("appli.apps.googleusercontent.com", "secret-appli", "rt-x",
+                                          "Proprietas/L'Orée du bois")
     import io
     st.enregistrer("Autres/d'abord l'été.pdf", io.BytesIO(b"x"))
     assert st.taille("Autres/d'abord l'été.pdf") == 1 and st.taille("Autres/dabord lete.pdf") is None
@@ -238,7 +240,7 @@ def test_application_retiree_de_l_instance(client, db, copro_a, syndic_a, token_
     doc = _deposer(client, token_a).json()
     monkeypatch.setattr(get_settings(), "google_client_secret", "")
     r = client.get(f"/api/documents/{doc['id']}/download", headers=auth(token_a))
-    assert r.status_code == 503 and "COPRO_GOOGLE_CLIENT_ID" in r.json()["detail"]
+    assert r.status_code == 503 and "Réglages → Drive de la copropriété" in r.json()["detail"]
 
 
 # ---------------------------------------------------------------- débrancher, changer
