@@ -183,6 +183,23 @@ export interface Mouvement {
   avance_par_id?: number | null;
   avance_par_nom?: string;
   hors_banque?: boolean;        // n'est pas passé par le compte bancaire de la copropriété
+  // Facture à payer : pas encore réglée (échéance facultative) ; réglée plus tard : date du paiement
+  a_payer?: boolean;
+  echeance?: string | null;
+  paye_le?: string | null;
+}
+
+export interface FactureAPayer {
+  id: number;
+  date: string;
+  libelle: string;
+  categorie: string;
+  montant: number;
+  echeance: string | null;
+  en_retard: boolean;
+  exercice_id: number;
+  document_id: number | null;
+  contrat_id: number | null;
 }
 
 export interface AvancePersonne {

@@ -16,14 +16,14 @@ from app.services.country_rules import repartir_par_tantiemes
 from app.services.regime import regime_copro
 from app.core.money import D, arrondi, somme
 from app.schemas import (
-    AvancePersonneOut,
+    AvancePersonneOut, FactureAPayerOut, PayerIn,
     MouvementsGroupeIn,
     ExerciceIn, ExerciceOut, BudgetLineIn, BudgetLineOut,
     AppelIn, AppelOut, AppelLotOut, MouvementIn, MouvementOut, RecapOut, EtatDateLot,
     RegularisationIn, RegularisationOut, ReclasserIn, EnsembleSolde,
 )
 from app.core import audit
-from app.services import avances, regularisation, reprise
+from app.services import avances, factures, regularisation, reprise
 from app.services.soldes import totaux_lot
 from app.services import ensembles
 
@@ -285,6 +285,7 @@ def _controler_mouvement(db: Session, copro, data: MouvementIn, mouvement=None) 
     if data.document_id is not None and not db.query(Document).filter(
             Document.id == data.document_id, Document.copropriete_id == copro.id).first():
         raise HTTPException(422, "Ce document n'appartient pas à la copropriété.")
+    factures.controler(data)
     return avances.controler(db, copro, data, mouvement)
 
 
@@ -301,7 +302,8 @@ def create_mouvement(exercice_id: int, data: MouvementIn, db: Session = Depends(
     ex = get_exercice(db, exercice_id, copro)
     hors_banque = _controler_mouvement(db, copro, data)
     m = Mouvement(copropriete_id=ex.copropriete_id, exercice_id=ex.id, hors_banque=hors_banque,
-                  **data.model_dump(exclude={"exercice_id"}))
+                  **data.model_dump(exclude={"exercice_id", "echeance"}),
+                  echeance=data.echeance if data.a_payer else None)
     db.add(m)
     db.commit()
     db.refresh(m)
@@ -330,6 +332,10 @@ def update_mouvement(mouvement_id: int, data: MouvementIn, request: Request, db:
     for champ, valeur in data.model_dump(exclude={"exercice_id"}).items():
         setattr(m, champ, valeur)
     m.hors_banque = hors_banque
+    if not m.a_payer:
+        m.echeance = None
+    elif m.paye_le is not None:            # remise « à payer » : le paiement noté n'a pas eu lieu
+        m.paye_le = None
     audit.enregistrer(db, "mouvement_modifie", user=user, copro_id=copro.id, request=request,
                       detail=f"Mouvement #{m.id} : {avant} → {_resume_mouvement(m)}{deplacement}")
     db.commit()
@@ -392,9 +398,9 @@ def modifier_mouvements_groupe(data: MouvementsGroupeIn, request: Request, db: S
     mouvements = db.query(Mouvement).filter(Mouvement.id.in_(ids), Mouvement.copropriete_id == copro.id).all()
     if len(mouvements) != len(ids):
         raise HTTPException(422, "Certains mouvements n'appartiennent pas à la copropriété.")
-    if champs & {"type", "categorie"} and any(m.avance_par_id is not None for m in mouvements):
-        raise HTTPException(422, "Avances, remboursements et déductions : leur type et leur catégorie se "
-                                 "modifient un par un.")
+    if champs & {"type", "categorie"} and any(m.avance_par_id is not None or m.a_payer for m in mouvements):
+        raise HTTPException(422, "Avances, remboursements, déductions et factures à payer : leur type et leur "
+                                 "catégorie se modifient un par un.")
     if "type" in champs and data.type not in TYPES_MOUVEMENT:
         raise HTTPException(422, "Type de mouvement inconnu (encaissement ou dépense).")
     if "categorie" in champs and data.categorie not in CATEGORIES_MOUVEMENT:   # « avance » : un par un
@@ -493,7 +499,8 @@ def recap(db: Session = Depends(get_db), user: User = Depends(get_current_user))
         # Ce qui est réellement entré et sorti de la banque sur l'exercice : sans les avances payées par une
         # personne ni leurs déductions, avec les remboursements (services/avances.py).
         solde_caisse=arrondi(somme(m.montant for m in mouvements if m.type == "encaissement" and not m.hors_banque)
-                             - somme(m.montant for m in mouvements if m.type == "depense" and not m.hors_banque)),
+                             - somme(m.montant for m in mouvements
+                                     if m.type == "depense" and not m.hors_banque and not m.a_payer)),
         fonds_travaux_encaisse=arrondi(ft_encaisse),
         **{f"tresorerie_{k}": v for k, v in reprise.tresorerie(db, copro.id).items()},
         appels_en_cours=appels_en_cours,
@@ -515,3 +522,21 @@ def lister_avances(db: Session = Depends(get_db), user: User = Depends(require_s
 def mes_avances(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Les avances du compte connecté, dans la copropriété active (liste vide s'il n'en a pas)."""
     return avances.etat(db, get_or_create_copro(db, user).id, user.id)
+
+
+# ---------- Factures à payer (services/factures.py) ----------
+@router.get("/factures-a-payer", response_model=list[FactureAPayerOut])
+def lister_factures_a_payer(db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    return factures.liste(db, get_or_create_copro(db, user).id)
+
+
+@router.post("/mouvements/{mouvement_id}/payer", response_model=MouvementOut)
+def payer_facture(mouvement_id: int, data: PayerIn, request: Request, db: Session = Depends(get_db),
+                  user: User = Depends(require_syndic)):
+    """Marque payée une facture à payer : par la copropriété à la date donnée, ou par une personne (avance)."""
+    copro = get_or_create_copro(db, user)
+    m = get_owned(db, Mouvement, mouvement_id, copro, label="Mouvement")
+    factures.payer(db, copro, m, data.date, data.avance_par_id, user, request)
+    db.commit()
+    db.refresh(m)
+    return m

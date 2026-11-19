@@ -222,6 +222,10 @@ def export_compte_gestion(request: Request, exercice_id: int | None = None, db: 
                    "remboursement": f"remboursement d'avance à {m.avance_par_nom}",
                    "deduction": f"{cat}, avance de {m.avance_par_nom} déduite (hors banque)"}[
                 avances.nature(m.type, m.categorie, m.avance_par_id)]
+        if m.a_payer:
+            cat += ", à payer" + (f" (échéance le {m.echeance:%d/%m/%Y})" if m.echeance else "")
+        elif m.paye_le:
+            cat += f", payée le {m.paye_le:%d/%m/%Y}"
         if m.type == "depense":
             ligne(m.date.strftime("%d/%m/%Y"), m.libelle, f"lot {lot.numero}" if lot else "copro",
                   f"dépense {cat}", m.montant, 0)

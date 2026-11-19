@@ -12,6 +12,15 @@ const libCategorie = (c: string) => (c === "avance" ? "Remboursement d'avance" :
 
 /** Avance, remboursement ou déduction : à qui, et si rien n'est passé par la banque. */
 function LigneAvance({ m }: { m: Mouvement }) {
+  if (m.a_payer) {
+    const retard = !!m.echeance && m.echeance < new Date().toISOString().slice(0, 10);
+    return (
+      <span className={`mt-0.5 block text-xs ${retard ? "font-medium text-red-700" : "text-amber-800"}`}>
+        À payer{m.echeance ? ` — échéance le ${fmtDate(m.echeance)}` : ""}{retard ? " (en retard)" : ""}
+      </span>
+    );
+  }
+  if (m.paye_le && !m.avance_par_id) return <span className="mt-0.5 block text-xs text-slate-500">Payée le {fmtDate(m.paye_le)}</span>;
   if (!m.avance_par_id) return null;
   const texte = m.type === "encaissement" ? `Avance de ${m.avance_par_nom} déduite de ses charges`
     : m.categorie === "avance" ? `Remboursement de l'avance de ${m.avance_par_nom}` : `Payée par ${m.avance_par_nom} (avance)`;

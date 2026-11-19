@@ -577,11 +577,15 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
   const [categorie, setCategorie] = useState(initial?.categorie ?? "charges");
   const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
   const [lotId, setLotId] = useState(initial?.lot_id != null ? String(initial.lot_id) : "");
-  // Avance : dépense payée de sa poche par une personne (compte de la copropriété).
-  const [avanceParId, setAvanceParId] = useState(initial?.avance_par_id != null ? String(initial.avance_par_id) : "");
+  // Paiement d'une dépense : par le compte de la copropriété (""), pas encore réglée (« a_payer »), ou de sa
+  // poche par une personne (son id : avance).
+  const [avanceParId, setAvanceParId] = useState(
+    initial?.a_payer ? "a_payer" : initial?.avance_par_id != null ? String(initial.avance_par_id) : "");
+  const [echeance, setEcheance] = useState(initial?.echeance ?? "");
+  const aPayer = type === "depense" && avanceParId === "a_payer";
   // Remboursement ou déduction d'une avance (créés depuis « Avances à régler ») : la personne ne se change pas ici.
   const reglementAvance = !!initial?.avance_par_id && (initial.type === "encaissement" || initial.categorie === "avance");
-  const avance = type === "depense" && categorie !== "avance" && avanceParId !== "";
+  const avance = type === "depense" && categorie !== "avance" && avanceParId !== "" && !aPayer;
   async function save() {
     try {
       // Nouveau fichier joint : déposé dans Documents (catégorie facture), puis rattaché.
@@ -597,7 +601,9 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
         exercice_id: Number(exerciceId),
         contrat_id: contratId === "" ? null : Number(contratId),
         document_id: docId,
-        avance_par_id: (type === "depense" && avanceParId !== "") || reglementAvance ? Number(avanceParId) : null,
+        avance_par_id: (type === "depense" && avanceParId !== "" && !aPayer) || reglementAvance ? Number(avanceParId) : null,
+        a_payer: aPayer,
+        echeance: aPayer && echeance ? echeance : null,
       };
       if (initial) await api.put(`/mouvements/${initial.id}`, corps);
       else await api.post(`/exercices/${exerciceId}/mouvements`, corps);
@@ -650,10 +656,21 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
           </p>
         ) : type === "depense" && (
           <>
-            <Select label="Payée par" value={avanceParId} onChange={(e) => setAvanceParId(e.target.value)}>
-              <option value="">Le compte de la copropriété</option>
+            <Select label="Paiement" value={avanceParId} onChange={(e) => setAvanceParId(e.target.value)}>
+              <option value="">Payée par le compte de la copropriété</option>
+              <option value="a_payer">À payer (pas encore réglée)</option>
               {comptes.map((c) => <option key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ") || c.email} (avance)</option>)}
             </Select>
+            {aPayer && (
+              <>
+                <Input label="Échéance (facultatif)" type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                  La facture compte dans les charges dès maintenant, mais pas dans la banque tant qu'elle n'est pas réglée.
+                  Elle apparaît sur le tableau de bord (« Factures à payer ») et les syndics reçoivent un e-mail 7 jours
+                  avant l'échéance, puis si elle est dépassée.
+                </p>
+              </>
+            )}
             {avance && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
                 Avance : la dépense compte dans les charges, mais ne sort pas de la banque ; la copropriété doit cette somme

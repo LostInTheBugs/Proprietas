@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, Numeric, String, ForeignKey, Date, text
+from sqlalchemy import Boolean, Column, Integer, Numeric, String, ForeignKey, Date, DateTime, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -26,6 +26,14 @@ class Mouvement(Base):
     # compte bancaire de la copropriété (dépense payée par une personne, déduction).
     avance_par_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     hors_banque = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # Factures à payer (services/factures.py) : dépense saisie à la date de la facture (charge de
+    # l'exercice), pas encore réglée. Réglée plus tard : `paye_le` est la date du paiement, celle que
+    # retient la banque. Rappels aux syndics 7 jours avant l'échéance et après elle.
+    a_payer = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    echeance = Column(Date, nullable=True)
+    paye_le = Column(Date, nullable=True)
+    rappel_avant_le = Column(DateTime, nullable=True)
+    rappel_retard_le = Column(DateTime, nullable=True)
 
     copropriete = relationship("Copropriete")
     exercice = relationship("Exercice", back_populates="mouvements")
