@@ -20,6 +20,7 @@ from app.core.scoping import get_owned
 from app.core.stockage import NomInvalide, StockageIndisponible, StockageLocal, stockage_depuis
 from app.routes.copro import get_or_create_copro
 from app.schemas import DocumentOut
+from app.services import drive_fichiers
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 settings = get_settings()
@@ -61,11 +62,19 @@ def stockage_du_document(copro, doc):
     return _stockage()
 
 
-def _indisponible(e: StockageIndisponible, sur_le_drive: bool = False) -> HTTPException:
+def _peut_attendre(db: Session, taille: int) -> bool:
+    """Dépôt mettable en attente du drive : option active et plafond de l'instance respecté."""
+    plafond = settings.drive_attente_mo * 1024 * 1024
+    return plafond > 0 and drive_fichiers.octets_en_attente(db) + taille <= plafond
+
+
+def _indisponible(e: StockageIndisponible, sur_le_drive: bool = False, attente: bool = False) -> HTTPException:
     logging.getLogger("uvicorn.error").error("%s", e)
     if sur_le_drive:
         # Le message vient de core/drive.py : il ne contient ni mot de passe ni adresse interne.
-        return HTTPException(503, f"Drive de la copropriété indisponible : {e}")
+        suite = (" Le serveur ne peut pas garder ce document en attente (place réservée pleine) : redéposez-le plus tard."
+                 if attente and settings.drive_attente_mo > 0 else "")
+        return HTTPException(503, f"Drive de la copropriété indisponible : {e}{suite}")
     return HTTPException(503, "Stockage des documents indisponible, réessayez plus tard")
 
 
@@ -123,14 +132,24 @@ async def upload_document(
             else:
                 st, nom_stocke = _stockage(), f"{uuid.uuid4().hex}{ext}"
             st.enregistrer(nom_stocke, tmp)
+            emplacement = "drive" if sur_le_drive else ""
         except StockageIndisponible as e:
-            raise _indisponible(e, sur_le_drive) from e
+            if not (sur_le_drive and _peut_attendre(db, taille)):
+                raise _indisponible(e, sur_le_drive, attente=sur_le_drive) from e
+            # Drive injoignable : le fichier est gardé sur le serveur et rangé sur le drive dès son retour.
+            logging.getLogger("uvicorn.error").warning("Dépôt mis en attente du drive : %s", e)
+            tmp.seek(0)
+            nom_stocke, emplacement = f"{uuid.uuid4().hex}{ext}", drive_fichiers.ATTENTE
+            try:
+                _stockage().enregistrer(nom_stocke, tmp)
+            except StockageIndisponible as e2:
+                raise _indisponible(e2) from e2
     doc = Document(
         copropriete_id=copro.id,
         categorie=categorie,
         libelle=libelle,
         fichier=nom_stocke,
-        emplacement="drive" if sur_le_drive else "",
+        emplacement=emplacement,
         taille=taille,
         empreinte=empreinte.hexdigest(),
         date_ajout=date.today(),

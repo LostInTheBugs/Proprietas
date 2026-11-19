@@ -4,7 +4,9 @@
   LOTS : un appel traite quelques fichiers puis rend la main, l'écran recommence tant qu'il en reste ;
 - vérifier le drive : fichiers attendus introuvables, fichiers du drive rattachés à aucun document ;
 - retrouver un fichier renommé ou déplacé sur le drive, par son contenu (taille + empreinte SHA-256
-  relevées au dépôt ou au déplacement), ou le relier à la main.
+  relevées au dépôt ou au déplacement), ou le relier à la main ;
+- ranger sur le drive les dépôts « en attente » (drive injoignable au moment du dépôt, option
+  COPRO_DRIVE_ATTENTE_MO) : le planificateur réessaie toutes les 5 minutes.
 
 Ordre d'un déplacement : copie → contrôle de la taille → fiche mise à jour (commit) → suppression de
 l'original. Une panne au milieu ne perd jamais un fichier : au pire il reste un double.
@@ -12,11 +14,13 @@ l'original. Une panne au milieu ne perd jamais un fichier : au pire il reste un 
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import tempfile
 import time
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core import drive
@@ -26,6 +30,8 @@ from app.models.document import Document
 LOT_FICHIERS = 10            # fichiers par appel
 LOT_SECONDES = 40            # durée visée d'un appel
 RETROUVER_OCTETS = 200 * 1024 * 1024     # volume relu au plus par recherche
+ATTENTE = "attente"          # documents.emplacement : sur le serveur, en attente du drive
+log = logging.getLogger("uvicorn.error")
 
 
 def _copier(source, nom: str, tmp) -> tuple[int, str]:
@@ -86,6 +92,50 @@ def deplacer_vers_drive(db: Session, copro, instance, st_drive) -> dict:
         return st_drive.nom_libre(drive.DOSSIERS.get(doc.categorie, drive.DOSSIERS["autre"]),
                                   drive.nom_lisible(doc.date_ajout, doc.libelle, ext))
     return _transferer(db, copro, instance, st_drive, "", "drive", nom)
+
+
+def ranger_en_attente(db: Session, copro, instance, st_drive) -> dict:
+    """Un lot de dépôts « en attente du drive » (drive injoignable au moment du dépôt) rangés sur le drive."""
+    def nom(doc):
+        ext = os.path.splitext(doc.fichier)[1].lower()[:10]
+        return st_drive.nom_libre(drive.DOSSIERS.get(doc.categorie, drive.DOSSIERS["autre"]),
+                                  drive.nom_lisible(doc.date_ajout, doc.libelle, ext))
+    return _transferer(db, copro, instance, st_drive, ATTENTE, "drive", nom)
+
+
+def octets_en_attente(db: Session, copro=None) -> int:
+    """Taille des fichiers en attente du drive, pour une copropriété ou pour toute l'instance."""
+    q = db.query(func.coalesce(func.sum(Document.taille), 0)).filter(Document.emplacement == ATTENTE)
+    if copro is not None:
+        q = q.filter(Document.copropriete_id == copro.id)
+    return int(q.scalar() or 0)
+
+
+def run_ranger_en_attente(db: Session) -> dict:
+    """Passage du planificateur : range sur leur drive les dépôts en attente, copropriété par copropriété."""
+    from app.core.config import get_settings
+    from app.models.copropriete import Copropriete
+    from app.routes import documents      # stockage de l'instance, au même endroit que les documents
+    stats = {"ranges": 0, "en_attente": 0}
+    reglages = get_settings()
+    ids = [i for (i,) in db.query(Document.copropriete_id).filter(Document.emplacement == ATTENTE).distinct()]
+    for copro in db.query(Copropriete).filter(Copropriete.id.in_(ids or [-1])).all():
+        try:
+            st = drive.stockage_drive(copro, reglages.drive_reseau_local)
+            if st is None:
+                continue
+            for _ in range(100):
+                bilan = ranger_en_attente(db, copro, documents._stockage(), st)
+                stats["ranges"] += bilan["deplaces"]
+                if not bilan["restants"] or not bilan["deplaces"]:
+                    break
+        except Exception as e:  # noqa: BLE001 — drive toujours injoignable : on réessaiera au prochain passage
+            db.rollback()
+            log.info("Copropriété %s : dépôts en attente du drive non rangés (%s)", copro.id, e)
+    stats["en_attente"] = db.query(Document).filter(Document.emplacement == ATTENTE).count()
+    if stats["ranges"]:
+        log.info("Dépôts en attente rangés sur le drive : %s", stats)
+    return stats
 
 
 def rapatrier(db: Session, copro, instance, st_drive) -> dict:

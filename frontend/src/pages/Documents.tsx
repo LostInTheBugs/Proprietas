@@ -25,6 +25,7 @@ export default function Documents() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   async function load() {
     setDocs(await api.get<Document[]>("/documents"));
@@ -36,8 +37,11 @@ export default function Documents() {
     if (!file) return;
     setBusy(true);
     setError("");
+    setInfo("");
     try {
-      await uploadDocument(categorie, libelle || file.name, file);
+      const doc: Document = await uploadDocument(categorie, libelle || file.name, file);
+      if (doc.emplacement === "attente")
+        setInfo("Le drive de la copropriété ne répond pas : le document est gardé sur le serveur et sera rangé sur le drive dès son retour.");
       setFile(null);
       setLibelle("");
       await load();
@@ -87,6 +91,7 @@ export default function Documents() {
       </div>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {info && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{info}</p>}
 
       {isSyndic && (
         <Card title="Ajouter un document">
@@ -121,6 +126,11 @@ export default function Documents() {
                   <Badge color="indigo">{CAT_LABELS[d.categorie] ?? d.categorie}</Badge>
                   <span className="text-xs text-slate-500">{fmtDate(d.date_ajout)}</span>
                   {d.emplacement === "drive" && <span title={d.fichier}><Badge color="green">Drive</Badge></span>}
+                  {d.emplacement === "attente" && (
+                    <span title="Le drive ne répondait pas au dépôt : le fichier est sur le serveur, il sera rangé sur le drive dès son retour.">
+                      <Badge color="amber">En attente du drive</Badge>
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 gap-1">

@@ -1031,7 +1031,7 @@ class DocumentOut(BaseModel):
     categorie: str = "autre"
     libelle: str
     fichier: str = ""
-    emplacement: str = ""      # "" : sur le serveur ; "drive" : sur le drive de la copropriété
+    emplacement: str = ""      # "" : sur le serveur ; "drive" : sur le drive ; "attente" : sur le serveur, en attente du drive
     date_ajout: date
 
 

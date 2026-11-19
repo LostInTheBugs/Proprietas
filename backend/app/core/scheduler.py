@@ -46,8 +46,27 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    # Dépôts faits pendant une panne du drive (option COPRO_DRIVE_ATTENTE_MO) : rangés dès son retour.
+    _scheduler.add_job(
+        _tick_drive_attente,
+        IntervalTrigger(minutes=5, start_date=datetime.now() + timedelta(minutes=1)),
+        id="drive_attente",
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.start()
     log.info("Scheduler démarré (relances auto toutes les 30 min, purge des journaux quotidienne)")
+
+
+def _tick_drive_attente() -> None:
+    from app.services.drive_fichiers import run_ranger_en_attente
+    db = SessionLocal()
+    try:
+        run_ranger_en_attente(db)
+    except Exception:
+        log.exception("Erreur pendant le rangement des dépôts en attente du drive")
+    finally:
+        db.close()
 
 
 def stop_scheduler() -> None:
