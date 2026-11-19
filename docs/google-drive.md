@@ -30,8 +30,11 @@ Ce qu'il faut savoir avant de commencer :
 - Les nouveaux fichiers sont **seulement sur le drive**. Si un fichier y est renommé ou supprimé à la main,
   Proprietas ne le retrouve plus (le bouton « Vérifier le drive » le signale et aide à le retrouver).
 - Un fichier supprimé dans Proprietas va dans la **corbeille** de Google Drive (récupérable 30 jours).
-- Le compte Google utilisé devrait être celui **de la copropriété** (par exemple une adresse Gmail créée pour
-  elle), pas le compte personnel du syndic : le jour où le syndic change, le drive reste à la copropriété.
+- **Le compte Google doit être dédié à la copropriété** (par exemple une adresse Gmail créée pour l'immeuble),
+  jamais le compte personnel du syndic. Le jour où le syndic change, il transmet ce compte (adresse et mot de
+  passe) à son successeur avec les archives : les documents restent à la copropriété, rien n'est « perdu »
+  dans la boîte personnelle d'un ancien syndic. Créez ce compte avant de commencer (gratuit, sur
+  <https://accounts.google.com/signup>), et notez ses identifiants avec ceux de la copropriété.
 
 ---
 
@@ -142,8 +145,8 @@ puis `docker compose up -d`. L'onglet **Google Drive** apparaît alors pour les 
 
 ## Partie 2 — Le syndic branche le drive de sa copropriété (~2 minutes)
 
-Connectez-vous d'abord, dans votre navigateur, au **compte Google de la copropriété** (celui que
-l'administrateur a ajouté à l'étape 5).
+Connectez-vous d'abord, dans votre navigateur, au **compte Google dédié à la copropriété** (celui que
+l'administrateur a ajouté à l'étape 5), et non à votre compte personnel.
 
 ### 1. Lancer la connexion
 

@@ -341,6 +341,10 @@ serveur. Les fichiers déposés avant le branchement restent où ils sont.
 | Nextcloud, ownCloud | `https://cloud.exemple.fr/remote.php/dav/files/<identifiant>/` |
 | Synology (paquet « WebDAV Server ») | `https://nas.exemple.fr:5006/` (ou `http://…:5005/` sur le réseau local) |
 
+Le drive doit appartenir à la copropriété : un **compte dédié à l'immeuble** (Nextcloud, Synology, Google…),
+jamais le compte personnel du syndic. Au changement de syndic, ce compte est transmis au successeur avec les
+archives, et les documents restent à la copropriété.
+
 Utilisez de préférence un **mot de passe d'application** : il est chiffré en base et n'est jamais réaffiché.
 Les réglages ne sont enregistrés que si l'essai réussit (dossier créé, fichier témoin écrit, relu, supprimé).
 
@@ -422,7 +426,8 @@ sauvegardes), avec un Google Drive. Essayé sur le vrai service le 18 novembre 2
    plusieurs : le retour se fait sur le nom utilisé) ;
 2. il ajoute au `.env` `COPRO_GOOGLE_CLIENT_ID` et `COPRO_GOOGLE_CLIENT_SECRET`, puis `docker compose up -d` ;
 3. le syndic choisit **Google Drive** dans la carte « Drive de la copropriété », puis **Se connecter à
-   Google Drive**.
+   Google Drive**, avec le **compte Google dédié à la copropriété** (une adresse Gmail créée pour
+   l'immeuble), jamais son compte personnel.
 
 Proprietas ne voit que les dossiers et fichiers qu'il a créés (portée `drive.file`) : un fichier déposé à la
 main dans Google Drive ne lui est pas visible. Une suppression met le fichier à la corbeille de Google Drive.
