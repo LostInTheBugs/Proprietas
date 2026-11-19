@@ -5,6 +5,7 @@ import { useUser } from "../auth";
 import type { Recap, Mouvement, Travaux, InvitationsResult, Lot } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Card, Stat, Badge, Empty } from "../components/ui";
+import { MesAvances } from "../components/Avances";
 
 const MOIS_COURTS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
@@ -52,7 +53,7 @@ export default function Dashboard() {
   const mois = Array.from({ length: 12 }, (_, i) => ({
     encaisse: mouvements.filter((m) => m.type === "encaissement" && new Date(m.date).getMonth() === i)
       .reduce((s, m) => s + m.montant, 0),
-    depense: mouvements.filter((m) => m.type === "depense" && new Date(m.date).getMonth() === i)
+    depense: mouvements.filter((m) => m.type === "depense" && m.categorie !== "avance" && new Date(m.date).getMonth() === i)
       .reduce((s, m) => s + m.montant, 0),
   }));
   const maxMensuel = Math.max(1, ...mois.map((m) => Math.max(m.encaisse, m.depense)));
@@ -92,9 +93,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Budget prévisionnel" value={fmtEUR(recap.budget_previsionnel)} />
         <Stat label="Encaissé" value={fmtEUR(recap.encaisse)} sub={`${tauxRecouvrement.toFixed(0)} % du budget`} accent />
-        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Solde de l'exercice : ${fmtEUR(recap.solde_caisse)}`} />
+        <Stat label="Dépensé" value={fmtEUR(recap.depense)} sub={`Solde en caisse de l'exercice : ${fmtEUR(recap.solde_caisse)}`} />
         <Stat label="Fonds de travaux" value={fmtEUR(recap.fonds_travaux_encaisse)} sub="Cotisations de l'exercice" />
       </div>
+
+      <MesAvances />
 
       {/* Ce qui devrait être en banque, d'après les opérations saisies (à rapprocher du relevé). */}
       <Card title="Sur les comptes (selon les opérations saisies)">

@@ -138,7 +138,8 @@ def _flux(db: Session, copro_id: int, apres: date | None, jusqu_a: date | None) 
         q = q.filter(Mouvement.date <= jusqu_a)
     flux = {c: {"encaissement": D(0), "depense": D(0)} for c, _ in COMPTES}
     for m in q:
-        if m.type in ("encaissement", "depense"):
+        # Avance payée par une personne, déduction de ses charges : rien n'est passé par la banque.
+        if m.type in ("encaissement", "depense") and not m.hors_banque:
             flux[_compte(m)][m.type] += D(m.montant or 0)
     return flux
 

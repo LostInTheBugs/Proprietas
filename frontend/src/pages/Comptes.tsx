@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { api, uploadDocument } from "../api";
 import { useUser } from "../auth";
 import type { Exercice, BudgetLine, Appel, Mouvement, Recap, Lot, Regularisation, Repartition, Contrat,
-  Document as DocumentFichier } from "../types";
+  Document as DocumentFichier, User } from "../types";
 import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import { TableMouvements } from "../components/TableMouvements";
+import { AvancesCard } from "../components/Avances";
 
 export default function Comptes() {
   const { user } = useUser();
@@ -19,6 +20,7 @@ export default function Comptes() {
   const [contrats, setContrats] = useState<Contrat[]>([]);
   const [documents, setDocuments] = useState<DocumentFichier[]>([]);
   const [recap, setRecap] = useState<Recap | null>(null);
+  const [comptes, setComptes] = useState<User[]>([]);     // « Payée par » (avances)
   const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement" | "paiement">(null);
   const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
   const [budgetEdite, setBudgetEdite] = useState<BudgetLine | null>(null);
@@ -44,6 +46,7 @@ export default function Comptes() {
     api.get<Contrat[]>("/contrats").then(setContrats).catch(() => {});
     api.get<DocumentFichier[]>("/documents").then(setDocuments).catch(() => {});
     api.get<Recap>("/recap").then(setRecap).catch(() => {});
+    if (isSyndic) api.get<User[]>("/auth/users").then(setComptes).catch(() => {});
   }, [exId]);
 
   const totalBudget = budget.reduce((s, b) => s + b.montant, 0);
@@ -253,8 +256,12 @@ export default function Comptes() {
             </Card>
           </div>
 
+          {isSyndic && exId && (
+            <AvancesCard exId={exId} cle={mouvements} onChanged={refresh} onError={setError} />
+          )}
+
           <Card
-            title={`Mouvements (encaissements & dépenses) — ${recap ? fmtEUR(recap.encaisse - recap.depense) : ""}`}
+            title={`Mouvements (encaissements & dépenses) — ${recap ? fmtEUR(recap.solde_caisse) : ""}`}
             action={
               <a href={`/api/export/compte-gestion`} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
                 Export compte de gestion ↓
@@ -295,7 +302,7 @@ export default function Comptes() {
       )}
       {modal === "mouvement" && exId && (
         <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
-          onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+          comptes={comptes} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "paiement" && (
         <PaiementModal lots={lots} onClose={() => setModal(null)}
@@ -303,7 +310,7 @@ export default function Comptes() {
       )}
       {mouvementEdite && exId && (
         <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
-          initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
+          comptes={comptes} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
           onSaved={() => { setMouvementEdite(null); refresh(); }} onError={setError} />
       )}
       {reclassement && exId && (
@@ -552,8 +559,8 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
-function MouvementModal({ exId, exercices, lots, contrats, documents, initial, onClose, onSaved, onError }: {
-  exId: number; exercices: Exercice[]; lots: Lot[]; contrats: Contrat[]; documents: DocumentFichier[];
+function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, initial, onClose, onSaved, onError }: {
+  exId: number; exercices: Exercice[]; lots: Lot[]; contrats: Contrat[]; documents: DocumentFichier[]; comptes: User[];
   initial?: Mouvement; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [contratId, setContratId] = useState(initial?.contrat_id != null ? String(initial.contrat_id) : "");
@@ -570,6 +577,11 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, initial, o
   const [categorie, setCategorie] = useState(initial?.categorie ?? "charges");
   const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
   const [lotId, setLotId] = useState(initial?.lot_id != null ? String(initial.lot_id) : "");
+  // Avance : dépense payée de sa poche par une personne (compte de la copropriété).
+  const [avanceParId, setAvanceParId] = useState(initial?.avance_par_id != null ? String(initial.avance_par_id) : "");
+  // Remboursement ou déduction d'une avance (créés depuis « Avances à régler ») : la personne ne se change pas ici.
+  const reglementAvance = !!initial?.avance_par_id && (initial.type === "encaissement" || initial.categorie === "avance");
+  const avance = type === "depense" && categorie !== "avance" && avanceParId !== "";
   async function save() {
     try {
       // Nouveau fichier joint : déposé dans Documents (catégorie facture), puis rattaché.
@@ -585,6 +597,7 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, initial, o
         exercice_id: Number(exerciceId),
         contrat_id: contratId === "" ? null : Number(contratId),
         document_id: docId,
+        avance_par_id: (type === "depense" && avanceParId !== "") || reglementAvance ? Number(avanceParId) : null,
       };
       if (initial) await api.put(`/mouvements/${initial.id}`, corps);
       else await api.post(`/exercices/${exerciceId}/mouvements`, corps);
@@ -627,8 +640,29 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, initial, o
             <option value="energie">Énergie</option>
             <option value="entretien">Entretien</option>
             <option value="autre">Autre</option>
+            {initial?.categorie === "avance" && <option value="avance">Remboursement d'avance</option>}
           </Select>
         </div>
+        {reglementAvance ? (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {initial?.type === "encaissement" ? "Avance déduite des charges" : "Remboursement de l'avance"} de{" "}
+            <strong>{initial?.avance_par_nom}</strong>.
+          </p>
+        ) : type === "depense" && (
+          <>
+            <Select label="Payée par" value={avanceParId} onChange={(e) => setAvanceParId(e.target.value)}>
+              <option value="">Le compte de la copropriété</option>
+              {comptes.map((c) => <option key={c.id} value={c.id}>{[c.prenom, c.nom].filter(Boolean).join(" ") || c.email} (avance)</option>)}
+            </Select>
+            {avance && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                Avance : la dépense compte dans les charges, mais ne sort pas de la banque ; la copropriété doit cette somme
+                à la personne (Comptes → Avances à régler). <strong>Justificatif obligatoire</strong> : rattachez la
+                facture ci-dessous.
+              </p>
+            )}
+          </>
+        )}
         {type === "encaissement" && (
           <p className="text-xs text-slate-500">
             Catégorie « Fonds de travaux » ou « Travaux » : le versement ne paie que la part fonds de travaux des
@@ -667,7 +701,7 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, initial, o
         </label>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Enregistrer</Button>
+          <Button onClick={save} disabled={avance && documentId === "" && !fichier}>Enregistrer</Button>
         </div>
       </div>
     </Modal>

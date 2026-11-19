@@ -29,7 +29,7 @@ from app.models.mouvement import Mouvement
 from app.services import ensembles
 from app.services.country_rules import repartir_par_tantiemes
 
-CATEGORIES_HORS_CHARGES = ("fonds_travaux", "travaux")
+CATEGORIES_HORS_CHARGES = ("fonds_travaux", "travaux", "avance")   # avance : remboursement (services/avances.py)
 
 
 def appel_existant(db: Session, ex) -> AppelFonds | None:

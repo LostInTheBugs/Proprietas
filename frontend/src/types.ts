@@ -179,6 +179,22 @@ export interface Mouvement {
   exercice_id?: number;
   contrat_id?: number | null;   // contrat rattaché
   document_id?: number | null;  // facture (document) rattachée
+  // Avances : dépense payée par une personne, remboursement (catégorie « avance ») ou déduction de ses charges
+  avance_par_id?: number | null;
+  avance_par_nom?: string;
+  hors_banque?: boolean;        // n'est pas passé par le compte bancaire de la copropriété
+}
+
+export interface AvancePersonne {
+  personne_id: number;
+  nom: string;
+  avance: number;
+  rembourse: number;
+  deduit: number;
+  reste: number;               // ce que la copropriété lui doit encore
+  lots: { id: number; numero: string }[];
+  mouvements: { id: number; date: string; libelle: string; montant: number; nature: "avance" | "remboursement" | "deduction";
+    exercice_id: number; document_id: number | null }[];
 }
 
 export interface EtatDateLot {

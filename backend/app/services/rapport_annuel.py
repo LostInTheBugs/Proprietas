@@ -116,7 +116,7 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
     el = []
 
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
-    depenses = [m for m in mouvements if m.type == "depense"]
+    depenses = [m for m in mouvements if m.type == "depense" and m.categorie != "avance"]   # remboursements d'avances : hors charges
     encaissements = [m for m in mouvements if m.type == "encaissement"]
     enc_charges = somme(m.montant for m in encaissements if m.categorie != "fonds_travaux")
     enc_ft = somme(m.montant for m in encaissements if m.categorie == "fonds_travaux")
