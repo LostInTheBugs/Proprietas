@@ -13,6 +13,7 @@ from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
 from app.routes.copro import get_or_create_copro
 from app.routes.relances import _etat_lots
+from app.services import avances
 from app.services.compte_gestion import generer_compte_gestion_pdf
 from app.services.quittances import generer_quittances_pdf
 from app.services.rapport_annuel import generer_rapport_annuel_pdf
@@ -216,6 +217,11 @@ def export_compte_gestion(request: Request, exercice_id: int | None = None, db: 
     for m in mouvements:
         lot = db.query(Lot).filter(Lot.id == m.lot_id).first() if m.lot_id else None
         cat = "fonds de travaux" if m.categorie == "fonds_travaux" else "charges"
+        if m.avance_par_id is not None:          # avances (services/avances.py)
+            cat = {"avance": f"{cat}, payée par {m.avance_par_nom} (hors banque)",
+                   "remboursement": f"remboursement d'avance à {m.avance_par_nom}",
+                   "deduction": f"{cat}, avance de {m.avance_par_nom} déduite (hors banque)"}[
+                avances.nature(m.type, m.categorie, m.avance_par_id)]
         if m.type == "depense":
             ligne(m.date.strftime("%d/%m/%Y"), m.libelle, f"lot {lot.numero}" if lot else "copro",
                   f"dépense {cat}", m.montant, 0)

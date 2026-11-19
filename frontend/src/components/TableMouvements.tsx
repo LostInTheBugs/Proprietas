@@ -8,7 +8,19 @@ export const CATEGORIES: [string, string][] = [
   ["charges", "Charges"], ["fonds_travaux", "Fonds de travaux"], ["travaux", "Travaux"], ["assurance", "Assurance"],
   ["energie", "Énergie"], ["entretien", "Entretien"], ["autre", "Autre"],
 ];
-const libCategorie = (c: string) => CATEGORIES.find(([v]) => v === c)?.[1] ?? c;
+const libCategorie = (c: string) => (c === "avance" ? "Remboursement d'avance" : CATEGORIES.find(([v]) => v === c)?.[1] ?? c);
+
+/** Avance, remboursement ou déduction : à qui, et si rien n'est passé par la banque. */
+function LigneAvance({ m }: { m: Mouvement }) {
+  if (!m.avance_par_id) return null;
+  const texte = m.type === "encaissement" ? `Avance de ${m.avance_par_nom} déduite de ses charges`
+    : m.categorie === "avance" ? `Remboursement de l'avance de ${m.avance_par_nom}` : `Payée par ${m.avance_par_nom} (avance)`;
+  return (
+    <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-amber-800">
+      {texte}{m.hors_banque && <Badge color="slate">hors banque</Badge>}
+    </span>
+  );
+}
 const libType = (t: string) => (t === "encaissement" ? "Encaissement" : "Dépense");
 
 type Colonne = "date" | "libelle" | "type" | "lot" | "categorie" | "contrat" | "montant";
@@ -167,6 +179,7 @@ export function TableMouvements({ mouvements, exercices, exId, lots, contrats, d
                   </td>
                   <td className="py-2 text-slate-700">
                     {m.libelle}
+                    <LigneAvance m={m} />
                     {m.document_id && (
                       <a href={`/api/documents/${m.document_id}/download`} className="block text-xs text-indigo-600 hover:underline">
                         📎 {documents.find((d) => d.id === m.document_id)?.libelle ?? "facture"}

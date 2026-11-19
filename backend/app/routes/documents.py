@@ -194,6 +194,12 @@ def download_document(doc_id: int, db: Session = Depends(get_db), user: User = D
 def delete_document(doc_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     doc = get_owned(db, Document, doc_id, copro, label="Document")
+    # Justificatif d'une avance (dépense payée par une personne) : il doit rester (services/avances.py).
+    avance = (db.query(Mouvement).filter(Mouvement.document_id == doc.id, Mouvement.avance_par_id.isnot(None),
+                                         Mouvement.type == "depense", Mouvement.categorie != "avance").first())
+    if avance is not None:
+        raise HTTPException(409, f"Ce document justifie l'avance « {avance.libelle} » du {avance.date:%d/%m/%Y} : "
+                                 "il ne peut pas être supprimé.")
     try:
         if doc.fichier and doc.emplacement == "drive" and _drive(copro) is None:
             # Aucun drive branché (copropriété restaurée d'une sauvegarde, par exemple) : il n'y a rien

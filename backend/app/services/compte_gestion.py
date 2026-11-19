@@ -21,7 +21,8 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     from app.models.user import User
 
     mouvements = db.query(Mouvement).filter(Mouvement.exercice_id == exercice.id).all()
-    depenses = [m for m in mouvements if m.type == "depense"]
+    # Remboursement d'une avance (catégorie « avance ») : ni une charge ni un produit (services/avances.py).
+    depenses = [m for m in mouvements if m.type == "depense" and m.categorie != "avance"]
     encaissements = [m for m in mouvements if m.type == "encaissement"]
     # Encaissements « fonds de travaux » ou « travaux » : réservés au fonds de travaux
     # (même règle que l'imputation du décompte, recouvrement.CATEGORIES_TRAVAUX).

@@ -382,6 +382,14 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), c
             .first())
     if not user:
         raise HTTPException(404, "Utilisateur introuvable")
+    from app.services import avances
+    if avances.solde_compte(db, user.id) != 0:
+        raise HTTPException(409, "La copropriété doit encore de l'argent à ce compte au titre de ses avances : "
+                                 "remboursez-le ou déduisez-le de ses charges avant de supprimer le compte.")
+    # Ses avances soldées restent dans les comptes, sans le nom (hors_banque est gardé : la banque ne change pas).
+    from app.models.mouvement import Mouvement
+    db.query(Mouvement).filter(Mouvement.avance_par_id == user.id).update(
+        {Mouvement.avance_par_id: None}, synchronize_session=False)
     # L'historique SURVIT à la suppression du compte (journal additif, RGPD :
     # le nom disparaît avec le compte, la preuve reste attachée au lot/l'AG) :
     # - actes de recouvrement saisis par ce compte → auteur délié ;

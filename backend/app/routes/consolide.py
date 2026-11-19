@@ -35,7 +35,7 @@ def consolide(db: Session = Depends(get_db), user: User = Depends(get_current_us
         lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
         mouvements = (db.query(Mouvement).filter(Mouvement.exercice_id == ex.id).all()) if ex else []
         encaisse = somme([m.montant for m in mouvements if m.type == "encaissement"])
-        depense = somme([m.montant for m in mouvements if m.type == "depense"])
+        depense = somme([m.montant for m in mouvements if m.type == "depense" and m.categorie != "avance"])
         budget = somme([b.montant for b in ex.budget_lines]) if ex else D(0)
         ft_encaisse = somme([m.montant for m in mouvements if m.type == "encaissement" and m.categorie == "fonds_travaux"])
         ft_depense = somme([m.montant for m in mouvements if m.type == "depense" and m.categorie == "fonds_travaux"])

@@ -51,6 +51,12 @@ se créer normalement depuis la page de connexion.
   Mes lots ; aucun nom de locataire enregistré, RGPD)
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
   encaissements / dépenses, solde par lot, état daté, quittances
+- **Avances** : une dépense payée de sa poche par le syndic ou un copropriétaire (« Payée par » sur la
+  dépense, **facture obligatoire**, qui ne peut plus être supprimée) compte dans les charges mais pas dans la
+  banque ; la copropriété la règle, au choix et même en plusieurs fois, par un **remboursement** (virement :
+  sort de la banque, n'est pas une charge) ou en la **déduisant de ses charges** (crédit sur son lot, imputé
+  sur ses appels). Jamais plus que le reste dû ; « Avances à régler » dans Comptes, « Mes avances » sur le
+  tableau de bord de la personne ; un compte à qui la copropriété doit encore de l'argent ne se supprime pas
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
 - **Recouvrement des impayés** : décompte détaillé par provision (imputation FIFO, échu / à
   échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,

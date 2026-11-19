@@ -671,6 +671,9 @@ class MouvementIn(BaseModel):
     exercice_id: Optional[int] = None
     contrat_id: Optional[int] = None     # contrat rattaché
     document_id: Optional[int] = None    # facture (document) rattachée
+    # Avances (services/avances.py) : dépense payée par cette personne, remboursement (catégorie « avance »)
+    # ou déduction de ses charges (encaissement sur son lot).
+    avance_par_id: Optional[int] = None
 
 
 class ReclasserIn(BaseModel):
@@ -728,6 +731,8 @@ class MouvementOut(MouvementIn):
     id: int
     montant: float = 0.0          # sortie : nombre JSON
     piece_path: str = ""
+    hors_banque: bool = False     # n'est pas passé par le compte de la copropriété (avance, déduction)
+    avance_par_nom: str = ""
 
 
 # ---------- Etat daté / récap ----------
@@ -1389,3 +1394,30 @@ class CompteBloqueOut(BaseModel):
     bloque_jusqua: Optional[datetime] = None
     bloque_definitif_le: Optional[datetime] = None
     coproprietes: List[str] = []
+
+
+# ---------- Avances (services/avances.py) ----------
+class AvanceLotOut(BaseModel):
+    id: int
+    numero: str
+
+
+class AvanceMouvementOut(BaseModel):
+    id: int
+    date: date
+    libelle: str
+    montant: float
+    nature: str                      # avance | remboursement | deduction
+    exercice_id: int
+    document_id: Optional[int] = None
+
+
+class AvancePersonneOut(BaseModel):
+    personne_id: int
+    nom: str
+    avance: float = 0.0              # payé de sa poche pour la copropriété
+    rembourse: float = 0.0           # remboursé par virement
+    deduit: float = 0.0              # déduit de ses charges
+    reste: float = 0.0               # ce que la copropriété lui doit encore
+    lots: List[AvanceLotOut] = []    # ses lots (déduction)
+    mouvements: List[AvanceMouvementOut] = []
