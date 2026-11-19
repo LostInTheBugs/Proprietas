@@ -167,6 +167,13 @@ export function DriveCard() {
           Compatible WebDAV : Nextcloud, ownCloud (<code className="text-slate-700">https://cloud.exemple.fr/remote.php/dav/files/identifiant/</code>),
           Synology (paquet WebDAV Server, <code className="text-slate-700">https://nas.exemple.fr:5006/</code>).
         </p>
+        {!branche && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Utilisez un <strong>compte dédié à la copropriété</strong> (par exemple une adresse Gmail ou un compte Nextcloud
+            créés pour l'immeuble), pas votre compte personnel : quand le syndic change, il transmet ce compte à son
+            successeur, et les documents restent à la copropriété.
+          </p>
+        )}
         {branche ? (
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             Drive branché : <strong>{etat.documents_sur_le_drive}</strong> fichier(s) y sont rangés, dans « {etat.dossier} ».
