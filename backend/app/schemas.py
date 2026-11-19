@@ -1421,3 +1421,60 @@ class AvancePersonneOut(BaseModel):
     reste: float = 0.0               # ce que la copropriété lui doit encore
     lots: List[AvanceLotOut] = []    # ses lots (déduction)
     mouvements: List[AvanceMouvementOut] = []
+
+
+# ---------- AG : présence et pouvoirs (services/presences.py) ----------
+class ReponseAgIn(BaseModel):
+    reponse: str                          # present | pouvoir | absent | incertain
+    mandataire_id: Optional[int] = None   # pouvoir : copropriétaire qui représente
+
+
+class PresenceIn(ReponseAgIn):
+    pouvoir_recu: Optional[bool] = None   # syndic : pouvoir signé reçu (None : inchangé)
+
+
+class PresenceLigneOut(BaseModel):
+    personne_id: int
+    nom: str
+    lots: List[str] = []
+    voix: float = 0.0                     # en millièmes des voix du syndicat
+    reponse: str = ""                     # "" : pas de réponse
+    repondu_le: Optional[datetime] = None
+    source: str = ""                      # lien | compte | syndic
+    mandataire_id: Optional[int] = None
+    mandataire_nom: str = ""
+    mandataire_absent: bool = False       # le mandataire a dit qu'il serait absent (ou a lui-même donné pouvoir)
+    pouvoir_recu_le: Optional[datetime] = None
+    mandats: int = 0                      # pouvoirs reçus par ce copropriétaire
+    peut_recevoir_pouvoir: bool = True    # False : syndic (art. 22)
+
+
+class PresenceTotauxOut(BaseModel):
+    presents: int = 0
+    representes: int = 0
+    absents: int = 0
+    incertains: int = 0
+    sans_reponse: int = 0
+    voix_presentes_ou_representees: float = 0.0
+
+
+class PresencesOut(BaseModel):
+    ouvert: bool                          # les copropriétaires peuvent encore répondre
+    lignes: List[PresenceLigneOut] = []
+    totaux: PresenceTotauxOut
+
+
+class PersonneCourteOut(BaseModel):
+    id: int
+    nom: str
+
+
+class MaReponseOut(BaseModel):
+    ouvert: bool
+    coproprietaire: bool                  # le compte possède un lot : il peut répondre
+    reponse: str = ""
+    mandataire_id: Optional[int] = None
+    mandataire_nom: str = ""
+    repondu_le: Optional[datetime] = None
+    mandataires: List[PersonneCourteOut] = []   # à qui il peut donner pouvoir
+    mandats: List[PersonneCourteOut] = []       # qui lui a donné pouvoir

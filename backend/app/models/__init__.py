@@ -4,7 +4,7 @@ from app.models.lot import Lot
 from app.models.exercice import Exercice, BudgetLine
 from app.models.appel import AppelFonds, AppelLot
 from app.models.mouvement import Mouvement
-from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote
+from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote, AgReponse
 from app.models.document import Document
 from app.models.carnet import Entretien
 from app.models.invitation import Invitation
@@ -21,7 +21,7 @@ from app.models.reprise import EtatReprise, EtatRepriseLigne
 __all__ = [
     "User", "UserCopro", "Copropriete", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
-    "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
+    "AgCreneau", "AgCreneauVote", "AgReponse", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
     "NotificationPV", "EtatReprise", "EtatRepriseLigne",
 ]

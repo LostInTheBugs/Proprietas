@@ -386,6 +386,12 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db), c
     if avances.solde_compte(db, user.id) != 0:
         raise HTTPException(409, "La copropriété doit encore de l'argent à ce compte au titre de ses avances : "
                                  "remboursez-le ou déduisez-le de ses charges avant de supprimer le compte.")
+    # Ses réponses aux AG partent avec lui ; ceux qui lui avaient donné pouvoir n'ont plus de mandataire.
+    from app.models.ag import AgReponse
+    db.query(AgReponse).filter(AgReponse.personne_id == user.id).delete(synchronize_session=False)
+    db.query(AgReponse).filter(AgReponse.mandataire_id == user.id).update(
+        {AgReponse.reponse: "incertain", AgReponse.mandataire_id: None, AgReponse.pouvoir_recu_le: None},
+        synchronize_session=False)
     # Ses avances soldées restent dans les comptes, sans le nom (hors_banque est gardé : la banque ne change pas).
     from app.models.mouvement import Mouvement
     db.query(Mouvement).filter(Mouvement.avance_par_id == user.id).update(

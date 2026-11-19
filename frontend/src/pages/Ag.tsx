@@ -5,7 +5,7 @@ import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsRes
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import NotificationsPVPanel from "../components/NotificationsPV";
-
+import { MaReponseAg, PresencesSyndic } from "../components/Presences";
 export default function Ag() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
@@ -168,7 +168,8 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
     }
   }
 
-  if (creneaux.length === 0 && invitations.length === 0 && !isSyndic) return null;
+  if (creneaux.length === 0 && invitations.length === 0 && !isSyndic)
+    return ag.type_ag !== "consultation_ecrite" ? <MaReponseAg agId={agId} onError={onError} /> : null;
 
   return (
     <div className="space-y-4 border-t border-slate-100 pt-4">
@@ -335,6 +336,9 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
           )}
         </div>
       )}
+
+      {ag.type_ag !== "consultation_ecrite" && <MaReponseAg agId={agId} onError={onError} />}
+      {isSyndic && ag.type_ag !== "consultation_ecrite" && <PresencesSyndic agId={agId} onError={onError} />}
 
       {isSyndic && ag.resolutions.length > 0 && <NotificationsPVPanel agId={agId} onError={onError} />}
 
