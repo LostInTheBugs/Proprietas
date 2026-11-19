@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.042 — 2026-11-19
+
+- AG : chaque copropriétaire répond (présent, pouvoir à un autre copropriétaire, absent, ne sait pas) par le lien de l'e-mail ou depuis son compte, jusqu'à l'ouverture de l'AG. Pouvoirs contrôlés (art. 22 : jamais le syndic, trois au plus sauf sous 10 % des voix) et produits en PDF à signer ; tableau des présences, feuille de présence en PDF, présents et représentés dans le PV. Correctif : PV d'une copropriété au nom accentué. Migration f2a3b4c5d6e7.
+
 ## 2026.11.041 — 2026-11-19
 
 - Avances : une dépense payée de sa poche par le syndic ou un copropriétaire (« Payée par », facture obligatoire) compte dans les charges mais pas dans la banque ; la copropriété la règle par un remboursement (virement) ou en la déduisant de ses charges, au choix. Carte « Avances à régler » dans Comptes, « Mes avances » sur le tableau de bord. Migration e1f2a3b4c5d6.
