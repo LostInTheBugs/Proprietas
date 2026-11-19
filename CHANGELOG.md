@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.043 — 2026-11-19
+
+- Factures à payer : une dépense se saisit « à payer » avec une échéance ; elle compte dans les charges mais pas dans la banque jusqu'à « Marquer payée » (par la copropriété à la date du virement, ou de sa poche par quelqu'un : avance). Encart sur le tableau de bord du syndic, e-mail aux syndics 7 jours avant l'échéance puis en cas de retard. Migration a3b4c5d6e7f8.
+
 ## 2026.11.042 — 2026-11-19
 
 - AG : chaque copropriétaire répond (présent, pouvoir à un autre copropriétaire, absent, ne sait pas) par le lien de l'e-mail ou depuis son compte, jusqu'à l'ouverture de l'AG. Pouvoirs contrôlés (art. 22 : jamais le syndic, trois au plus sauf sous 10 % des voix) et produits en PDF à signer ; tableau des présences, feuille de présence en PDF, présents et représentés dans le PV. Correctif : PV d'une copropriété au nom accentué. Migration f2a3b4c5d6e7.
