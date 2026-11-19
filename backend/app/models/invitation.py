@@ -15,6 +15,9 @@ class Invitation(Base):
     date_envoi = Column(DateTime, nullable=False)
     statut = Column(String, default="envoye")  # envoye | erreur
     message = Column(Text, default="")
+    # Lien personnel « J'ai bien reçu ce message » (pas un accusé de réception légal) : date du clic.
+    jeton = Column(String, nullable=True, unique=True, index=True)
+    confirme_le = Column(DateTime, nullable=True)
 
     ag = relationship("AG", back_populates="invitations")
     personne = relationship("User")

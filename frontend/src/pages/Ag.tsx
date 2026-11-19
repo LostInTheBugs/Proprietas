@@ -308,6 +308,16 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
               )}
             </p>
           )}
+          {invitations.length > 0 && (() => {
+            const envois = invitations.filter((i) => i.statut === "envoye");
+            const confirmes = envois.filter((i) => i.confirme_le);
+            return envois.length > 0 && (
+              <p className="text-xs text-slate-600">
+                Réception confirmée par <strong>{confirmes.length}</strong> destinataire(s) sur {envois.length}
+                <span className="text-slate-400"> (lien « J'ai bien reçu ce message » de l'e-mail ; ce n'est pas un accusé de réception de recommandé)</span>
+              </p>
+            );
+          })()}
           {invitations.length > 0 && (
             <ul className="space-y-1 text-xs text-slate-500">
               {invitations.slice(0, 10).map((i) => (
@@ -316,6 +326,9 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
                   <span className="text-slate-400">({i.personne_email})</span>
                   <span className="ml-auto">{fmtDateTime(i.date_envoi)}</span>
                   {i.statut === "envoye" ? <Badge color="green">envoyé</Badge> : <Badge color="red">erreur</Badge>}
+                  {i.statut === "envoye" && (i.confirme_le
+                    ? <span title={`Réception confirmée le ${fmtDateTime(i.confirme_le)}`}><Badge color="indigo">reçu ✓</Badge></span>
+                    : <Badge color="slate">non confirmé</Badge>)}
                 </li>
               ))}
             </ul>

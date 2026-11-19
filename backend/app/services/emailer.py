@@ -166,12 +166,11 @@ def _fmt_eur(v: float) -> str:
 # rédaction du décret n° 2025-1292 du 22/12/2025) : ces messages sont des INFORMATIONS.
 # La voie électronique est la règle ; le papier, l'exception à la demande du copropriétaire
 # (loi n° 65-557, art. 42-1 ; décret, art. 64-1).
+# Une ligne, en bas du message (choix de Fred, 19/11/2026) : l'e-mail reste une information.
 MENTION_CONVOCATION = (
-    "Ce message vous informe de la tenue de l'assemblée. Il ne remplace pas la convocation "
-    "régulière, notifiée au moins 21 jours avant la réunion par lettre recommandée "
-    "électronique (par défaut), par lettre recommandée avec avis de réception si vous avez "
-    "demandé à recevoir les notifications par voie postale, ou par remise contre récépissé "
-    "(loi n° 65-557, art. 42-1 ; décret n° 67-223 du 17 mars 1967, art. 9 et 64 et suivants)."
+    "Pour information : la convocation officielle vous parvient par lettre recommandée électronique "
+    "(par défaut), ou par lettre recommandée papier si vous avez demandé la voie postale "
+    "(loi n° 65-557, art. 42-1 ; décret n° 67-223, art. 9 et 64)."
 )
 
 
@@ -200,8 +199,11 @@ def pv_email_texte(copro, ag, syndic_nom: str) -> str:
     )
 
 
-def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
-    """Corps de l'e-mail d'INFORMATION sur l'assemblée (texte brut)."""
+def convocation_texte(copro, ag, resolutions, syndic_nom: str, lien_confirmation: str = "") -> str:
+    """Corps de l'e-mail d'INFORMATION sur l'assemblée (texte brut).
+
+    `lien_confirmation` : lien personnel « J'ai bien reçu ce message » (vide : pas de lien).
+    """
     type_label = {
         "annuelle": "Assemblée Générale annuelle",
         "extraordinaire": "Assemblée Générale extraordinaire",
@@ -212,8 +214,6 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
         f"Bonjour,",
         "",
         f"La copropriété {copro.nom} tiendra {_article(type_label)}.",
-        "",
-        MENTION_CONVOCATION,
         "",
     ]
     if ag.type_ag == "consultation_ecrite":
@@ -234,11 +234,15 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str) -> str:
     url = adresse_publique(copro)
     if url:
         lignes += ["", "Vous pouvez consulter les détails et répondre en ligne :", url]
+    if lien_confirmation:
+        lignes += ["", "Merci de confirmer que vous avez bien reçu ce message (un clic) :", lien_confirmation]
     lignes += [
         "",
         "Cordialement,",
         syndic_nom or "Le syndic",
         f"Syndic bénévole — {copro.nom}",
+        "",
+        MENTION_CONVOCATION,
     ]
     return "\n".join(lignes)
 
