@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.041 — 2026-11-19
+
+- Avances : une dépense payée de sa poche par le syndic ou un copropriétaire (« Payée par », facture obligatoire) compte dans les charges mais pas dans la banque ; la copropriété la règle par un remboursement (virement) ou en la déduisant de ses charges, au choix. Carte « Avances à régler » dans Comptes, « Mes avances » sur le tableau de bord. Migration e1f2a3b4c5d6.
+
 ## 2026.11.040 — 2026-11-19
 
 - Drive de la copropriété : le type de drive se choisit dans une liste (WebDAV ou Google Drive), les champs suivent. Pour Google Drive, l'ID client et le code secret de l'application Google se saisissent dans Proprietas, par copropriété (code secret chiffré, hors sauvegardes) ; le .env reste possible pour toute l'instance. L'URI de redirection à déclarer chez Google est affichée. Codes Google saisis par erreur dans le formulaire WebDAV : message clair (au lieu de l'erreur 405). Migration d0e1f2a3b4c5.
