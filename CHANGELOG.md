@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.038 — 2026-11-19
+
+- AG : l'e-mail d'information contient un lien personnel « J'ai bien reçu ce message » ; l'écran de l'AG montre qui a confirmé (ce n'est pas un accusé de réception de recommandé ; pas d'image de suivi). La mention sur la convocation officielle tient en une ligne, en bas du message. Migration b8c9d0e1f2a3.
+
 ## 2026.11.037 — 2026-11-19
 
 - Drive : la carte du drive, le guide Google Drive et le README demandent un compte dédié à la copropriété (jamais le compte personnel du syndic), transmis au successeur au changement de syndic.
