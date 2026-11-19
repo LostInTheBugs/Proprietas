@@ -432,16 +432,20 @@ sauvegardes), avec un Google Drive. Essayé sur le vrai service le 18 novembre 2
 
 **Guide pas à pas avec captures d'écran : [docs/google-drive.md](docs/google-drive.md).** En résumé :
 
-1. l'administrateur de l'instance déclare une fois une application chez Google (gratuit) : projet,
+1. le syndic (avec le compte Google de la copropriété) ou l'administrateur de l'instance déclare une fois
+   une application chez Google (gratuit) : projet,
    **Google Drive API** activée, écran de consentement **Externe** avec la portée
    `https://www.googleapis.com/auth/drive.file`, utilisateurs tests (tant que l'application est en mode
    **Test**, la connexion expire au bout de 7 jours), client **Application Web** avec l'URI de redirection
    `https://<adresse de l'instance>/api/drive/google/retour` (une adresse par nom si l'instance en a
    plusieurs : le retour se fait sur le nom utilisé) ;
-2. il ajoute au `.env` `COPRO_GOOGLE_CLIENT_ID` et `COPRO_GOOGLE_CLIENT_SECRET`, puis `docker compose up -d` ;
-3. le syndic choisit **Google Drive** dans la carte « Drive de la copropriété », puis **Se connecter à
-   Google Drive**, avec le **compte Google dédié à la copropriété** (une adresse Gmail créée pour
-   l'immeuble), jamais son compte personnel.
+2. ses deux codes (ID client, code secret) se saisissent dans la carte « Drive de la copropriété », type de
+   drive **Google Drive** (application de la copropriété, de préférence créée avec son compte Google
+   dédié ; le code secret est chiffré en base et n'est pas dans les sauvegardes) ; ou, pour toutes les
+   copropriétés d'un serveur, dans le `.env` : `COPRO_GOOGLE_CLIENT_ID` et `COPRO_GOOGLE_CLIENT_SECRET`,
+   puis `docker compose up -d` (les codes d'une copropriété passent avant ceux du `.env`) ;
+3. le syndic clique **Se connecter à Google Drive**, avec le **compte Google dédié à la copropriété** (une
+   adresse Gmail créée pour l'immeuble), jamais son compte personnel.
 
 Proprietas ne voit que les dossiers et fichiers qu'il a créés (portée `drive.file`) : un fichier déposé à la
 main dans Google Drive ne lui est pas visible. Une suppression met le fichier à la corbeille de Google Drive.

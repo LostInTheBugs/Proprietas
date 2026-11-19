@@ -288,26 +288,41 @@ def reglages(copro) -> SimpleNamespace | None:
                            mot_de_passe=copro.drive_password or "", dossier=copro.drive_dossier)
 
 
+def application_google(copro, reglages_instance=None) -> SimpleNamespace | None:
+    """Application Google (OAuth) qui sert à cette copropriété : la sienne (Réglages → Drive) si elle est
+    complète, sinon celle de l'instance (.env), sinon None."""
+    cid = (getattr(copro, "google_client_id", "") or "").strip()
+    secret = getattr(copro, "google_client_secret", "") or ""
+    if cid and secret:
+        return SimpleNamespace(client_id=cid, client_secret=secret, source="copropriete")
+    if reglages_instance is None:
+        from app.core.config import get_settings
+        reglages_instance = get_settings()
+    if reglages_instance.google_client_id and reglages_instance.google_client_secret:
+        return SimpleNamespace(client_id=reglages_instance.google_client_id,
+                               client_secret=reglages_instance.google_client_secret, source="instance")
+    return None
+
+
 def stockage_drive(copro, reseau_local: bool = True, reglages_instance=None):
     """Le drive de la copropriété, prêt à servir, ou None s'il n'est pas branché.
 
     WebDAV : `drive_url`, `drive_user`, `drive_password`. Google Drive (core/drive_google.py) : le jeton de
-    renouvellement est dans `drive_password`, l'application OAuth dans les réglages de l'instance.
+    renouvellement est dans `drive_password`, l'application OAuth est celle de `application_google`.
     """
     r = reglages(copro)
     if r is None:
         return None
     try:
         if r.type == "google":
-            from app.core.config import get_settings
             from app.core.drive_google import StockageGoogleDrive
-            s = reglages_instance or get_settings()
-            if not (s.google_client_id and s.google_client_secret):
-                raise StockageIndisponible("Google Drive n'est plus configuré sur cette instance "
-                                           "(COPRO_GOOGLE_CLIENT_ID / COPRO_GOOGLE_CLIENT_SECRET).")
+            app_google = application_google(copro, reglages_instance)
+            if app_google is None:
+                raise StockageIndisponible("L'application Google n'est plus configurée : saisissez son identifiant et "
+                                           "son code secret dans Réglages → Drive de la copropriété.")
             if not r.mot_de_passe:
                 raise StockageIndisponible("L'autorisation Google est absente : reconnectez Google Drive dans Réglages.")
-            return StockageGoogleDrive(s.google_client_id, s.google_client_secret, r.mot_de_passe, r.dossier)
+            return StockageGoogleDrive(app_google.client_id, app_google.client_secret, r.mot_de_passe, r.dossier)
         verifier_adresse(r.url, reseau_local)
         return StockageWebDAV(r.url, r.utilisateur, r.mot_de_passe, r.dossier)
     except (AdresseRefusee, NomInvalide) as e:

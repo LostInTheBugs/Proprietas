@@ -14,14 +14,19 @@ Mon Drive
         └── Sauvegardes   Sauvegarde 2026-11-22 03h00.zip (chiffrée)
 ```
 
-Il y a **deux étapes, faites par deux personnes différentes** :
+Il y a **deux étapes** :
 
 | Qui | Quoi | Combien de fois |
 |---|---|---|
-| **L'administrateur du serveur** (celui qui a installé Proprietas) | déclarer Proprietas chez Google, puis copier deux codes dans le fichier `.env` | une seule fois pour tout le serveur |
+| **Le syndic**, avec le compte Google de la copropriété (ou l'administrateur du serveur) | déclarer Proprietas chez Google (une « application »), puis coller ses deux codes dans Proprietas | une seule fois |
 | **Le syndic** de chaque copropriété | cliquer « Se connecter à Google Drive » et accepter | une fois par copropriété |
 
-Si vous êtes syndic sur un serveur déjà préparé, passez directement à la **partie 2**.
+Le plus simple et le plus durable : créer l'application **avec le compte Google dédié à la copropriété**.
+Elle lui appartient alors, et passe au syndic suivant avec ce compte. Un administrateur qui héberge plusieurs
+copropriétés peut aussi créer une seule application pour tout le serveur (étape 7, deuxième cas).
+
+Si l'application existe déjà (vos codes sont saisis, ou l'administrateur l'a préparée pour le serveur), passez
+directement à la **partie 2**.
 
 Ce qu'il faut savoir avant de commencer :
 
@@ -38,9 +43,10 @@ Ce qu'il faut savoir avant de commencer :
 
 ---
 
-## Partie 1 — L'administrateur prépare le serveur (une seule fois, ~15 minutes)
+## Partie 1 — Déclarer Proprietas chez Google (une seule fois, ~15 minutes)
 
-Il faut un compte Google (n'importe lequel ; c'est gratuit, aucune carte bancaire n'est demandée).
+Il faut un compte Google : de préférence celui de la copropriété (c'est gratuit, aucune carte bancaire n'est
+demandée).
 
 ### 1. Créer un projet
 
@@ -119,6 +125,7 @@ Menu **Clients** → **Créer un client** :
 - **Nom** : `Proprietas` (seulement pour vous) ;
 - **URI de redirection autorisés** → **Ajouter un URI** : l'adresse de votre serveur suivie de
   `/api/drive/google/retour`, par exemple `https://copro.exemple.fr/api/drive/google/retour`.
+  Proprietas l'affiche, prête à copier, quand on choisit Google Drive (étape 7).
   Si le serveur répond sous plusieurs noms, ajoutez une ligne par nom.
 
 ![Créer le client](images/google-drive/11-client-web.png)
@@ -132,14 +139,25 @@ Le code secret est un mot de passe : ne le mettez ni dans un e-mail, ni dans une
 
 ### 7. Donner les codes à Proprietas
 
-Sur le serveur, ajoutez deux lignes au fichier `.env` (à côté de `docker-compose.yml`) :
+Dans Proprietas : **Réglages → Sauvegarde et stockage**, carte **Drive de la copropriété**. Dans **Type de
+drive**, choisissez **Google Drive**, puis collez l'**ID client** et le **Code secret du client**. Ils sont
+gardés pour la copropriété (le code secret chiffré, il n'est plus jamais affiché) au moment où vous cliquez
+**Se connecter à Google Drive** (partie 2).
+
+![Codes de l'application Google dans Proprietas](images/google-drive/20-reglages-google-drive.png)
+
+Attention à ne pas les mettre dans le type **WebDAV** : ce n'est pas le même formulaire.
+
+**Administrateur d'un serveur à plusieurs copropriétés** : pour une seule application Google pour toutes,
+ajoutez plutôt deux lignes au fichier `.env` du serveur (à côté de `docker-compose.yml`) :
 
 ```
 COPRO_GOOGLE_CLIENT_ID=108360811579-xxxxxxxx.apps.googleusercontent.com
 COPRO_GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxx
 ```
 
-puis `docker compose up -d`. L'onglet **Google Drive** apparaît alors pour les syndics.
+puis `docker compose up -d`. Les syndics n'ont alors rien à saisir : ils laissent les deux champs vides. Une
+copropriété qui saisit ses propres codes utilise sa propre application.
 
 ---
 
@@ -150,11 +168,10 @@ l'administrateur a ajouté à l'étape 5), et non à votre compte personnel.
 
 ### 1. Lancer la connexion
 
-Dans Proprietas : **Réglages → Sauvegarde et stockage**, carte **Drive de la copropriété**, onglet
-**Google Drive**. Le dossier proposé (`Proprietas/<nom de la copropriété>`) convient en général. Cliquez
+Dans Proprietas : **Réglages → Sauvegarde et stockage**, carte **Drive de la copropriété**, type de drive
+**Google Drive** (avec les codes de l'étape 7, ou les champs vides si l'administrateur a préparé le serveur).
+Le dossier proposé (`Proprietas/<nom de la copropriété>`) convient en général. Cliquez
 **Se connecter à Google Drive**.
-
-![Se connecter à Google Drive](images/google-drive/20-reglages-google-drive.png)
 
 ### 2. Choisir le compte Google
 
@@ -211,7 +228,9 @@ Sur <https://drive.google.com>, dossier **Proprietas** → nom de la copropriét
 |---|---|---|
 | « Accès bloqué : … n'a pas terminé la procédure de validation de Google », erreur 403 `access_denied` | le compte Google n'est pas dans les **Utilisateurs tests** (ou l'ajout n'a pas été enregistré avec **Save**) | partie 1, étape 5 |
 | erreur 400 `redirect_uri_mismatch` | l'adresse du serveur n'est pas déclarée exactement (https, nom, `/api/drive/google/retour`) | partie 1, étape 6 : ajouter l'adresse affichée par Google dans « détails de l'erreur » |
-| l'onglet Google Drive n'apparaît pas | `COPRO_GOOGLE_CLIENT_ID` / `_SECRET` absents du `.env`, ou conteneur pas redémarré | partie 1, étape 7 |
+| « Indiquez l'identifiant client et le code secret de l'application Google » | aucune application : ni codes saisis pour la copropriété, ni codes dans le `.env` du serveur | partie 1, étape 7 |
+| « Ce sont les codes d'une application Google » (anciennement « Réponse inattendue du drive (code 405) ») | les codes Google ont été saisis dans le type **WebDAV** | choisir **Google Drive** comme type de drive |
+| « Google refuse l'application Google » | ID client ou code secret faux, ou client supprimé dans la console Google | ressaisir les deux codes (partie 1, étapes 6 et 7) |
 | « reconnecter Google Drive » au bout d'une semaine | application encore en test : Google limite la connexion à 7 jours | **Reconnecter Google Drive**, ou publier l'application |
 
 ![Accès bloqué](images/google-drive/90-acces-bloque.png)

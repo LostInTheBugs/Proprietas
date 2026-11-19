@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { Button, Card, Input } from "./ui";
+import { Button, Card, Input, Select } from "./ui";
 
 interface EtatDrive {
   autorise: boolean;
-  google_disponible: boolean;
+  // Application Google : de la copropriété (identifiant affiché, code secret jamais) ou de l'instance (.env).
+  google: { source: "" | "copropriete" | "instance"; instance: boolean; client_id: string; secret_defini: boolean; retour: string };
   type: "" | "webdav" | "google";
   url: string;
   utilisateur: string;
@@ -27,7 +28,10 @@ interface Verification {
   relies?: { id: number; libelle: string; ancien: string; nouveau: string }[];
 }
 
-/** Drive de la copropriété : ses fichiers rangés sur un serveur WebDAV (Nextcloud, ownCloud, Synology…). */
+const GUIDE_GOOGLE = "https://github.com/LostInTheBugs/Proprietas/blob/main/docs/google-drive.md";
+
+/** Drive de la copropriété : ses fichiers rangés sur un serveur WebDAV (Nextcloud, ownCloud, Synology…) ou sur
+ *  Google Drive. Le type de drive se choisit dans une liste ; les champs suivent. */
 export function DriveCard() {
   const [etat, setEtat] = useState<EtatDrive | null>(null);
   const [url, setUrl] = useState("");
@@ -43,6 +47,9 @@ export function DriveCard() {
   const [archives, setArchives] = useState<{ fichier: string; taille: number }[] | null>(null);
 
   const [service, setService] = useState<"webdav" | "google">("webdav");
+  const [googleId, setGoogleId] = useState("");
+  const [googleSecret, setGoogleSecret] = useState("");
+  const [copie, setCopie] = useState(false);
 
   function afficher(e: EtatDrive) {
     setEtat(e);
@@ -51,6 +58,8 @@ export function DriveCard() {
     setUtilisateur(e.utilisateur);
     setDossier(e.dossier || e.dossier_propose);
     setMotDePasse("");
+    setGoogleId(e.google.client_id);
+    setGoogleSecret("");
   }
   useEffect(() => {
     api.get<EtatDrive>("/drive").then(afficher).catch(() => {});
@@ -76,7 +85,8 @@ export function DriveCard() {
   const google = service === "google";
   const corps = google ? { type: "google" } : { type: "webdav", url, utilisateur, mot_de_passe: motDePasse, dossier };
   const connecterGoogle = () => lancer(async () => {
-    const r = await api.post<{ adresse: string }>("/drive/google/connecter", { dossier });
+    const r = await api.post<{ adresse: string }>("/drive/google/connecter",
+      { dossier, client_id: googleId.trim(), client_secret: googleSecret.trim() });
     window.location.href = r.adresse;           // page de Google, puis retour dans Réglages
     return { ok: true, texte: "Redirection vers Google…" };
   });
@@ -164,8 +174,7 @@ export function DriveCard() {
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
           Range les fichiers déposés (factures, contrats, devis…) sur votre drive, dans un dossier par catégorie et sous
           un nom lisible, par exemple <code className="text-slate-700">Factures/2026-11-16 Facture d'électricité.pdf</code>.
-          Compatible WebDAV : Nextcloud, ownCloud (<code className="text-slate-700">https://cloud.exemple.fr/remote.php/dav/files/identifiant/</code>),
-          Synology (paquet WebDAV Server, <code className="text-slate-700">https://nas.exemple.fr:5006/</code>).
+          Deux types de drive : WebDAV (Nextcloud, ownCloud, Synology) ou Google Drive.
         </p>
         {!branche && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -191,24 +200,50 @@ export function DriveCard() {
             dans Proprietas. Pensez à sauvegarder le drive lui-même.
           </p>
         )}
-        {etat.google_disponible && !(branche && etat.documents_sur_le_drive > 0) && (
-          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="tablist" aria-label="Service du drive">
-            {([["webdav", "Nextcloud, ownCloud, Synology (WebDAV)"], ["google", "Google Drive"]] as const).map(([k, l]) => (
-              <button key={k} type="button" role="tab" aria-selected={service === k} onClick={() => setService(k)}
-                className={`flex-1 rounded-md px-3 py-1.5 font-medium ${service === k ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600"}`}>
-                {l}
-              </button>
-            ))}
-          </div>
+        <Select label="Type de drive" value={service} onChange={(e) => { setService(e.target.value as "webdav" | "google"); setMessage(null); }}
+          disabled={branche && etat.documents_sur_le_drive > 0}>
+          <option value="webdav">Nextcloud, ownCloud, Synology (WebDAV)</option>
+          <option value="google">Google Drive</option>
+        </Select>
+        {branche && etat.documents_sur_le_drive > 0 && (
+          <p className="text-xs text-slate-500">Le type de drive ne peut plus changer tant que des fichiers y sont rangés.</p>
         )}
-        {google ? (
+        {google ? (<>
           <p className="text-sm text-slate-600">
             {etat.type === "google"
               ? <>Compte Google : <strong>{etat.utilisateur}</strong>. Proprietas ne voit que les dossiers et fichiers qu'il a créés lui-même.</>
               : <>Vous serez envoyé sur la page de Google pour autoriser Proprietas. Il n'aura accès qu'aux dossiers et fichiers qu'il crée lui-même.</>}
           </p>
-        ) : (<>
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs leading-relaxed text-slate-600">
+              <strong>Application Google</strong> : créée une fois dans la console Google Cloud, de préférence avec le compte
+              Google de la copropriété (<a className="text-indigo-700 underline" href={GUIDE_GOOGLE} target="_blank" rel="noreferrer">guide pas à pas</a>).
+              {etat.google.instance && !etat.google.client_id && <> Laissez ces champs vides pour utiliser celle de cette instance.</>}
+            </p>
+            <Input label="ID client" value={googleId} onChange={(e) => setGoogleId(e.target.value)} autoComplete="off"
+              placeholder="123456789012-abc….apps.googleusercontent.com" />
+            <Input label={etat.google.secret_defini ? "Nouveau code secret du client" : "Code secret du client"} type="password"
+              value={googleSecret} onChange={(e) => setGoogleSecret(e.target.value)} autoComplete="new-password"
+              placeholder={etat.google.secret_defini ? "Laisser vide pour conserver" : "GOCSPX-…"} />
+            {etat.google.retour && (
+              <div className="text-xs text-slate-600">
+                <p className="mb-1">URI de redirection à déclarer dans le client Google (« URI de redirection autorisés ») :</p>
+                <div className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 ring-1 ring-slate-200">
+                  <code className="flex-1 select-all overflow-x-auto whitespace-nowrap text-slate-800">{etat.google.retour}</code>
+                  <button type="button" className="shrink-0 font-medium text-indigo-700"
+                    onClick={() => { navigator.clipboard?.writeText(etat.google.retour); setCopie(true); setTimeout(() => setCopie(false), 1500); }}>
+                    {copie ? "✓ copié" : "copier"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>) : (<>
         <Input label="Adresse WebDAV" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://cloud.exemple.fr/remote.php/dav/files/identifiant/" />
+        <p className="-mt-2 text-xs text-slate-500">
+          Nextcloud, ownCloud : <code>https://cloud.exemple.fr/remote.php/dav/files/identifiant/</code> ; Synology (paquet WebDAV
+          Server) : <code>https://nas.exemple.fr:5006/</code>.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Identifiant" value={utilisateur} onChange={(e) => setUtilisateur(e.target.value)} autoComplete="off" />
           <Input label={etat.mot_de_passe_defini ? "Nouveau mot de passe" : "Mot de passe (d'application, de préférence)"} type="password" value={motDePasse}
