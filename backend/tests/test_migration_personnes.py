@@ -41,7 +41,7 @@ def test_table_personnes_supprimee(tmp_path):
     for table in ("lots", "relances", "invitations", "actes_recouvrement"):
         cibles = {fk["referred_table"] for fk in inspect(moteur).get_foreign_keys(table)}
         assert "personnes" not in cibles, table
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "f0a1b2c3d4e5")             # retour avant la suppression (pas « -1 » : head avance)
     moteur = create_engine(url)
     assert "personnes" in inspect(moteur).get_table_names()
     with moteur.connect() as c:
