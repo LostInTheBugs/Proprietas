@@ -150,7 +150,8 @@ def test_plus_de_reponse_en_ligne_une_fois_l_ag_ouverte(client, db, copro_a, syn
     client.post(f"/api/ag/{ag_id}/invitations", headers=auth(token_a))
     lien = next(l for l in envois[0][1].splitlines() if "/api/ag/confirmation/" in l).removeprefix("https://copro.exemple.fr")
     ag = db.get(AG, ag_id)
-    ag.date, ag.heure = date.today(), (datetime.now() - timedelta(hours=1)).strftime("%H:%M")
+    ouverte = datetime.now() - timedelta(hours=1)        # même instant pour la date et l'heure (vrai aussi après minuit)
+    ag.date, ag.heure = ouverte.date(), ouverte.strftime("%H:%M")
     db.commit()
     assert _repondre(client, ag_id, marie, copro_a, reponse="present").status_code == 409
     assert "plus possible de répondre" in client.get(lien).text
