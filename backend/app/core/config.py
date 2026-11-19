@@ -52,8 +52,9 @@ class Settings(BaseSettings):
     # est refusé (serveurs avec peu d'espace).
     drive_attente_mo: float = Field(50, ge=0)
     # Google Drive comme drive d'une copropriété (core/drive_google.py) : application OAuth « Web »
-    # déclarée par l'administrateur de l'instance dans la console Google Cloud, portée drive.file,
-    # adresse de retour <adresse de l'instance>/api/drive/google/retour. Vides : Google Drive n'est pas proposé.
+    # déclarée dans la console Google Cloud, portée drive.file, adresse de retour
+    # <adresse de l'instance>/api/drive/google/retour. Ici : l'application de toute l'instance (facultatif) ;
+    # une copropriété peut saisir la sienne dans Réglages → Drive, qui passe avant (core/drive.py).
     google_client_id: str = ""
     google_client_secret: str = ""
     # RGPD : durée de conservation du journal d'audit et des infos de dernière connexion

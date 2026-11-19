@@ -1,7 +1,7 @@
 """Google Drive comme drive d'une copropriété (voir core/drive.py pour le principe).
 
 ⚠ Écrit d'après la documentation de Google et vérifié sur un faux serveur ; pas encore essayé sur le
-vrai service (il faut l'application OAuth de l'instance : COPRO_GOOGLE_CLIENT_ID / _SECRET).
+vrai service (il faut une application OAuth : celle de la copropriété, ou celle de l'instance, voir core/drive.py).
 
 Même interface que `StockageWebDAV` : les noms sont des chemins relatifs au dossier du drive
 (« Factures/2026-11-16 Facture.pdf »). Google Drive, lui, ne connaît que des identifiants : chaque
@@ -59,8 +59,8 @@ def _post_jeton(champs: dict) -> dict:
             raise StockageIndisponible("L'autorisation Google a expiré ou a été retirée : reconnectez Google Drive "
                                        "dans Réglages → Sauvegarde et stockage.")
         if corps.get("error") in ("invalid_client", "unauthorized_client"):
-            raise StockageIndisponible("Google refuse l'application de cette instance (COPRO_GOOGLE_CLIENT_ID / "
-                                       "COPRO_GOOGLE_CLIENT_SECRET).")
+            raise StockageIndisponible("Google refuse l'application Google (identifiant client ou code secret) : "
+                                       "vérifiez-les dans Réglages → Drive de la copropriété.")
         raise StockageIndisponible(f"Google refuse la connexion (code {r.status_code}).")
     return corps
 

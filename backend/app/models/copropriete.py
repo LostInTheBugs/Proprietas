@@ -40,6 +40,10 @@ class Copropriete(Base):
     drive_sauvegarde_derniere = Column(DateTime, nullable=True)     # dernière sauvegarde réussie
     drive_sauvegarde_tentative = Column(DateTime, nullable=True)    # dernier essai automatique
     drive_sauvegarde_erreur = Column(String, default="")            # raison du dernier échec ("" : aucun)
+    # Application Google (OAuth « Web ») de la copropriété, saisie dans Réglages → Drive. Vide : celle de
+    # l'instance (COPRO_GOOGLE_CLIENT_ID / _SECRET dans le .env), si elle existe (core/drive.py).
+    google_client_id = Column(String, nullable=False, default="", server_default="")
+    google_client_secret = Column(TexteChiffre, default="")         # chiffré en base, ne ressort jamais
     # Relances automatiques (cron)
     relance_auto = Column(Boolean, default=False)
     relance_frequence = Column(String, default="hebdo")  # hebdo | mensuel

@@ -85,7 +85,7 @@ EXCLUES = {
     # s'ils sont dans l'archive, vont dans le stockage de l'instance).
     "coproprietes": {"smtp_password", "drive_type", "drive_url", "drive_user", "drive_password", "drive_dossier",
                      "drive_sauvegarde_auto", "drive_sauvegarde_password", "drive_sauvegarde_derniere",
-                     "drive_sauvegarde_tentative", "drive_sauvegarde_erreur"},
+                     "drive_sauvegarde_tentative", "drive_sauvegarde_erreur", "google_client_id", "google_client_secret"},
     "users": {"is_instance_admin", "token_version", "last_login_at", "last_login_ip", "last_login_ua",
               "copropriete_id", "echecs_connexion", "dernier_echec_at", "bloque_jusqua", "bloque_definitif_le"},
 }

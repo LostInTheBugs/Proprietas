@@ -1354,6 +1354,10 @@ class DriveSauvegardeIn(BaseModel):
 
 class DriveGoogleIn(BaseModel):
     dossier: str = ""                    # dossier du Google Drive, ex. « Proprietas/Ma copropriété »
+    # Application Google de la copropriété (vide : celle déjà enregistrée, ou celle de l'instance) ;
+    # code secret vide : garder celui qui est enregistré.
+    client_id: str = Field("", max_length=200)
+    client_secret: str = Field("", max_length=200)
 
 
 # ---------- Connexions (historique, blocage) ----------
