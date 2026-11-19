@@ -347,12 +347,12 @@ sur le drive puis renommé ne peut plus être retrouvé automatiquement ; tant q
 drive, on ne peut ni le débrancher ni changer son dossier. **Sauvegardez le drive lui-même.** Une sauvegarde de la copropriété
 « avec les fichiers » inclut ceux du drive ; ses réglages ne sont jamais exportés.
 
-**Dépôts pendant une panne du drive** : par défaut, un document déposé quand le drive ne répond pas est
-refusé (message clair, à redéposer plus tard). Avec `COPRO_DRIVE_ATTENTE_MO=200` dans le `.env`, le
-serveur le garde (badge « En attente du drive », lisible tout de suite) et le range sur le drive dès son
-retour : essai automatique toutes les 5 minutes, ou bouton « Ranger maintenant » dans la carte du drive.
-La valeur est la **place maximale en Mo** réservée à ces fichiers, toutes copropriétés confondues : au-delà,
-les dépôts sont de nouveau refusés. `0` (défaut) désactive l'option, pour les serveurs avec peu d'espace.
+**Dépôts pendant une panne du drive** : un document déposé quand le drive ne répond pas est gardé sur le
+serveur (badge « En attente du drive », lisible tout de suite) et rangé sur le drive dès son retour : essai
+automatique toutes les 5 minutes, ou bouton « Ranger maintenant » dans la carte du drive. La place réservée
+à ces fichiers, toutes copropriétés confondues, est de **50 Mo** par défaut ; au-delà, le dépôt est refusé
+(message clair, à redéposer plus tard). Autre valeur : `COPRO_DRIVE_ATTENTE_MO=…` (en Mo) dans le `.env` ;
+`0` désactive l'option, pour les serveurs avec peu d'espace.
 Débrancher le drive laisse simplement ces documents sur le serveur.
 
 Réglages d'instance : `COPRO_DRIVE_ACTIF=false` retire la fonction ; `COPRO_DRIVE_RESEAU_LOCAL=false`
