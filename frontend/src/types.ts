@@ -276,6 +276,7 @@ export interface Invitation {
   date_envoi: string;
   statut: string;
   message: string;
+  confirme_le: string | null;   // clic sur « J'ai bien reçu ce message » (pas un accusé de réception légal)
 }
 
 export interface InvitationsResult {

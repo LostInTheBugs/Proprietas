@@ -1,6 +1,8 @@
+import html
+import secrets
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
@@ -15,7 +17,7 @@ from app.routes.copro import get_or_create_copro
 from app.services.country_rules import calculer_statut_resolution, refus_consultation_ecrite, MAJORITES
 from app.services.regime import regime_copro
 from app.services.emailer import (envoyer_email, convocation_sujet, convocation_texte, pv_email_texte,
-                                  EmailError)
+                                  EmailError, adresse_publique)
 from app.services.pv_pdf import generer_pv_pdf
 from app.schemas import (
     AGIn, AGOut, ResolutionIn, ResolutionOut, VoteIn, VoteOut, ResolutionResult,
@@ -357,6 +359,7 @@ def list_invitations(ag_id: int, db: Session = Depends(get_db), user: User = Dep
             date_envoi=i.date_envoi,
             statut=i.statut,
             message=i.message,
+            confirme_le=i.confirme_le,
         ))
     return out
 
@@ -370,8 +373,8 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
             proprietaires[lot.proprietaire_id] = True
     personnes = db.query(User).filter(User.id.in_(list(proprietaires.keys()))).all() if proprietaires else []
 
-    corps = convocation_texte(copro, ag, ag.resolutions, syndic_nom)
     sujet = convocation_sujet(copro, ag)
+    base = adresse_publique(copro).rstrip("/")
 
     envoyes = 0
     sans_email = 0
@@ -380,6 +383,10 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
         if not p.email:
             sans_email += 1
             continue
+        # Lien personnel « J'ai bien reçu ce message » (seulement si l'adresse publique est connue).
+        jeton = secrets.token_urlsafe(24)
+        lien = f"{base}/api/ag/confirmation/{jeton}" if base else ""
+        corps = convocation_texte(copro, ag, ag.resolutions, syndic_nom, lien_confirmation=lien)
         try:
             envoyer_email(copro, p.email, sujet, corps)
             statut = "envoye"
@@ -391,6 +398,7 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
         inv = Invitation(
             ag_id=ag.id, personne_id=p.id,
             date_envoi=datetime.now(), statut=statut, message=message,
+            jeton=jeton if statut == "envoye" and lien else None,
         )
         db.add(inv)
         if statut == "envoye":
@@ -399,6 +407,54 @@ def envoyer_convocations(db: Session, ag: AG, copro: Copropriete, syndic_nom: st
         ag.convocation_envoyee = True
     db.commit()
     return InvitationsResult(envoyes=envoyes, sans_email=sans_email, erreurs=erreurs)
+
+
+def _page(titre: str, texte: str, formulaire: str = "") -> HTMLResponse:
+    """Petite page autonome (sans script : CSP stricte), lisible sur téléphone."""
+    return HTMLResponse(
+        "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        f"<title>{html.escape(titre)}</title><style>body{{font-family:system-ui,sans-serif;max-width:32rem;"
+        "margin:3rem auto;padding:0 1rem;color:#1e293b}h1{font-size:1.25rem}button{font-size:1rem;"
+        "padding:.6rem 1.2rem;border:0;border-radius:.5rem;background:#4f46e5;color:#fff;cursor:pointer}"
+        "</style></head><body>"
+        f"<h1>{html.escape(titre)}</h1><p>{html.escape(texte)}</p>{formulaire}</body></html>")
+
+
+def _invitation_du_jeton(db: Session, jeton: str):
+    inv = db.query(Invitation).filter(Invitation.jeton == jeton).first() if len(jeton) >= 20 else None
+    if inv is None:
+        return None, None, None
+    ag = db.get(AG, inv.ag_id)
+    copro = db.get(Copropriete, ag.copropriete_id) if ag else None
+    return inv, ag, copro
+
+
+@router.get("/ag/confirmation/{jeton}", response_class=HTMLResponse, include_in_schema=False)
+def confirmation_page(jeton: str, db: Session = Depends(get_db)):
+    """Page du lien de l'e-mail. Un bouton (POST) confirme : les antivirus et aperçus de liens qui
+    ouvrent les liens tout seuls (GET) ne confirment donc rien à la place du copropriétaire."""
+    inv, ag, copro = _invitation_du_jeton(db, jeton)
+    if inv is None:
+        return _page("Lien inconnu", "Ce lien de confirmation n'est pas valable (ou plus valable).")
+    quoi = f"l'assemblée du {ag.date.strftime('%d/%m/%Y')} — {copro.nom}" if ag and copro else "l'assemblée"
+    if inv.confirme_le:
+        return _page("Déjà confirmé", f"Vous avez confirmé la réception du message sur {quoi} "
+                                      f"le {inv.confirme_le.strftime('%d/%m/%Y à %H:%M')}. Merci.")
+    return _page("Confirmer la réception", f"Message d'information sur {quoi}.",
+                 f'<form method="post"><button type="submit">J\'ai bien reçu ce message</button></form>')
+
+
+@router.post("/ag/confirmation/{jeton}", response_class=HTMLResponse, include_in_schema=False)
+def confirmation(jeton: str, db: Session = Depends(get_db)):
+    inv, ag, copro = _invitation_du_jeton(db, jeton)
+    if inv is None:
+        return _page("Lien inconnu", "Ce lien de confirmation n'est pas valable (ou plus valable).")
+    if not inv.confirme_le:
+        inv.confirme_le = datetime.now()
+        db.commit()
+    return _page("Merci", "La réception est confirmée : le syndic en est informé. "
+                          "La convocation officielle vous parvient par lettre recommandée.")
 
 
 @router.post("/ag/{ag_id}/invitations", response_model=InvitationsResult)

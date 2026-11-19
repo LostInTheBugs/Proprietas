@@ -892,6 +892,7 @@ class InvitationOut(BaseModel):
     date_envoi: datetime
     statut: str = "envoye"
     message: str = ""
+    confirme_le: Optional[datetime] = None
 
 
 class InvitationsResult(BaseModel):
