@@ -57,7 +57,6 @@ class Copropriete(Base):
 
     users = relationship("User", back_populates="copropriete")
     lots = relationship("Lot", back_populates="copropriete", cascade="all, delete-orphan")
-    personnes = relationship("Personne", back_populates="copropriete", cascade="all, delete-orphan")
     exercices = relationship("Exercice", back_populates="copropriete", cascade="all, delete-orphan")
     ags = relationship("AG", back_populates="copropriete", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="copropriete", cascade="all, delete-orphan")

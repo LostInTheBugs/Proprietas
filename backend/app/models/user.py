@@ -33,7 +33,6 @@ class User(Base):
     telephone = Column(String, default="", server_default="")
     # Colonne historique : ancien lien vers une fiche « Lots & occupants »
     # (le modèle est passé aux comptes : plus aucun code ne la lit/écrit).
-    personne_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
     # Colonne historique : ancienne case « propriétaire occupant » du compte —
     # l'occupation se règle désormais lot par lot (lots.statut_occupation).
     est_occupant = Column(Boolean, nullable=False, default=False, server_default=text("false"))

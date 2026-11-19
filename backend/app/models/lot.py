@@ -18,7 +18,6 @@ class Lot(Base):
     proprietaire_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     # Colonne historique (l'occupant était une fiche personne nommée) — PLUS
     # utilisée : voir statut_occupation (RGPD, aucun nom de locataire).
-    occupant_id = Column(Integer, ForeignKey("personnes.id"), nullable=True)
     # Occupation du lot : "" = non renseigné | "occupant" | "loue" | "vacant".
     # « occupant » = le propriétaire occupe son logement (« propriétaire
     # occupant ») — il le déclare pour chacun de ses lots (Réglages → Mes lots).

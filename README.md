@@ -87,6 +87,21 @@ se créer normalement depuis la page de connexion.
   ou système (suit l'appareil), appliqué dès le chargement sans clignotement
 - **Multi-pays** : module de règles par pays (France en V1, extensible)
 
+## Feuille de route
+
+Pistes retenues pour plus tard, sans date :
+
+- **Charges spéciales** (loi du 10 juillet 1965, art. 10) : plusieurs **clés de répartition** (bâtiment,
+  escalier, ascenseur, garages…), une clé par ligne de budget et par dépense, appels de provisions et
+  régularisation clé par clé. Couvre aussi une copropriété de plusieurs bâtiments : une répartition « entre
+  bâtiments, puis dans le bâtiment » revient à une seule clé aux millièmes recalculés
+  ([#65](https://github.com/LostInTheBugs/Proprietas/issues/65)). Ensuite, en AG, vote des seuls
+  copropriétaires concernés pour ces dépenses (art. 24, dernier alinéa).
+- **OneDrive** comme drive de la copropriété (comptes personnels et professionnels), après WebDAV et
+  Google Drive.
+- **Envoi des lettres recommandées** (électroniques ou papier) depuis l'application : aujourd'hui, elle
+  prépare les courriers, le syndic les envoie.
+
 ## Stack
 
 - Backend : FastAPI + SQLAlchemy + JWT (Python 3.11)

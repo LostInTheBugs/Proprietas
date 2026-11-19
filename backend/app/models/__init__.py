@@ -1,6 +1,5 @@
 from app.models.user import User, UserCopro
 from app.models.copropriete import Copropriete
-from app.models.personne import Personne
 from app.models.lot import Lot
 from app.models.exercice import Exercice, BudgetLine
 from app.models.appel import AppelFonds, AppelLot
@@ -20,7 +19,7 @@ from app.models.notification import NotificationPV
 from app.models.reprise import EtatReprise, EtatRepriseLigne
 
 __all__ = [
-    "User", "UserCopro", "Copropriete", "Personne", "Lot", "Exercice", "BudgetLine",
+    "User", "UserCopro", "Copropriete", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
