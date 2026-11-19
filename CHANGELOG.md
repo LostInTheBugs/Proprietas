@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.034 — 2026-11-19
+
+- Drive : option d'instance COPRO_DRIVE_ATTENTE_MO (Mo, 0 = désactivée par défaut) : un document déposé pendant une panne du drive est gardé sur le serveur (« En attente du drive ») et rangé sur le drive dès son retour (toutes les 5 minutes, ou bouton « Ranger maintenant »). Au-delà de la place fixée, le dépôt est refusé comme avant.
+
 ## 2026.11.033 — 2026-11-19
 
 - Sauvegarde automatique sur le drive en échec : les syndics sont prévenus par e-mail (au premier échec, puis quand elle refonctionne) ; Google Drive : autorisation expirée expliquée.
