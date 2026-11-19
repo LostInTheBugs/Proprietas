@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.044 — 2026-11-19
+
+- Charges spéciales : clés de répartition (bâtiment, ascenseur…) avec leurs millièmes par lot (page Lots) ; une clé par ligne de budget et par dépense commune ; un appel de provisions se partage comme le budget, clé par clé (ou sur une seule clé) ; régularisation et compte de gestion par clé (issue #65). Correctif : PDF d'une copropriété au nom accentué. Migration b4c5d6e7f8a9.
+
 ## 2026.11.043 — 2026-11-19
 
 - Factures à payer : une dépense se saisit « à payer » avec une échéance ; elle compte dans les charges mais pas dans la banque jusqu'à « Marquer payée » (par la copropriété à la date du virement, ou de sa poche par quelqu'un : avance). Encart sur le tableau de bord du syndic, e-mail aux syndics 7 jours avant l'échéance puis en cas de retard. Migration a3b4c5d6e7f8.
