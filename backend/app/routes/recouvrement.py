@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.routes.documents import _content_disposition
 from app.core import audit
 from app.core.database import get_db
 from app.core.deps import require_syndic
@@ -194,7 +195,7 @@ def mise_en_demeure_pdf(lot_id: int, db: Session = Depends(get_db), user: User =
                                       annexes=ensembles.annexes(db, lot))
     return StreamingResponse(
         buf, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="mise-en-demeure-lot-{lot.numero}.pdf"'},
+        headers={"Content-Disposition": _content_disposition(f"mise-en-demeure-lot-{lot.numero}.pdf")},
     )
 
 

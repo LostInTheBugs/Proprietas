@@ -23,7 +23,7 @@ from app.schemas import (
     RegularisationIn, RegularisationOut, ReclasserIn, EnsembleSolde,
 )
 from app.core import audit
-from app.services import avances, factures, regularisation, reprise
+from app.services import avances, cles, factures, regularisation, reprise
 from app.services.soldes import totaux_lot
 from app.services import ensembles
 
@@ -113,6 +113,7 @@ def get_budget(exercice_id: int, db: Session = Depends(get_db), user: User = Dep
 def add_budget_line(exercice_id: int, data: BudgetLineIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
+    cles.controler(db, copro.id, data.cle_id)
     line = BudgetLine(exercice_id=ex.id, **data.model_dump())
     db.add(line)
     db.commit()
@@ -125,6 +126,7 @@ def update_budget_line(line_id: int, data: BudgetLineIn, db: Session = Depends(g
                        user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     line = get_owned_via(db, BudgetLine, Exercice, line_id, copro, "exercice_id", label="Ligne")
+    cles.controler(db, copro.id, data.cle_id)
     for champ, valeur in data.model_dump().items():
         setattr(line, champ, valeur)
     db.commit()
@@ -162,7 +164,7 @@ def list_appels(exercice_id: int, db: Session = Depends(get_db), user: User = De
             id=a.id, exercice_id=a.exercice_id, libelle=a.libelle,
             date_emission=a.date_emission, date_echeance=a.date_echeance,
             montant_total=a.montant_total, inclut_fonds_travaux=a.inclut_fonds_travaux,
-            fonds_travaux_montant=a.fonds_travaux_montant, parts=parts,
+            fonds_travaux_montant=a.fonds_travaux_montant, cle_id=a.cle_id, parts=parts,
         ))
     return out
 
@@ -174,6 +176,7 @@ def create_appel(exercice_id: int, data: AppelIn, db: Session = Depends(get_db),
     lots = db.query(Lot).filter(Lot.copropriete_id == ex.copropriete_id).all()
     if not lots:
         raise HTTPException(400, "Créez d'abord des lots avec des tantièmes")
+    cles.controler(db, copro.id, data.cle_id)
 
     appel = AppelFonds(
         exercice_id=ex.id,
@@ -183,20 +186,23 @@ def create_appel(exercice_id: int, data: AppelIn, db: Session = Depends(get_db),
         montant_total=data.montant_total,
         inclut_fonds_travaux=data.inclut_fonds_travaux and copro.fonds_travaux_actif,
         fonds_travaux_montant=D(0),
+        cle_id=data.cle_id,
     )
     db.add(appel)
     db.flush()
 
+    # Charges : sur une seule clé, ou comme le budget de l'exercice, clé par clé (services/cles.py).
+    # Fonds de travaux : par les tantièmes généraux.
+    charges = (cles.repartir(db, copro.id, data.montant_total, data.cle_id) if data.cle_id is not None
+               else cles.repartir_selon_budget(db, copro.id, ex.id, data.montant_total))
     taux = copro.fonds_travaux_taux_pct if appel.inclut_fonds_travaux else D(0)
-    parts = repartir_par_tantiemes(data.montant_total, lots, taux)
-    for p in parts:
-        db.add(AppelLot(
-            appel_id=appel.id,
-            lot_id=p["lot"].id,
-            montant_charges=p["montant_charges"],
-            montant_fonds_travaux=p.get("montant_fonds_travaux", D(0)),
-        ))
-    appel.fonds_travaux_montant = somme(p.get("montant_fonds_travaux", D(0)) for p in parts)
+    fonds = ({p["lot"].id: p.get("montant_fonds_travaux", D(0))
+              for p in repartir_par_tantiemes(data.montant_total, lots, taux)} if taux > 0 else {})
+    for lot in sorted(lots, key=lambda l: l.id):
+        mc, mf = charges.get(lot.id, D(0)), fonds.get(lot.id, D(0))
+        if mc or mf:
+            db.add(AppelLot(appel_id=appel.id, lot_id=lot.id, montant_charges=mc, montant_fonds_travaux=mf))
+    appel.fonds_travaux_montant = somme(fonds.values())
     db.commit()
     db.refresh(appel)
     return _appel_out(db, appel)
@@ -216,7 +222,7 @@ def _appel_out(db: Session, a: AppelFonds) -> AppelOut:
         id=a.id, exercice_id=a.exercice_id, libelle=a.libelle,
         date_emission=a.date_emission, date_echeance=a.date_echeance,
         montant_total=a.montant_total, inclut_fonds_travaux=a.inclut_fonds_travaux,
-        fonds_travaux_montant=a.fonds_travaux_montant, parts=parts,
+        fonds_travaux_montant=a.fonds_travaux_montant, cle_id=a.cle_id, parts=parts,
     )
 
 
@@ -286,6 +292,11 @@ def _controler_mouvement(db: Session, copro, data: MouvementIn, mouvement=None) 
             Document.id == data.document_id, Document.copropriete_id == copro.id).first():
         raise HTTPException(422, "Ce document n'appartient pas à la copropriété.")
     factures.controler(data)
+    if data.cle_id is not None:
+        if data.type != "depense" or data.lot_id is not None or data.categorie == avances.CATEGORIE:
+            raise HTTPException(422, "Une clé de répartition ne s'applique qu'à une dépense commune (pas à un lot, "
+                                     "ni à un encaissement ou un remboursement d'avance).")
+        cles.controler(db, copro.id, data.cle_id)
     return avances.controler(db, copro, data, mouvement)
 
 

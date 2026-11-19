@@ -189,6 +189,7 @@ export function TableMouvements({ mouvements, exercices, exId, lots, contrats, d
                   <td className="py-2 text-slate-700">
                     {m.libelle}
                     <LigneAvance m={m} />
+                    {m.cle_nom && <span className="block text-xs text-indigo-700">clé : {m.cle_nom}</span>}
                     {m.document_id && (
                       <a href={`/api/documents/${m.document_id}/download`} className="block text-xs text-indigo-600 hover:underline">
                         📎 {documents.find((d) => d.id === m.document_id)?.libelle ?? "facture"}

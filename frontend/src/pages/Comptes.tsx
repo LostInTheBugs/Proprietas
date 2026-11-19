@@ -7,6 +7,7 @@ import { fmtEUR, fmtDate } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import { TableMouvements } from "../components/TableMouvements";
 import { AvancesCard } from "../components/Avances";
+import { OptionsCles, useCles, type Cle } from "../components/Cles";
 
 export default function Comptes() {
   const { user } = useUser();
@@ -21,6 +22,8 @@ export default function Comptes() {
   const [documents, setDocuments] = useState<DocumentFichier[]>([]);
   const [recap, setRecap] = useState<Recap | null>(null);
   const [comptes, setComptes] = useState<User[]>([]);     // « Payée par » (avances)
+  const [cles] = useCles();                                // clés de répartition (charges spéciales)
+  const nomCle = (id?: number | null) => cles.find((c) => c.id === id)?.nom;
   const [modal, setModal] = useState<null | "exercice" | "budget" | "appel" | "mouvement" | "paiement">(null);
   const [mouvementEdite, setMouvementEdite] = useState<Mouvement | null>(null);
   const [budgetEdite, setBudgetEdite] = useState<BudgetLine | null>(null);
@@ -185,7 +188,8 @@ export default function Comptes() {
                   <tbody>
                     {budget.map((b) => (
                       <tr key={b.id} className="border-b border-slate-50 last:border-0">
-                        <td className="py-2.5 text-slate-700">{b.libelle}</td>
+                        <td className="py-2.5 text-slate-700">{b.libelle}
+                          {b.cle_id && <span className="block text-xs text-indigo-700">clé : {nomCle(b.cle_id)}</span>}</td>
                         <td className="py-2.5 text-right tabular-nums text-slate-700">{fmtEUR(b.montant)}</td>
                         <td className="py-2.5 text-right">
                           {isSyndic && (
@@ -295,14 +299,14 @@ export default function Comptes() {
         <ExerciceModal onClose={() => setModal(null)} onSaved={(id) => { setModal(null); refresh(); setExId(id); }} onError={setError} />
       )}
       {modal === "budget" && exId && (
-        <BudgetModal exId={exId} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+        <BudgetModal exId={exId} cles={cles} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "appel" && exId && (
-        <AppelModal exId={exId} lots={lots} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+        <AppelModal exId={exId} lots={lots} cles={cles} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "mouvement" && exId && (
         <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
-          comptes={comptes} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
+          comptes={comptes} cles={cles} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} onError={setError} />
       )}
       {modal === "paiement" && (
         <PaiementModal lots={lots} onClose={() => setModal(null)}
@@ -310,7 +314,7 @@ export default function Comptes() {
       )}
       {mouvementEdite && exId && (
         <MouvementModal exId={exId} exercices={exercices} lots={lots} contrats={contrats} documents={documents}
-          comptes={comptes} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
+          comptes={comptes} cles={cles} initial={mouvementEdite} onClose={() => setMouvementEdite(null)}
           onSaved={() => { setMouvementEdite(null); refresh(); }} onError={setError} />
       )}
       {reclassement && exId && (
@@ -346,7 +350,7 @@ export default function Comptes() {
         </Modal>
       )}
       {budgetEdite && exId && (
-        <BudgetModal exId={exId} initial={budgetEdite} onClose={() => setBudgetEdite(null)}
+        <BudgetModal exId={exId} cles={cles} initial={budgetEdite} onClose={() => setBudgetEdite(null)}
           onSaved={() => { setBudgetEdite(null); refresh(); }} onError={setError} />
       )}
     </div>
@@ -492,14 +496,16 @@ function ExerciceModal({ onClose, onSaved, onError }: { onClose: () => void; onS
   );
 }
 
-function BudgetModal({ exId, initial, onClose, onSaved, onError }: {
-  exId: number; initial?: BudgetLine; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+function BudgetModal({ exId, cles, initial, onClose, onSaved, onError }: {
+  exId: number; cles: Cle[]; initial?: BudgetLine; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [libelle, setLibelle] = useState(initial?.libelle ?? "");
   const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
+  const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
   async function save() {
     try {
-      const corps = { libelle, montant: Number(montant), type_repartition: initial?.type_repartition ?? "generale" };
+      const corps = { libelle, montant: Number(montant), type_repartition: initial?.type_repartition ?? "generale",
+        cle_id: cleId === "" ? null : Number(cleId) };
       if (initial) await api.put(`/budget/${initial.id}`, corps);
       else await api.post(`/exercices/${exId}/budget`, corps);
       onSaved();
@@ -510,6 +516,11 @@ function BudgetModal({ exId, initial, onClose, onSaved, onError }: {
       <div className="space-y-3">
         <Input label="Poste" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Entretien courant" />
         <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
+        {cles.length > 0 && (
+          <Select label="Répartition" value={cleId} onChange={(e) => setCleId(e.target.value)}>
+            <OptionsCles cles={cles} />
+          </Select>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>{initial ? "Enregistrer" : "Ajouter"}</Button>
@@ -519,7 +530,8 @@ function BudgetModal({ exId, initial, onClose, onSaved, onError }: {
   );
 }
 
-function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
+function AppelModal({ exId, lots, cles, onClose, onSaved, onError }: { exId: number; lots: Lot[]; cles: Cle[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
+  const [cleId, setCleId] = useState("");
   const [libelle, setLibelle] = useState("");
   const [montant, setMontant] = useState("");
   const [dateEmission, setDateEmission] = useState(new Date().toISOString().slice(0, 10));
@@ -529,7 +541,7 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
     try {
       await api.post(`/exercices/${exId}/appels`, {
         libelle, montant_total: Number(montant), date_emission: dateEmission,
-        date_echeance: dateEcheance || null, inclut_fonds_travaux: ft,
+        date_echeance: dateEcheance || null, inclut_fonds_travaux: ft, cle_id: cleId === "" ? null : Number(cleId),
       });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
@@ -547,8 +559,18 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
           <input type="checkbox" checked={ft} onChange={(e) => setFt(e.target.checked)} />
           Inclure la cotisation fonds de travaux (5 % du montant)
         </label>
+        {cles.length > 0 && (
+          <Select label="Répartition" value={cleId} onChange={(e) => setCleId(e.target.value)}>
+            <option value="">Comme le budget de l'exercice (chaque part par sa clé)</option>
+            {cles.map((c) => <option key={c.id} value={c.id}>Seulement la clé « {c.nom} »</option>)}
+          </Select>
+        )}
         <p className="text-xs leading-relaxed text-slate-500">
-          Le montant sera réparti automatiquement entre les {lots.length} lots au prorata des millièmes.
+          {cles.length === 0
+            ? `Le montant sera réparti automatiquement entre les ${lots.length} lots au prorata des millièmes.`
+            : cleId === ""
+              ? "Le montant est partagé entre charges générales et clés comme le budget voté, puis chaque part entre les lots concernés. La cotisation au fonds de travaux suit les tantièmes généraux."
+              : "Le montant est réparti entre les seuls lots de cette clé, selon ses millièmes."}
         </p>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
@@ -559,8 +581,9 @@ function AppelModal({ exId, lots, onClose, onSaved, onError }: { exId: number; l
   );
 }
 
-function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, initial, onClose, onSaved, onError }: {
+function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, cles, initial, onClose, onSaved, onError }: {
   exId: number; exercices: Exercice[]; lots: Lot[]; contrats: Contrat[]; documents: DocumentFichier[]; comptes: User[];
+  cles: Cle[];
   initial?: Mouvement; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [contratId, setContratId] = useState(initial?.contrat_id != null ? String(initial.contrat_id) : "");
@@ -582,6 +605,7 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
   const [avanceParId, setAvanceParId] = useState(
     initial?.a_payer ? "a_payer" : initial?.avance_par_id != null ? String(initial.avance_par_id) : "");
   const [echeance, setEcheance] = useState(initial?.echeance ?? "");
+  const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
   const aPayer = type === "depense" && avanceParId === "a_payer";
   // Remboursement ou déduction d'une avance (créés depuis « Avances à régler ») : la personne ne se change pas ici.
   const reglementAvance = !!initial?.avance_par_id && (initial.type === "encaissement" || initial.categorie === "avance");
@@ -603,6 +627,7 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
         document_id: docId,
         avance_par_id: (type === "depense" && avanceParId !== "" && !aPayer) || reglementAvance ? Number(avanceParId) : null,
         a_payer: aPayer,
+        cle_id: type === "depense" && lotId === "" && categorie !== "avance" && cleId !== "" ? Number(cleId) : null,
         echeance: aPayer && echeance ? echeance : null,
       };
       if (initial) await api.put(`/mouvements/${initial.id}`, corps);
@@ -693,6 +718,11 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, i
             {lots.map((l) => <option key={l.id} value={l.id}>Lot {l.numero}</option>)}
           </Select>
         </div>
+        {type === "depense" && lotId === "" && categorie !== "avance" && cles.length > 0 && (
+          <Select label="Répartition" value={cleId} onChange={(e) => setCleId(e.target.value)}>
+            <OptionsCles cles={cles} />
+          </Select>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Select label="Contrat" value={contratId} onChange={(e) => setContratId(e.target.value)}>
             <option value="">— aucun —</option>

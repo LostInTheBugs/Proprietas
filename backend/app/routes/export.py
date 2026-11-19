@@ -14,6 +14,7 @@ from app.models.mouvement import Mouvement
 from app.routes.copro import get_or_create_copro
 from app.routes.relances import _etat_lots
 from app.services import avances
+from app.routes.documents import _content_disposition   # noms accentués (en-tête HTTP en latin-1)
 from app.services.compte_gestion import generer_compte_gestion_pdf
 from app.services.quittances import generer_quittances_pdf
 from app.services.rapport_annuel import generer_rapport_annuel_pdf
@@ -40,7 +41,7 @@ def rapport_annuel(exercice_id: int, request: Request, db: Session = Depends(get
     return Response(
         content=pdf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+        headers={"Content-Disposition": _content_disposition(nom)},
     )
 
 
@@ -60,7 +61,7 @@ def compte_gestion(exercice_id: int, request: Request, db: Session = Depends(get
     return Response(
         content=pdf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+        headers={"Content-Disposition": _content_disposition(nom)},
     )
 
 
@@ -85,7 +86,7 @@ def quittances(exercice_id: int, request: Request, lot_id: int | None = None, db
     return Response(
         content=pdf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+        headers={"Content-Disposition": _content_disposition(nom)},
     )
 
 

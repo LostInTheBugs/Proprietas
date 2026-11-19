@@ -42,11 +42,12 @@ def calcul(db: Session, ex) -> dict:
     depenses = (db.query(Mouvement).filter(Mouvement.exercice_id == ex.id, Mouvement.type == "depense")
                 .all())
     courantes = [m for m in depenses if (m.categorie or "autre") not in CATEGORIES_HORS_CHARGES]
-    communes = arrondi(somme(D(m.montant or 0) for m in courantes if m.lot_id is None))
     reel = {lot.id: D(0) for lot in lots}
-    if lots and communes:
-        for p in repartir_par_tantiemes(communes, lots):
-            reel[p["lot"].id] += p["montant_charges"]
+    # Dépenses communes : chacune par sa clé de répartition (charges générales : tantièmes du lot).
+    from app.services.cles import depenses_reparties
+    for lot_id, montant in depenses_reparties(db, ex.copropriete_id, courantes).items():
+        if lot_id in reel:
+            reel[lot_id] += montant
     for m in courantes:
         if m.lot_id in reel:
             reel[m.lot_id] += D(m.montant or 0)

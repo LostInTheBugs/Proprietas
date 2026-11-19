@@ -51,6 +51,12 @@ se créer normalement depuis la page de connexion.
   Mes lots ; aucun nom de locataire enregistré, RGPD)
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
   encaissements / dépenses, solde par lot, état daté, quittances
+- **Charges spéciales** (loi du 10 juillet 1965, art. 10) : **clés de répartition** (bâtiment, escalier,
+  ascenseur, garages…) avec leurs propres millièmes par lot (page Lots) ; une clé par ligne de budget et par
+  dépense commune ; un appel de provisions se partage comme le budget, chaque part par sa clé (ou sur une
+  seule clé) ; régularisation clé par clé ; compte de gestion par clé. Une copropriété de plusieurs
+  bâtiments s'y ramène : une répartition « entre bâtiments, puis dans le bâtiment » revient à une clé aux
+  millièmes recalculés ([#65](https://github.com/LostInTheBugs/Proprietas/issues/65))
 - **Factures à payer** : une dépense se saisit « à payer » dès réception de la facture, avec une échéance ;
   elle compte dans les charges mais pas dans la banque jusqu'à « Marquer payée » (par la copropriété, à la
   date du virement, ou de sa poche par quelqu'un : elle devient une avance) ; encart sur le tableau de bord
@@ -108,12 +114,8 @@ se créer normalement depuis la page de connexion.
 
 Pistes retenues pour plus tard, sans date :
 
-- **Charges spéciales** (loi du 10 juillet 1965, art. 10) : plusieurs **clés de répartition** (bâtiment,
-  escalier, ascenseur, garages…), une clé par ligne de budget et par dépense, appels de provisions et
-  régularisation clé par clé. Couvre aussi une copropriété de plusieurs bâtiments : une répartition « entre
-  bâtiments, puis dans le bâtiment » revient à une seule clé aux millièmes recalculés
-  ([#65](https://github.com/LostInTheBugs/Proprietas/issues/65)). Ensuite, en AG, vote des seuls
-  copropriétaires concernés pour ces dépenses (art. 24, dernier alinéa).
+- **Charges spéciales en AG** : vote des seuls copropriétaires concernés par une clé de répartition
+  (art. 24, dernier alinéa).
 - **OneDrive** comme drive de la copropriété (comptes personnels et professionnels), après WebDAV et
   Google Drive.
 - **Envoi des lettres recommandées** (électroniques ou papier) depuis l'application : aujourd'hui, elle

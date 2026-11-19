@@ -29,6 +29,8 @@ class Mouvement(Base):
     # Factures à payer (services/factures.py) : dépense saisie à la date de la facture (charge de
     # l'exercice), pas encore réglée. Réglée plus tard : `paye_le` est la date du paiement, celle que
     # retient la banque. Rappels aux syndics 7 jours avant l'échéance et après elle.
+    # Dépense commune répartie par une clé (charges spéciales, services/cles.py) ; NULL : charges générales.
+    cle_id = Column(Integer, ForeignKey("cles_repartition.id"), nullable=True)
     a_payer = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     echeance = Column(Date, nullable=True)
     paye_le = Column(Date, nullable=True)
@@ -40,6 +42,12 @@ class Mouvement(Base):
     lot = relationship("Lot")
     appel = relationship("AppelFonds")
     avance_par = relationship("User", foreign_keys=[avance_par_id])
+    cle = relationship("CleRepartition")
+
+    @property
+    def cle_nom(self) -> str:
+        """Nom de la clé de répartition (vue Pydantic MouvementOut) ; « » : charges générales."""
+        return self.cle.nom if self.cle is not None else ""
 
     @property
     def avance_par_nom(self) -> str:

@@ -3,6 +3,7 @@ import { api } from "../api";
 import { useUser } from "../auth";
 import type { Lot, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
+import { ClesCard } from "../components/Cles";
 
 export default function Lots() {
   const { user } = useUser();
@@ -113,6 +114,8 @@ export default function Lots() {
           le syndic peut tout régler ici. Jamais de nom de locataire (RGPD).
         </p>
       </Card>
+
+      <ClesCard lots={lots} isSyndic={isSyndic} onError={setError} />
 
       {modal && (
         <LotModal
