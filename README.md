@@ -90,6 +90,10 @@ se créer normalement depuis la page de connexion.
 - **Carnet d'entretien** : interventions, prestataires, coûts
 - **Exports** : registre des copropriétés, compte de gestion annuel
 - **Multi-copropriétés** : un compte, plusieurs immeubles isolés, vue consolidée
+- **Import des lots** depuis un tableur (CSV, Excel .xlsx, LibreOffice .ods) : numéro, tantièmes, désignation,
+  type, surface, propriétaire (e-mail d'un compte) et millièmes de chaque clé de répartition (colonnes « clé :
+  Nom ») ; vérification avant import, refus en bloc avec le numéro de ligne de chaque erreur, modèle à
+  télécharger (page Lots)
 - **Comptes utilisateurs** : les propriétaires sont des comptes (prénom, nom, email,
   téléphone, adresse, rôle, mot de passe) ; chacun modifie ses propres coordonnées
   (Réglages → Mes informations) et déclare l'occupation de ses lots (Mes lots) ;
