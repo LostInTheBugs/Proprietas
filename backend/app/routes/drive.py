@@ -76,6 +76,10 @@ def _etat(db: Session, copro) -> dict:
             "documents_sur_le_serveur": db.query(Document).filter(
                 Document.copropriete_id == copro.id, Document.emplacement == "", Document.fichier != "").count(),
             "dossier_propose": drive.dossier_propose(copro.nom),
+            "en_attente": {"nombre": db.query(Document).filter(Document.copropriete_id == copro.id,
+                                                               Document.emplacement == drive_fichiers.ATTENTE).count(),
+                           "octets": drive_fichiers.octets_en_attente(db, copro),
+                           "plafond_mo": get_settings().drive_attente_mo},
             "sauvegarde": _etat_sauvegarde(copro)}
 
 
@@ -151,6 +155,9 @@ def enregistrer(data: DriveIn, request: Request, db: Session = Depends(get_db),
                               detail=copro.drive_url or f"Google Drive {copro.drive_user or ''}".strip())
         copro.drive_type = copro.drive_url = copro.drive_user = copro.drive_password = copro.drive_dossier = ""
         copro.drive_sauvegarde_auto = False
+        # Plus de drive : les dépôts qui l'attendaient restent simplement sur le serveur.
+        db.query(Document).filter(Document.copropriete_id == copro.id, Document.emplacement == drive_fichiers.ATTENTE) \
+            .update({Document.emplacement: ""}, synchronize_session=False)
         db.commit()
         if rendre:
             _rendre_autorisation(db, *rendre)       # l'autorisation est aussi retirée chez Google
@@ -216,6 +223,12 @@ def _lot(operation, db, copro, action: str, user, request) -> dict:
 def deplacer(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """Déplace vers le drive un LOT de fichiers encore sur le serveur ; à rappeler tant que `restants` > 0."""
     return _lot(drive_fichiers.deplacer_vers_drive, db, get_or_create_copro(db, user), "drive_deplacement", user, request)
+
+
+@router.post("/ranger-attente")
+def ranger_attente(request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Range sur le drive un LOT de dépôts faits pendant une panne du drive ; à rappeler tant que `restants` > 0."""
+    return _lot(drive_fichiers.ranger_en_attente, db, get_or_create_copro(db, user), "drive_attente_rangee", user, request)
 
 
 @router.post("/rapatrier")

@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # les adresses du réseau privé (à régler ainsi sur une instance hébergée pour des tiers).
     drive_actif: bool = True
     drive_reseau_local: bool = True
+    # Dépôts mis en attente quand le drive d'une copropriété est injoignable : le fichier est gardé sur
+    # le serveur (« en attente du drive ») et rangé sur le drive dès son retour. Plafond en Mo pour toute
+    # l'instance (fichiers en attente de toutes les copropriétés) ; 0 = désactivé : le dépôt est refusé.
+    drive_attente_mo: float = Field(0, ge=0)
     # Google Drive comme drive d'une copropriété (core/drive_google.py) : application OAuth « Web »
     # déclarée par l'administrateur de l'instance dans la console Google Cloud, portée drive.file,
     # adresse de retour <adresse de l'instance>/api/drive/google/retour. Vides : Google Drive n'est pas proposé.

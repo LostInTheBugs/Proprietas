@@ -226,8 +226,15 @@ def main() -> int:
     if premier:
         code, r = http("GET", f"{URL_B}/api/documents/{premier['id']}/download", jeton=jb, delai=120)
         verifier(code == 503, f"lecture pendant la panne : {code} « {r.get('detail') if isinstance(r, dict) else ''} »")
-    code, r = deposer(URL_B, jb, "Facture pendant la panne", "facture", "panne.pdf", os.urandom(5_000))
-    verifier(code in (200, 503), f"dépôt pendant la panne : {code} « {r.get('detail') or r.get('emplacement')} »")
+    contenu_panne = os.urandom(5_000)
+    code, r = deposer(URL_B, jb, "Facture pendant la panne", "facture", "panne.pdf", contenu_panne)
+    # Refusé (503), ou gardé sur le serveur « en attente du drive » si l'instance l'autorise (COPRO_DRIVE_ATTENTE_MO).
+    verifier(code == 503 or (code == 200 and r.get("emplacement") == "attente"),
+             f"dépôt pendant la panne : {code} « {r.get('detail') or r.get('emplacement')} »")
+    en_attente = r.get("id") if code == 200 else None
+    if en_attente:
+        c, contenu = http("GET", f"{URL_B}/api/documents/{en_attente}/download", jeton=jb, brut=True)
+        verifier(c == 200 and contenu == contenu_panne, f"dépôt en attente lisible pendant la panne ({c})")
     code, r = http("POST", f"{URL_B}/api/drive/sauvegarde/maintenant", None, jb, delai=120)
     verifier(code == 503, f"sauvegarde pendant la panne : {code} « {r.get('detail')} »")
     code, r = http("POST", f"{URL_B}/api/drive/test", {"type": "webdav", "url": DAV, "utilisateur": DAV_USER,
@@ -254,6 +261,15 @@ def main() -> int:
         c, contenu = http("GET", f"{URL_B}/api/documents/{premier['id']}/download", jeton=jb, brut=True)
         verifier(c == 200 and hashlib.sha256(contenu).hexdigest() == originaux.get(premier["libelle"]),
                  f"lecture après la panne : « {premier['libelle']} » identique ({c})")
+    if en_attente:
+        code, r = http("POST", f"{URL_B}/api/drive/ranger-attente", None, jb, delai=300)
+        # (le planificateur, toutes les 5 min, a pu le ranger juste avant : « deplaces » vaut alors 0)
+        verifier(code == 200 and r.get("restants") == 0, f"dépôts en attente rangés sur le drive ({code}, {r})")
+        code, docs = http("GET", f"{URL_B}/api/documents", jeton=jb)
+        d = next((x for x in docs if x["id"] == en_attente), {}) if code == 200 else {}
+        c, contenu = http("GET", f"{URL_B}/api/documents/{en_attente}/download", jeton=jb, brut=True)
+        verifier(d.get("emplacement") == "drive" and contenu == contenu_panne,
+                 f"« Facture pendant la panne » sur le drive, identique : {d.get('fichier')}")
     code, r = http("POST", f"{URL_B}/api/drive/sauvegarde/maintenant", None, jb, delai=300)
     verifier(code == 200, f"sauvegarde après la panne : {r.get('fichier') or r.get('detail')}")
     code, r = http("GET", f"{URL_B}/api/drive", jeton=jb)

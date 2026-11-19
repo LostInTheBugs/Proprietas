@@ -53,6 +53,13 @@ disparaît à la première sauvegarde réussie.
 - Les messages « Drive injoignable » ajoutent : « réessayez plus tard ; les fichiers déjà rangés ne sont pas
   perdus ».
 
+## Ensuite (2026.11.034) : dépôts en attente du drive
+
+L'exercice a montré qu'un document déposé pendant la panne était refusé. Une option d'instance permet
+désormais de le garder sur le serveur et de le ranger sur le drive à son retour : `COPRO_DRIVE_ATTENTE_MO`,
+place maximale en Mo. Elle est désactivée par défaut, pour les serveurs avec peu d'espace (voir le README).
+Le script de l'exercice vérifie les deux comportements : dépôt refusé, ou dépôt en attente lisible puis rangé.
+
 ## Google Drive
 
 Google Drive a été essayé sur le vrai service le 18 novembre 2026, sur la démo : connexion, dépôt, fichier

@@ -12,6 +12,7 @@ interface EtatDrive {
   mot_de_passe_defini: boolean;
   documents_sur_le_drive: number;
   documents_sur_le_serveur: number;
+  en_attente: { nombre: number; octets: number; plafond_mo: number };
   dossier_propose: string;
   sauvegarde: { auto: boolean; mot_de_passe_defini: boolean; derniere: string | null; prochaine: string | null; erreur: string; gardees: number };
 }
@@ -105,7 +106,7 @@ export function DriveCard() {
   });
 
   // Déplacement par lots : le serveur traite quelques fichiers par appel, on rappelle tant qu'il en reste.
-  const transferer = (chemin: "deplacer" | "rapatrier", fait: string) => lancer(async () => {
+  const transferer = (chemin: "deplacer" | "rapatrier" | "ranger-attente", fait: string) => lancer(async () => {
     let total = 0;
     const absents: string[] = [];
     for (;;) {
@@ -230,6 +231,13 @@ export function DriveCard() {
         {branche && (
           <div className="space-y-2 border-t border-slate-100 pt-3">
             <p className="text-sm font-medium text-slate-700">Fichiers</p>
+            {etat.en_attente.nombre > 0 && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <strong>{etat.en_attente.nombre}</strong> document(s) déposés pendant une panne du drive sont gardés sur le serveur
+                ({(etat.en_attente.octets / 1024 / 1024).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mo) : ils sont
+                rangés sur le drive automatiquement dès son retour (essai toutes les 5 minutes).
+              </p>
+            )}
             {etat.documents_sur_le_serveur > 0 && (
               <p className="text-sm text-slate-600">
                 <strong>{etat.documents_sur_le_serveur}</strong> fichier(s) déposés avant le branchement sont encore sur le serveur.
@@ -238,6 +246,9 @@ export function DriveCard() {
             <div className="flex flex-wrap gap-2">
               {etat.documents_sur_le_serveur > 0 && (
                 <Button variant="secondary" onClick={() => transferer("deplacer", "déplacé(s) vers le drive")} disabled={occupe}>Déplacer vers le drive</Button>
+              )}
+              {etat.en_attente.nombre > 0 && (
+                <Button variant="secondary" onClick={() => transferer("ranger-attente", "rangé(s) sur le drive")} disabled={occupe}>Ranger maintenant</Button>
               )}
               <Button variant="secondary" onClick={verifier} disabled={occupe}>Vérifier le drive</Button>
               {etat.documents_sur_le_drive > 0 && (
