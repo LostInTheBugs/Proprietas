@@ -6,7 +6,7 @@ Archive (format « proprietas-copropriete », version 1) :
 - `documents/<fichier>` : les fichiers déposés (page Documents).
 
 Export : toutes les données liées à la copropriété active, découvertes par les clés étrangères.
-Sont exclus : le journal d'audit (propre à l'instance), l'ancienne table `personnes`, le mot de passe
+Sont exclus : le journal d'audit (propre à l'instance), l'ancienne table `personnes` (supprimée par la migration a7b8c9d0e1f2), le mot de passe
 SMTP (chiffré avec la clé du serveur : à ressaisir), et pour les comptes ce qui est propre à
 l'instance (administrateur de l'instance, dernières connexions, version des jetons).
 
@@ -87,9 +87,12 @@ EXCLUES = {
                      "drive_sauvegarde_auto", "drive_sauvegarde_password", "drive_sauvegarde_derniere",
                      "drive_sauvegarde_tentative", "drive_sauvegarde_erreur"},
     "users": {"is_instance_admin", "token_version", "last_login_at", "last_login_ip", "last_login_ua",
-              "personne_id", "copropriete_id"},
+              "copropriete_id"},
 }
-TABLES_IGNOREES = {"personnes"}   # clés étrangères vers ces tables : mises à NULL à l'import
+# Tables des anciennes sauvegardes, supprimées depuis : leurs clés étrangères sont mises à NULL à l'import.
+TABLES_IGNOREES = {"personnes"}
+# Colonnes des anciennes sauvegardes, supprimées depuis : ignorées sans avertissement.
+COLONNES_SUPPRIMEES = {"lots.occupant_id", "users.personne_id"}
 
 MDP_MIN = 10
 DOMAINE_ANONYME = "anonyme.invalid"   # comptes « Compte N » d'une sauvegarde sans données personnelles
@@ -349,7 +352,8 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
                     if k == "id":
                         continue
                     if k not in t.c:
-                        colonnes_ignorees.add(f"{nom}.{k}")
+                        if f"{nom}.{k}" not in COLONNES_SUPPRIMEES:
+                            colonnes_ignorees.add(f"{nom}.{k}")
                         continue
                     col = t.c[k]
                     if isinstance(col.type, TexteChiffre):
