@@ -10,7 +10,9 @@ def _entrees(client, token):
 
 
 def test_journal_trace_connexions(client, db, copro_a, syndic_a):
-    # Échec puis succès → les deux événements sont journalisés
+    # Historique des connexions activé : échec puis succès → les deux événements sont journalisés
+    copro_a.connexions_historique = True
+    db.commit()
     client.post("/api/auth/login", json={"email": "syndic.a@test.fr", "password": "mauvais"})
     r = client.post("/api/auth/login", json={"email": "syndic.a@test.fr", "password": "test1234"})
     assert r.status_code == 200, r.text
@@ -49,6 +51,8 @@ def test_journal_trace_export(client, db, copro_a, syndic_a):
 
 
 def test_journal_pagination_et_filtre(client, db, copro_a, syndic_a):
+    copro_a.connexions_historique = True
+    db.commit()
     tok = create_access_token(syndic_a.id, copro_a.id)
     for _ in range(3):
         client.post("/api/auth/login", json={"email": "syndic.a@test.fr", "password": "test1234"})
