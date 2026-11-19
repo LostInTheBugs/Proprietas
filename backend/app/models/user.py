@@ -49,6 +49,12 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
     last_login_ip = Column(String, default="")
     last_login_ua = Column(String, default="")
+    # Échecs de connexion d'affilée (remis à zéro à chaque connexion réussie) et blocage du compte
+    # selon la politique de ses copropriétés (services/connexions.py, Réglages → Sécurité).
+    echecs_connexion = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    dernier_echec_at = Column(DateTime, nullable=True)
+    bloque_jusqua = Column(DateTime, nullable=True)          # blocage temporaire
+    bloque_definitif_le = Column(DateTime, nullable=True)    # blocage jusqu'au déblocage (syndic, administrateur)
     # Notifications officielles par voie postale (LRAR) au lieu de la voie électronique, à la
     # demande du copropriétaire (loi n° 65-557, art. 42-1 ; décret n° 67-223, art. 64-1).
     notification_postale = Column(Boolean, nullable=False, default=False, server_default=text("false"))
@@ -63,6 +69,16 @@ class User(Base):
     def two_factor_enabled(self) -> bool:
         """Vue Pydantic (UserOut) : la 2FA est-elle activée pour ce compte ?"""
         return bool(self.totp_enabled)
+
+    @property
+    def bloque(self) -> str:
+        """« definitif », « temporaire » (blocage en cours) ou « » (vue Pydantic UserOut)."""
+        from datetime import datetime
+        if self.bloque_definitif_le:
+            return "definitif"
+        if self.bloque_jusqua and self.bloque_jusqua > datetime.now():
+            return "temporaire"
+        return ""
 
     @property
     def nom_complet(self) -> str:

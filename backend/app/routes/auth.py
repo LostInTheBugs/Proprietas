@@ -25,7 +25,7 @@ from app.schemas import (RegisterRequest, LoginRequest, LoginResponse, TokenResp
                          VoiePostaleIn)
 from app.core.rate_limit import check_login_allowed, record_failure, clear_failures
 from app.core.session import jeton_entrant, poser_cookie_session, supprimer_cookie_session
-from app.services import two_factor, voie_postale
+from app.services import connexions, two_factor, voie_postale
 from app.services.donnees_personnelles import donnees_personnelles
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -68,14 +68,13 @@ def login(req: LoginRequest, response: Response, db: Session = Depends(get_db), 
     ip = audit.client_ip(request)
     check_login_allowed(req.email, ip)
     user = db.query(User).filter(User.email == req.email.lower().strip()).first()
+    if user:
+        connexions.verifier_non_bloque(db, user, request)   # 423 si le compte est bloqué
     if not user or not verify_password(req.password, user.password_hash):
         record_failure(req.email, ip)
-        audit.enregistrer(
-            db, "login_failed", user=user,
-            copro_id=two_factor.copro_principale_id(db, user) if user else None,
-            detail=req.email.lower().strip(), request=request,
-        )
-        db.commit()
+        if user:   # adresse inconnue : rien à rattacher à un compte, rien n'est gardé
+            connexions.echec(db, user, request, "mot de passe incorrect")
+            db.commit()
         raise HTTPException(401, "Email ou mot de passe incorrect")
     clear_failures(req.email, ip)
     # Double authentification (les comptes démo en sont exemptés)

@@ -87,7 +87,7 @@ EXCLUES = {
                      "drive_sauvegarde_auto", "drive_sauvegarde_password", "drive_sauvegarde_derniere",
                      "drive_sauvegarde_tentative", "drive_sauvegarde_erreur"},
     "users": {"is_instance_admin", "token_version", "last_login_at", "last_login_ip", "last_login_ua",
-              "copropriete_id"},
+              "copropriete_id", "echecs_connexion", "dernier_echec_at", "bloque_jusqua", "bloque_definitif_le"},
 }
 # Tables des anciennes sauvegardes, supprimées depuis : leurs clés étrangères sont mises à NULL à l'import.
 TABLES_IGNOREES = {"personnes"}

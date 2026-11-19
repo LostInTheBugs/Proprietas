@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { api, clearToken, getToken } from "../api";
 import { useUser } from "../auth";
 import { Badge, Button, Card, Empty, Input, Select } from "../components/ui";
 import TwoFactorWizard from "../components/TwoFactorWizard";
-import type { AuditEntry, Copro, DiagnosticItem, InstanceOut, TwoFactorStatus, User } from "../types";
+import {
+  BadgeBlocage,
+  DetailConnexions,
+  LIBELLES_CONNEXION,
+  MesConnexions,
+  PolitiqueConnexionsCard,
+  dateHeure,
+} from "../components/Connexions";
+import type { AuditEntry, Connexions, Copro, DiagnosticItem, InstanceOut, TwoFactorStatus, User } from "../types";
 
 const LIBELLES_ACTIONS: Record<string, string> = {
-  login: "Connexion",
-  login_failed: "Échec de connexion",
+  ...LIBELLES_CONNEXION,
   "2fa_enabled": "Double authentification activée",
   "2fa_disabled": "Double authentification désactivée",
   "2fa_reset": "Réinitialisation 2FA (par le syndic)",
@@ -65,6 +72,10 @@ export default function Securite() {
   const [code, setCode] = useState("");
   const [nouveauxCodes, setNouveauxCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Connexions d'un compte (tableau des comptes, syndic)
+  const [ouvert, setOuvert] = useState<number | null>(null);
+  const [connexionsCompte, setConnexionsCompte] = useState<Connexions | null>(null);
 
   // Accès depuis internet (syndic)
   const [inst, setInst] = useState<InstanceOut | null>(null);
@@ -189,6 +200,34 @@ export default function Securite() {
       flash(`Double authentification de ${u.email} réinitialisée.`);
       chargerUsers();
       chargerAudit(0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    }
+  }
+
+  async function voirConnexions(u: User) {
+    if (ouvert === u.id) {
+      setOuvert(null);
+      return;
+    }
+    setOuvert(u.id);
+    setConnexionsCompte(null);
+    try {
+      setConnexionsCompte(await api.get<Connexions>(`/auth/users/${u.id}/connexions`));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur");
+    }
+  }
+
+  async function debloquer(u: User) {
+    if (!confirm(`Débloquer le compte ${u.email} ?\n\nLa personne pourra de nouveau se connecter ; elle est prévenue par e-mail.`))
+      return;
+    try {
+      await api.post(`/auth/users/${u.id}/debloquer`);
+      flash(`Compte ${u.email} débloqué.`);
+      chargerUsers();
+      chargerAudit(0);
+      if (ouvert === u.id) setConnexionsCompte(await api.get<Connexions>(`/auth/users/${u.id}/connexions`));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     }
@@ -379,6 +418,7 @@ export default function Securite() {
           <Button variant="secondary" onClick={revoquerSessions} disabled={revokeBusy}>
             {revokeBusy ? "…" : "Déconnecter tous mes appareils"}
           </Button>
+          <MesConnexions />
         </div>
       </Card>
 
@@ -497,7 +537,9 @@ export default function Securite() {
             </div>
           </Card>
 
-          <Card title="Comptes et double authentification">
+          <PolitiqueConnexionsCard copro={copro} onSaved={setCopro} />
+
+          <Card title="Comptes : connexions et double authentification">
             {users.length === 0 ? (
               <Empty text="Aucun compte pour cette copropriété." />
             ) : (
@@ -507,12 +549,14 @@ export default function Securite() {
                     <th className="pb-2">Compte</th>
                     <th className="pb-2">Rôle</th>
                     <th className="pb-2">2FA</th>
+                    <th className="pb-2">Dernière connexion</th>
                     <th className="pb-2"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {users.map((u) => (
-                    <tr key={u.id}>
+                    <Fragment key={u.id}>
+                    <tr>
                       <td className="py-2.5">
                         <p className="font-medium text-slate-800">{u.nom}</p>
                         <p className="text-xs text-slate-500">{u.email}</p>
@@ -527,20 +571,42 @@ export default function Securite() {
                           <Badge color="slate">Non</Badge>
                         )}
                       </td>
-                      <td className="py-2.5 text-right">
+                      <td className="py-2.5 text-slate-600">
+                        <span className="tabular-nums">{dateHeure(u.last_login_at)}</span>
+                        <div><BadgeBlocage u={u} /></div>
+                      </td>
+                      <td className="py-2.5 text-right whitespace-nowrap">
+                        {u.bloque && (
+                          <Button variant="secondary" onClick={() => debloquer(u)}>
+                            Débloquer
+                          </Button>
+                        )}
+                        <Button variant="ghost" onClick={() => voirConnexions(u)}>
+                          {ouvert === u.id ? "Masquer" : "Connexions"}
+                        </Button>
                         {u.two_factor_enabled && u.id !== me?.id && (
                           <Button variant="ghost" onClick={() => resetUser(u)}>
-                            Réinitialiser
+                            Réinitialiser 2FA
                           </Button>
                         )}
                       </td>
                     </tr>
+                    {ouvert === u.id && (
+                      <tr>
+                        <td colSpan={5} className="pb-3">
+                          {connexionsCompte ? <DetailConnexions c={connexionsCompte} /> : <p className="text-sm text-slate-500">…</p>}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             )}
             <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              « Réinitialiser » : le compte devra réactiver sa 2FA à la prochaine connexion (utile si la
+              « Connexions » : dernière connexion, dernier échec et, si l'historique est activé, les connexions
+              récentes. « Débloquer » : le compte bloqué après des échecs peut de nouveau se connecter (tracé, et la
+              personne est prévenue par e-mail). « Réinitialiser 2FA » : le compte devra réactiver sa 2FA à la prochaine connexion (utile si la
               personne a perdu son téléphone). L'opération est tracée dans le journal et notifiée par email.
             </p>
           </Card>

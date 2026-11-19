@@ -34,7 +34,7 @@ from app.schemas import (
     TwoFactorVerifyLoginIn,
     TwoFactorVerifyOut,
 )
-from app.services import alertes, two_factor
+from app.services import alertes, connexions, two_factor
 
 router = APIRouter(prefix="/api/auth", tags=["securite"])
 router_audit = APIRouter(prefix="/api/audit", tags=["securite"])
@@ -135,12 +135,11 @@ def verifier_connexion(req: TwoFactorVerifyLoginIn, request: Request, response: 
 
     # Mêmes compteurs que l'étape mot de passe (email + IP) : pas de contournement.
     check_login_allowed(user.email, ip)
+    connexions.verifier_non_bloque(db, user, request)   # bloqué entre les deux étapes
     mode = two_factor.valider_code(user, req.code)
     if not mode:
         record_failure(user.email, ip)
-        audit.enregistrer(db, "login_failed", user=user,
-                          copro_id=two_factor.copro_principale_id(db, user),
-                          detail="code 2FA invalide", request=request)
+        connexions.echec(db, user, request, "code 2FA invalide")
         db.commit()
         raise HTTPException(401, "Code invalide.")
     clear_failures(user.email, ip)

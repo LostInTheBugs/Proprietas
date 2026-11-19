@@ -2,7 +2,7 @@ import math
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Optional, List, Union
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, field_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 from app.core.money import LIMITE_MONTANT, LIMITE_TAUX, decimal_saisi
 from app.services.country_rules import NATURES_RESOLUTION, TYPES_AG, TYPES_LOT
@@ -88,6 +88,11 @@ class UserOut(BaseModel):
     # Notifications officielles par voie postale (LRAR), à la demande du copropriétaire (art. 42-1).
     notification_postale: bool = False
     notification_postale_depuis: Optional[date] = None
+    # Connexions (Réglages → Sécurité) : dernière connexion, dernier échec, blocage en cours.
+    last_login_at: Optional[datetime] = None
+    dernier_echec_at: Optional[datetime] = None
+    bloque: str = ""                       # "" | temporaire | definitif (propriété du modèle User)
+    bloque_jusqua: Optional[datetime] = None
 
     @field_validator("prenom", "adresse", "telephone", mode="before")
     @classmethod
@@ -230,6 +235,14 @@ class CoproOut(BaseModel):
         # ne jamais renvoyer None (ResponseValidationError → 500 sur /api/copro).
         return v or "off"
 
+    # Connexions : historique complet, blocage après des échecs d'affilée (services/connexions.py).
+    connexions_historique: bool = False
+    verrouillage_actif: bool = False
+    verrouillage_seuil: int = 5
+    verrouillage_minutes: int = 15
+    verrouillage_seuil_definitif: int = 10
+    verrouillage_avec_2fa: bool = False
+
     notes: str = ""
 
 
@@ -265,6 +278,12 @@ class CoproUpdate(BaseModel):
     relance_minimum: Optional[Montant] = None
     taux_legal_retard: Optional[Taux] = None
     totp_policy: Optional[str] = None
+    connexions_historique: Optional[bool] = None
+    verrouillage_actif: Optional[bool] = None
+    verrouillage_seuil: Optional[int] = Field(None, ge=1, le=100)
+    verrouillage_minutes: Optional[int] = Field(None, ge=1, le=1440)
+    verrouillage_seuil_definitif: Optional[int] = Field(None, ge=0, le=1000)   # 0 : jamais
+    verrouillage_avec_2fa: Optional[bool] = None
     notes: Optional[str] = None
 
     @field_validator("totp_policy")
@@ -1335,3 +1354,34 @@ class DriveSauvegardeIn(BaseModel):
 
 class DriveGoogleIn(BaseModel):
     dossier: str = ""                    # dossier du Google Drive, ex. « Proprietas/Ma copropriété »
+
+
+# ---------- Connexions (historique, blocage) ----------
+class ConnexionEntree(BaseModel):
+    date: datetime
+    action: str          # login | login_failed | login_blocked | account_locked | account_unlocked
+    detail: str = ""
+    ip: str = ""
+    navigateur: str = ""
+
+
+class ConnexionsOut(BaseModel):
+    historique: bool = False             # historique complet activé (sinon : dernière connexion seulement)
+    derniere_connexion: Optional[datetime] = None
+    derniere_ip: str = ""
+    dernier_echec: Optional[datetime] = None
+    echecs_d_affilee: int = 0
+    bloque: str = ""                     # "" | temporaire | definitif
+    bloque_jusqua: Optional[datetime] = None
+    entrees: List[ConnexionEntree] = []
+
+
+class CompteBloqueOut(BaseModel):
+    id: int
+    email: str
+    nom: str = ""
+    prenom: str = ""
+    bloque: str
+    bloque_jusqua: Optional[datetime] = None
+    bloque_definitif_le: Optional[datetime] = None
+    coproprietes: List[str] = []

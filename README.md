@@ -82,7 +82,8 @@ se créer normalement depuis la page de connexion.
   (encaissements − dépenses) — seule la modification reste au syndic
 - **Sécurité** : double authentification TOTP (compatible FreeOTP, Aegis, Google
   Authenticator…), codes de secours, réinitialisation assistée par le syndic,
-  journal d'audit, alertes email de connexion
+  journal d'audit, alertes email de connexion, historique des connexions (activable) et
+  blocage des comptes après des échecs de connexion (Réglages → Sécurité)
 - **Thème clair / sombre** : au choix par compte (Réglages → Apparence) — clair, sombre
   ou système (suit l'appareil), appliqué dès le chargement sans clignotement
 - **Multi-pays** : module de règles par pays (France en V1, extensible)
@@ -165,7 +166,20 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   2FA**). Les jetons intermédiaires (vérification du code, enrôlement forcé) sont à
   portée limitée et courts (10 / 30 min) ; les tentatives 2FA partagent le
   rate-limit du login.
-- **Journal d'audit** : connexions (succès et échecs), activation / désactivation /
+- **Connexions** (page « 🔐 Sécurité », réglage par copropriété) : par défaut, chaque compte
+  ne garde que sa dernière connexion et son dernier échec. L'**historique** activé écrit aussi
+  chaque connexion réussie, ratée ou refusée dans le journal d'audit (les copropriétés créées
+  avant la 2026.11.039 l'ont activé, comme avant). Le **blocage** (désactivé par défaut) bloque
+  un compte 15 min après 5 échecs d'affilée (puis à chaque multiple), et jusqu'au déblocage
+  après 10 ; tout est réglable, 0 = jamais de blocage définitif. Les comptes avec double
+  authentification n'y sont soumis que si la copropriété le demande, les comptes de
+  démonstration jamais ; un compte de plusieurs copropriétés suit la règle la plus stricte.
+  Débloquent : le syndic (comptes de sa copropriété), l'administrateur de l'instance
+  (Réglages → Serveur → Comptes bloqués) et, en secours, la commande
+  `docker compose exec backend python -m app.cli.debloquer adresse@exemple.fr` (`--liste`
+  pour les voir). La personne est prévenue par e-mail du blocage et du déblocage. Le
+  limiteur par adresse et IP (5 essais en 15 min) reste en plus.
+- **Journal d'audit** : connexions (si l'historique est activé), blocages et déblocages, activation / désactivation /
   réinitialisation 2FA, usage des codes de secours, création, modification et
   suppression de comptes, exports (compte de gestion, quittances, rapport annuel,
   CSV, registre) et envois de relances — consultable par le syndic (page
