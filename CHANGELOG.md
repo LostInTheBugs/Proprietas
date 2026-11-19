@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.037 — 2026-11-19
+
+- Drive : la carte du drive, le guide Google Drive et le README demandent un compte dédié à la copropriété (jamais le compte personnel du syndic), transmis au successeur au changement de syndic.
+
 ## 2026.11.036 — 2026-11-19
 
 - RGPD : l'ancienne table « personnes » (écran « Lots & occupants » d'avant le modèle « zéro fiche ») est supprimée avec ses données, qui ne servaient plus (noms, e-mails, téléphones, adresses). Migration a7b8c9d0e1f2.
