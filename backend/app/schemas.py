@@ -1529,3 +1529,19 @@ class CleOut(BaseModel):
     total: int = 0
     lots: List[CleLotOut] = []
     utilisations: dict = {}
+
+
+# ---------- Résolutions types d'une AG annuelle (services/modele_ag.py) ----------
+class ModeleResolutionOut(BaseModel):
+    code: str
+    libelle: str
+    texte: str = ""
+    majorite: str
+    nature: str
+    coche: bool                          # pré-cochée
+    exercice_id: Optional[int] = None    # approbation des comptes : exercice approuvé
+    remarque: str = ""
+
+
+class ResolutionsTypesIn(BaseModel):
+    codes: List[str] = []

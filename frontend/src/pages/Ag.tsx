@@ -6,9 +6,11 @@ import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import NotificationsPVPanel from "../components/NotificationsPV";
 import { MaReponseAg, PresencesSyndic } from "../components/Presences";
+import { ListeModele, ResolutionsTypesModal, useModele } from "../components/ResolutionsTypes";
 export default function Ag() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
+  const [types, setTypes] = useState<{ agId: number; jour: string } | null>(null);   // résolutions types
   const [ags, setAgs] = useState<AG[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
   const [majorites, setMajorites] = useState<Record<string, Majorite>>({});
@@ -69,6 +71,11 @@ export default function Ag() {
                 {ag.convocation_envoyee && (
                   <Badge color="green">📨 Information envoyée par e-mail</Badge>
                 )}
+                {isSyndic && ag.type_ag !== "consultation_ecrite" && (
+                  <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setTypes({ agId: ag.id, jour: ag.date })}>
+                    Résolutions types
+                  </Button>
+                )}
                 {isSyndic && (
                   <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ type: "resolution", agId: ag.id })}>
                     + Résolution
@@ -95,6 +102,10 @@ export default function Ag() {
         ))
       )}
 
+      {types && (
+        <ResolutionsTypesModal agId={types.agId} jour={types.jour} onClose={() => setTypes(null)}
+          onSaved={() => { setTypes(null); load(); }} onError={setError} />
+      )}
       {modal?.type === "ag" && <AgModal onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />}
       {modal?.type === "resolution" && (
         <ResolutionModal agId={modal.agId} majorites={majorites}
@@ -513,6 +524,8 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   const [statut, setStatut] = useState("projet");
   const [lieu, setLieu] = useState("");
   const [rappelJours, setRappelJours] = useState("21");
+  // AG annuelle : résolutions types (pré-cochées : celles de chaque année).
+  const [modele, choix, setChoix] = useModele(typeAg === "annuelle" ? date : "");
   // Consultation écrite réservée aux petites copropriétés (art. 41-8 et 41-12) : null = inconnu.
   const [petite, setPetite] = useState<boolean | null>(null);
   useEffect(() => {
@@ -520,7 +533,8 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   }, []);
   async function save() {
     try {
-      await api.post("/ag", { date, heure, type_ag: typeAg, statut, lieu, notes: "", rappel_jours: Number(rappelJours) || 0 });
+      const ag = await api.post<{ id: number }>("/ag", { date, heure, type_ag: typeAg, statut, lieu, notes: "", rappel_jours: Number(rappelJours) || 0 });
+      if (typeAg === "annuelle" && choix.size > 0) await api.post(`/ag/${ag.id}/resolutions-types`, { codes: [...choix] });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
@@ -547,6 +561,13 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
             Décisions à l'unanimité des voix de tous les copropriétaires. Le budget prévisionnel et
             l'approbation des comptes ne peuvent pas être décidés par consultation écrite.
           </p>
+        )}
+        {typeAg === "annuelle" && modele.length > 0 && (
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-600">Résolutions types à l'ordre du jour</p>
+            <ListeModele modele={modele} choix={choix} onChange={setChoix} />
+            <p className="mt-1 text-xs text-slate-500">Textes à compléter (« …… ») avant la convocation ; tout reste modifiable.</p>
+          </div>
         )}
         <Select label="Statut" value={statut} onChange={(e) => setStatut(e.target.value)}>
           <option value="projet">Projet</option>

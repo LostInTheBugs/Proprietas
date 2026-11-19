@@ -74,6 +74,11 @@ se créer normalement depuis la page de connexion.
   étapes amiables et judiciaires
 - **Assemblées générales** : e-mails d'information (la convocation régulière se notifie par LRE — LRAR si le copropriétaire a demandé la voie postale — ou remise contre récépissé, au moins 21 jours avant) avec un lien personnel « J'ai bien reçu ce message » : le syndic voit qui a confirmé (sans image de suivi ; ce n'est pas un accusé de réception de recommandé), résolutions, moteur de majorités légal
   (art. 24 / 25 / 26, unanimité, régime 2 copropriétaires), procès-verbaux
+- **Résolutions types de l'AG annuelle** : à la création (ou bouton « Résolutions types »), bureau de séance,
+  approbation des comptes de l'exercice écoulé (reliée à l'exercice), quitus, budget de l'exercice suivant
+  (montant repris), cotisation au fonds de travaux (art. 25) pré-cochés ; ajustement du budget en cours,
+  syndic bénévole, conseil syndical, seuils de l'art. 21 et plan pluriannuel de travaux à cocher si besoin ;
+  bonne majorité, texte à compléter
 - **Présences et pouvoirs** : chaque copropriétaire répond par le lien de l'e-mail ou depuis son compte
   (« Je serai présent(e) », « … je donne pouvoir à… », « Je ne serai pas présent(e) », « Je ne sais pas
   encore »), jusqu'à l'ouverture de l'AG ; pouvoir à un autre copropriétaire, contrôlé selon l'art. 22 (jamais le
