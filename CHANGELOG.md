@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.040 — 2026-11-19
+
+- Drive de la copropriété : le type de drive se choisit dans une liste (WebDAV ou Google Drive), les champs suivent. Pour Google Drive, l'ID client et le code secret de l'application Google se saisissent dans Proprietas, par copropriété (code secret chiffré, hors sauvegardes) ; le .env reste possible pour toute l'instance. L'URI de redirection à déclarer chez Google est affichée. Codes Google saisis par erreur dans le formulaire WebDAV : message clair (au lieu de l'erreur 405). Migration d0e1f2a3b4c5.
+
 ## 2026.11.039 — 2026-11-19
 
 - Connexions (Réglages → Sécurité) : par défaut, la dernière connexion et le dernier échec de chaque compte ; historique complet activable (les copropriétés existantes l'ont activé). Blocage activable après des échecs d'affilée : 5 → 15 min, 10 → jusqu'au déblocage (réglable), comptes avec double authentification exemptés sauf réglage contraire. Déblocage par le syndic, l'administrateur de l'instance (Réglages → Serveur) ou `python -m app.cli.debloquer`. Migration c9d0e1f2a3b4.
