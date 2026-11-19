@@ -235,7 +235,8 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str, lien_confirmation
     if url:
         lignes += ["", "Vous pouvez consulter les détails et répondre en ligne :", url]
     if lien_confirmation:
-        lignes += ["", "Merci de confirmer que vous avez bien reçu ce message (un clic) :", lien_confirmation]
+        lignes += ["", "Merci de confirmer que vous avez bien reçu ce message, et d'indiquer si vous serez présent(e), "
+                       "absent(e) ou représenté(e) (pouvoir à un autre copropriétaire) :", lien_confirmation]
     lignes += [
         "",
         "Cordialement,",

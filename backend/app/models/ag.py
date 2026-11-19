@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -81,3 +81,24 @@ class Vote(Base):
 
     resolution = relationship("Resolution", back_populates="votes")
     lot = relationship("Lot")
+
+
+class AgReponse(Base):
+    """Réponse d'un copropriétaire à l'information sur l'AG : présence, absence, pouvoir (services/presences.py).
+
+    Une ligne par copropriétaire et par AG. `mandataire_id` : copropriétaire qui le représente (pouvoir,
+    loi n° 65-557, art. 22). `source` : lien de l'e-mail, compte connecté ou saisie du syndic.
+    """
+    __tablename__ = "ag_reponses"
+    __table_args__ = (UniqueConstraint("ag_id", "personne_id", name="uq_ag_reponses_ag_personne"),)
+    id = Column(Integer, primary_key=True)
+    ag_id = Column(Integer, ForeignKey("ags.id", ondelete="CASCADE"), nullable=False, index=True)
+    personne_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reponse = Column(String, nullable=False)          # present | pouvoir | absent | incertain
+    mandataire_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    repondu_le = Column(DateTime, nullable=False)
+    source = Column(String, nullable=False, default="lien")   # lien | compte | syndic
+    pouvoir_recu_le = Column(DateTime, nullable=True)         # pouvoir signé remis au syndic
+
+    personne = relationship("User", foreign_keys=[personne_id])
+    mandataire = relationship("User", foreign_keys=[mandataire_id])

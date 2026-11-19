@@ -1,14 +1,14 @@
 import html
 import secrets
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
 from app.models.user import User
 from app.models.lot import Lot
-from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote
+from app.models.ag import AG, AgReponse, Resolution, Vote, AgCreneau, AgCreneauVote
 from app.models.invitation import Invitation
 from app.models.copropriete import Copropriete
 from app.models.exercice import Exercice
@@ -16,10 +16,14 @@ from app.core.scoping import get_owned, get_owned_via
 from app.routes.copro import get_or_create_copro
 from app.services.country_rules import calculer_statut_resolution, refus_consultation_ecrite, MAJORITES
 from app.services.regime import regime_copro
+from app.core import audit
+from app.services import presences
+from app.routes.documents import _content_disposition
 from app.services.emailer import (envoyer_email, convocation_sujet, convocation_texte, pv_email_texte,
                                   EmailError, adresse_publique)
 from app.services.pv_pdf import generer_pv_pdf
 from app.schemas import (
+    MaReponseOut, PersonneCourteOut, PresenceIn, PresencesOut, ReponseAgIn,
     AGIn, AGOut, ResolutionIn, ResolutionOut, VoteIn, VoteOut, ResolutionResult,
     CreneauIn, CreneauOut, CreneauVoteIn, CreneauVoteOut,
     InvitationOut, InvitationsResult,
@@ -417,6 +421,8 @@ def _page(titre: str, texte: str, formulaire: str = "") -> HTMLResponse:
         f"<title>{html.escape(titre)}</title><style>body{{font-family:system-ui,sans-serif;max-width:32rem;"
         "margin:3rem auto;padding:0 1rem;color:#1e293b}h1{font-size:1.25rem}button{font-size:1rem;"
         "padding:.6rem 1.2rem;border:0;border-radius:.5rem;background:#4f46e5;color:#fff;cursor:pointer}"
+        "label{display:block;margin:.5rem 0}select{font-size:1rem;padding:.4rem;max-width:100%}"
+        ".note{font-size:.85rem;color:#475569}.erreur{color:#b91c1c}a{color:#4f46e5}"
         "</style></head><body>"
         f"<h1>{html.escape(titre)}</h1><p>{html.escape(texte)}</p>{formulaire}</body></html>")
 
@@ -430,31 +436,191 @@ def _invitation_du_jeton(db: Session, jeton: str):
     return inv, ag, copro
 
 
+def _quoi(ag, copro) -> str:
+    return f"l'assemblée du {ag.date.strftime('%d/%m/%Y')}" + (f" à {ag.heure}" if ag.heure else "") + f" — {copro.nom}"
+
+
+def _formulaire_reponse(db: Session, ag, personne, reponse, erreur: str = "") -> str:
+    """Formulaire de réponse (sans script) : quatre choix, et le mandataire en cas de pouvoir."""
+    actuelle = reponse.reponse if reponse else ""
+    choix = "".join(
+        f'<label><input type="radio" name="reponse" value="{k}"{" checked" if k == actuelle else ""} required> '
+        f'{html.escape(v + (" à…" if k == "pouvoir" else ""))}</label>' for k, v in presences.REPONSES.items())
+    options = "".join(
+        f'<option value="{u.id}"{" selected" if reponse and reponse.mandataire_id == u.id else ""}>'
+        f'{html.escape(presences.nom(u))}</option>' for u in presences.mandataires_possibles(db, ag.copropriete_id, personne))
+    return ((f'<p class="erreur">{html.escape(erreur)}</p>' if erreur else "")
+            + f'<form method="post">{choix}'
+            f'<label>Pouvoir à : <select name="mandataire_id"><option value="">— choisir un copropriétaire —</option>'
+            f'{options}</select></label>'
+            '<p class="note">Le syndic, son conjoint ou partenaire, ses parents et ses employés ne peuvent pas recevoir de '
+            'pouvoir ; un copropriétaire ne peut pas en recevoir plus de trois, sauf s\'il reste sous 10 % des voix '
+            '(loi du 10 juillet 1965, art. 22). Vous pourrez changer d\'avis jusqu\'à l\'ouverture de l\'assemblée.</p>'
+            '<button type="submit">Envoyer ma réponse</button></form>')
+
+
+def _resume_reponse(r) -> str:
+    if r is None:
+        return ""
+    texte = presences.REPONSES[r.reponse] + (f" à {presences.nom(r.mandataire)}" if r.reponse == "pouvoir" else "")
+    return f"{texte} (le {r.repondu_le:%d/%m/%Y à %H:%M})"
+
+
+def _reponse_de(db: Session, ag, personne_id):
+    return db.query(AgReponse).filter(AgReponse.ag_id == ag.id, AgReponse.personne_id == personne_id).first()
+
+
+def _lien_pouvoir(jeton: str, r) -> str:
+    if r is None or r.reponse != "pouvoir":
+        return ""
+    return (f'<p><a href="/api/ag/confirmation/{html.escape(jeton)}/pouvoir">Télécharger le pouvoir (PDF)</a> : '
+            f'datez-le, signez-le et remettez-le à {html.escape(presences.nom(r.mandataire))} ou au syndic avant '
+            "l'assemblée.</p>")
+
+
 @router.get("/ag/confirmation/{jeton}", response_class=HTMLResponse, include_in_schema=False)
 def confirmation_page(jeton: str, db: Session = Depends(get_db)):
-    """Page du lien de l'e-mail. Un bouton (POST) confirme : les antivirus et aperçus de liens qui
-    ouvrent les liens tout seuls (GET) ne confirment donc rien à la place du copropriétaire."""
+    """Page du lien de l'e-mail : le copropriétaire répond (présent, pouvoir, absent, ne sait pas). Rien n'est
+    enregistré à l'ouverture (GET) : les antivirus et aperçus qui ouvrent les liens seuls ne répondent pas à sa place."""
     inv, ag, copro = _invitation_du_jeton(db, jeton)
     if inv is None:
         return _page("Lien inconnu", "Ce lien de confirmation n'est pas valable (ou plus valable).")
-    quoi = f"l'assemblée du {ag.date.strftime('%d/%m/%Y')} — {copro.nom}" if ag and copro else "l'assemblée"
-    if inv.confirme_le:
-        return _page("Déjà confirmé", f"Vous avez confirmé la réception du message sur {quoi} "
-                                      f"le {inv.confirme_le.strftime('%d/%m/%Y à %H:%M')}. Merci.")
-    return _page("Confirmer la réception", f"Message d'information sur {quoi}.",
-                 f'<form method="post"><button type="submit">J\'ai bien reçu ce message</button></form>')
+    personne = db.get(User, inv.personne_id) if inv.personne_id else None
+    r = _reponse_de(db, ag, inv.personne_id)
+    if personne is None or not presences.reponses_ouvertes(ag) or \
+            personne not in presences.coproprietaires(db, ag.copropriete_id):
+        texte = f"Information sur {_quoi(ag, copro)}." + (f" Votre réponse : {_resume_reponse(r)}." if r else "")
+        return _page("Assemblée générale", texte + " Il n'est plus possible de répondre en ligne : contactez le syndic.",
+                     _lien_pouvoir(jeton, r))
+    texte = f"Information sur {_quoi(ag, copro)}. " + (f"Votre réponse : {_resume_reponse(r)}. Vous pouvez la changer."
+                                                         if r else "Serez-vous présent(e) ?")
+    return _page("Votre réponse", texte, _lien_pouvoir(jeton, r) + _formulaire_reponse(db, ag, personne, r))
 
 
 @router.post("/ag/confirmation/{jeton}", response_class=HTMLResponse, include_in_schema=False)
-def confirmation(jeton: str, db: Session = Depends(get_db)):
+def confirmation(jeton: str, reponse: str = Form(""), mandataire_id: str = Form(""), db: Session = Depends(get_db)):
     inv, ag, copro = _invitation_du_jeton(db, jeton)
     if inv is None:
         return _page("Lien inconnu", "Ce lien de confirmation n'est pas valable (ou plus valable).")
     if not inv.confirme_le:
-        inv.confirme_le = datetime.now()
+        inv.confirme_le = datetime.now()          # répondre, c'est aussi confirmer la réception
         db.commit()
-    return _page("Merci", "La réception est confirmée : le syndic en est informé. "
-                          "La convocation officielle vous parvient par lettre recommandée.")
+    personne = db.get(User, inv.personne_id) if inv.personne_id else None
+    if not reponse:                               # bouton des liens envoyés avant la 2026.11.042
+        return _page("Merci", "La réception est confirmée : le syndic en est informé. "
+                              "La convocation officielle vous parvient par lettre recommandée.")
+    if personne is None or not presences.reponses_ouvertes(ag):
+        return _page("Assemblée générale", "Il n'est plus possible de répondre en ligne : contactez le syndic.")
+    try:
+        r = presences.repondre(db, ag, personne, reponse, int(mandataire_id) if mandataire_id.isdigit() else None, "lien")
+    except HTTPException as e:
+        db.rollback()
+        return _page("Votre réponse", f"Information sur {_quoi(ag, copro)}.",
+                     _formulaire_reponse(db, ag, personne, _reponse_de(db, ag, personne.id), str(e.detail)))
+    db.commit()
+    return _page("Merci", f"Réponse enregistrée : {_resume_reponse(r)}. Le syndic en est informé ; vous pouvez la "
+                          "changer avec le même lien jusqu'à l'ouverture de l'assemblée.", _lien_pouvoir(jeton, r))
+
+
+@router.get("/ag/confirmation/{jeton}/pouvoir", include_in_schema=False)
+def pouvoir_du_lien(jeton: str, db: Session = Depends(get_db)):
+    inv, ag, copro = _invitation_du_jeton(db, jeton)
+    r = _reponse_de(db, ag, inv.personne_id) if inv is not None else None
+    if r is None or r.reponse != "pouvoir":
+        raise HTTPException(404, "Pas de pouvoir enregistré.")
+    return _pdf_pouvoir(db, ag, copro, r)
+
+
+def _pdf_pouvoir(db: Session, ag, copro, r) -> Response:
+    from app.services.presence_pdf import pouvoir_pdf
+    nom_fichier = f"pouvoir-ag-{ag.date}.pdf"
+    return Response(pouvoir_pdf(db, ag, copro, r).getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{nom_fichier}"'})
+
+
+# ---------- Présence et pouvoirs (services/presences.py) ----------
+@router.get("/ag/{ag_id}/presences", response_model=PresencesOut)
+def lire_presences(ag_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    ag = get_owned(db, AG, ag_id, get_or_create_copro(db, user), label="AG")
+    return presences.etat(db, ag)
+
+
+@router.put("/ag/{ag_id}/presences/{personne_id}", response_model=PresencesOut)
+def saisir_presence(ag_id: int, personne_id: int, data: PresenceIn, request: Request, db: Session = Depends(get_db),
+                    user: User = Depends(require_syndic)):
+    """Le syndic saisit ou corrige une réponse (téléphone, courrier, séance), à tout moment."""
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    personne = db.get(User, personne_id)
+    if personne is None or personne not in presences.coproprietaires(db, copro.id):
+        raise HTTPException(404, "Copropriétaire introuvable")
+    r = _reponse_de(db, ag, personne.id)
+    if r is None or r.reponse != data.reponse or r.mandataire_id != data.mandataire_id:
+        r = presences.repondre(db, ag, personne, data.reponse, data.mandataire_id, "syndic")
+    if data.pouvoir_recu is not None:
+        if r.reponse != "pouvoir":
+            raise HTTPException(422, "Pas de pouvoir pour ce copropriétaire.")
+        r.pouvoir_recu_le = (r.pouvoir_recu_le or datetime.now()) if data.pouvoir_recu else None
+    audit.enregistrer(db, "ag_presence", user=user, copro_id=copro.id, request=request,
+                      detail=f"AG du {ag.date:%d/%m/%Y} — {presences.nom(personne)} : {_resume_reponse(r)}"
+                             + (" — pouvoir signé reçu" if r.pouvoir_recu_le else ""))
+    db.commit()
+    return presences.etat(db, ag)
+
+
+def _ma_reponse(db: Session, ag, user: User) -> MaReponseOut:
+    r = _reponse_de(db, ag, user.id)
+    mandants = [x.personne for x in db.query(AgReponse).filter(
+        AgReponse.ag_id == ag.id, AgReponse.reponse == "pouvoir", AgReponse.mandataire_id == user.id)]
+    return MaReponseOut(
+        ouvert=presences.reponses_ouvertes(ag),
+        coproprietaire=user in presences.coproprietaires(db, ag.copropriete_id),
+        reponse=r.reponse if r else "", repondu_le=r.repondu_le if r else None,
+        mandataire_id=r.mandataire_id if r and r.reponse == "pouvoir" else None,
+        mandataire_nom=presences.nom(r.mandataire) if r and r.reponse == "pouvoir" else "",
+        mandataires=[PersonneCourteOut(id=u.id, nom=presences.nom(u))
+                     for u in presences.mandataires_possibles(db, ag.copropriete_id, user)],
+        mandats=[PersonneCourteOut(id=u.id, nom=presences.nom(u)) for u in mandants if u is not None])
+
+
+@router.get("/ag/{ag_id}/ma-reponse", response_model=MaReponseOut)
+def lire_ma_reponse(ag_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    ag = get_owned(db, AG, ag_id, get_or_create_copro(db, user), label="AG")
+    return _ma_reponse(db, ag, user)
+
+
+@router.put("/ag/{ag_id}/ma-reponse", response_model=MaReponseOut)
+def repondre_moi(ag_id: int, data: ReponseAgIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    ag = get_owned(db, AG, ag_id, get_or_create_copro(db, user), label="AG")
+    if not presences.reponses_ouvertes(ag):
+        raise HTTPException(409, "L'assemblée est ouverte : votre réponse ne peut plus changer en ligne ; "
+                                 "voyez le syndic.")
+    presences.repondre(db, ag, user, data.reponse, data.mandataire_id, "compte")
+    db.commit()
+    return _ma_reponse(db, ag, user)
+
+
+@router.get("/ag/{ag_id}/pouvoirs/{personne_id}")
+def telecharger_pouvoir(ag_id: int, personne_id: int, db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
+    """Le pouvoir en PDF : pour le syndic, le mandant et son mandataire."""
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    r = _reponse_de(db, ag, personne_id)
+    if r is None or r.reponse != "pouvoir":
+        raise HTTPException(404, "Pas de pouvoir enregistré pour ce copropriétaire.")
+    if user.role != "syndic" and user.id not in (r.personne_id, r.mandataire_id):
+        raise HTTPException(403, "Réservé au syndic, au copropriétaire et à son mandataire.")
+    return _pdf_pouvoir(db, ag, copro, r)
+
+
+@router.get("/ag/{ag_id}/feuille-presence")
+def telecharger_feuille_presence(ag_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    from app.services.presence_pdf import feuille_presence_pdf
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    return Response(feuille_presence_pdf(db, ag, copro).getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="feuille-presence-ag-{ag.date}.pdf"'})
 
 
 @router.post("/ag/{ag_id}/invitations", response_model=InvitationsResult)
@@ -476,7 +642,8 @@ def telecharger_pv(ag_id: int, db: Session = Depends(get_db), user: User = Depen
     return Response(
         content=pdf.getvalue(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+        # Nom accentué (« Résidence… ») : filename*=utf-8'' (un en-tête HTTP n'accepte que le latin-1).
+        headers={"Content-Disposition": _content_disposition(nom)},
     )
 
 

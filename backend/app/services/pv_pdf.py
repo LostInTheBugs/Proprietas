@@ -142,6 +142,22 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
     el.append(t)
     el.append(Spacer(1, 8))
 
+    # Présents et représentés (réponses enregistrées, corrigées en séance par le syndic : services/presences.py)
+    from app.models.ag import AgReponse
+    if not consultation and db.query(AgReponse).filter(AgReponse.ag_id == ag.id).first() is not None:
+        from app.services import presences
+        etat = presences.etat(db, ag)
+        tot = etat["totaux"]
+        el.append(Paragraph("PRÉSENCE", style("section")))
+        el.append(Paragraph(
+            f"{tot['presents']} copropriétaire(s) présent(s) et {tot['representes']} représenté(s), totalisant "
+            f"{tot['voix_presentes_ou_representees']:g} ‰ des voix (feuille de présence).", style("normal", spaceAfter=2)))
+        pouvoirs = [l for l in etat["lignes"] if l["reponse"] == "pouvoir"]
+        for l in pouvoirs:
+            el.append(Paragraph(f"{escape(l['nom'])} représenté(e) par {escape(l['mandataire_nom'])} "
+                                "(pouvoir annexé au présent procès-verbal).", style("small", spaceAfter=1)))
+        el.append(Spacer(1, 6))
+
     # Ordre du jour
     # Chaque second vote (passerelle 25-1 / 26-1) est placé juste après la résolution
     # dont il découle ; il ne figure pas à l'ordre du jour (il n'y était pas inscrit).
