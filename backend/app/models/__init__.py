@@ -8,6 +8,7 @@ from app.models.ag import AG, Resolution, Vote, AgCreneau, AgCreneauVote, AgRepo
 from app.models.document import Document
 from app.models.carnet import Entretien
 from app.models.invitation import Invitation
+from app.models.cle import CleRepartition, CleLot
 from app.models.relance import Relance
 from app.models.travaux import Travaux
 from app.models.contact import Contact
@@ -21,7 +22,7 @@ from app.models.reprise import EtatReprise, EtatRepriseLigne
 __all__ = [
     "User", "UserCopro", "Copropriete", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
-    "AgCreneau", "AgCreneauVote", "AgReponse", "Document", "Entretien", "Invitation", "Relance",
+    "AgCreneau", "AgCreneauVote", "AgReponse", "CleRepartition", "CleLot", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
     "NotificationPV", "EtatReprise", "EtatRepriseLigne",
 ]

@@ -60,13 +60,15 @@ VERSION_FORMAT = 1
 
 # Ordre d'export et d'import : chaque table après celles qu'elle référence.
 TABLES = [
-    "coproprietes", "users", "user_coproprietes", "contacts", "contrats", "lots", "exercices",
+    "coproprietes", "users", "user_coproprietes", "contacts", "contrats", "lots", "cles_repartition", "cles_lots",
+    "exercices",
     "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
     "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
     "ag_reponses", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
 ]
 # Lignes d'une table : directement par copropriété, ou par leur parent (colonne → table parente).
 PAR_PARENT = {
+    "cles_lots": ("cle_id", "cles_repartition"),
     "budget_lines": ("exercice_id", "exercices"),
     "appels_fonds": ("exercice_id", "exercices"),
     "appels_lots": ("appel_id", "appels_fonds"),

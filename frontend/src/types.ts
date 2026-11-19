@@ -144,6 +144,7 @@ export interface BudgetLine {
   libelle: string;
   montant: number;
   type_repartition: string;
+  cle_id?: number | null;       // clé de répartition (charges spéciales) ; null : charges générales
 }
 
 export interface AppelLot {
@@ -163,6 +164,7 @@ export interface Appel {
   montant_total: number;
   inclut_fonds_travaux: boolean;
   fonds_travaux_montant: number;
+  cle_id?: number | null;       // appel sur une seule clé ; null : réparti comme le budget
   parts: AppelLot[];
 }
 
@@ -184,6 +186,8 @@ export interface Mouvement {
   avance_par_nom?: string;
   hors_banque?: boolean;        // n'est pas passé par le compte bancaire de la copropriété
   // Facture à payer : pas encore réglée (échéance facultative) ; réglée plus tard : date du paiement
+  cle_id?: number | null;       // dépense commune : clé de répartition
+  cle_nom?: string;
   a_payer?: boolean;
   echeance?: string | null;
   paye_le?: string | null;

@@ -425,6 +425,7 @@ class BudgetLineIn(BaseModel):
     libelle: str
     montant: Montant = Decimal("0.00")
     type_repartition: str = "generale"
+    cle_id: Optional[int] = None          # clé de répartition (charges spéciales) ; None : charges générales
 
 
 class BudgetLineOut(BudgetLineIn):
@@ -449,6 +450,7 @@ class AppelIn(BaseModel):
     date_echeance: Optional[date] = None
     montant_total: Montant = Decimal("0.00")
     inclut_fonds_travaux: bool = False
+    cle_id: Optional[int] = None          # appel sur une seule clé ; None : réparti comme le budget
 
 
 class AppelLotOut(BaseModel):
@@ -470,6 +472,7 @@ class AppelOut(BaseModel):
     montant_total: float = 0.0
     inclut_fonds_travaux: bool = False
     fonds_travaux_montant: float = 0.0
+    cle_id: Optional[int] = None
     parts: List[AppelLotOut] = []
 
 
@@ -677,6 +680,7 @@ class MouvementIn(BaseModel):
     # Facture à payer (services/factures.py) : pas encore réglée, échéance facultative.
     a_payer: bool = False
     echeance: Optional[date] = None
+    cle_id: Optional[int] = None          # dépense commune : clé de répartition ; None : charges générales
 
 
 class ReclasserIn(BaseModel):
@@ -736,6 +740,7 @@ class MouvementOut(MouvementIn):
     piece_path: str = ""
     hors_banque: bool = False     # n'est pas passé par le compte de la copropriété (avance, déduction)
     paye_le: Optional[date] = None   # facture réglée après sa date : date du paiement
+    cle_nom: str = ""                # nom de la clé de répartition (« » : charges générales)
     avance_par_nom: str = ""
 
 
@@ -1501,3 +1506,26 @@ class FactureAPayerOut(BaseModel):
 class PayerIn(BaseModel):
     date: date                            # date du paiement (virement de la copropriété)
     avance_par_id: Optional[int] = None   # payée de sa poche par cette personne : elle devient une avance
+
+
+# ---------- Clés de répartition (services/cles.py) ----------
+class CleLotIn(BaseModel):
+    lot_id: int
+    tantiemes: int = Field(0, ge=0, le=1_000_000)
+
+
+class CleIn(BaseModel):
+    nom: str = Field(..., max_length=80)
+    lots: List[CleLotIn] = []
+
+
+class CleLotOut(CleLotIn):
+    lot_numero: str = ""
+
+
+class CleOut(BaseModel):
+    id: int
+    nom: str
+    total: int = 0
+    lots: List[CleLotOut] = []
+    utilisations: dict = {}

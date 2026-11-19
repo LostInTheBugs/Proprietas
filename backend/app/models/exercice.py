@@ -29,5 +29,7 @@ class BudgetLine(Base):
     # "generale" = répartie entre tous les lots par tantièmes
     # "speciale" = frais spécifiques (répartie entre lots concernés, gérée manuellement)
     type_repartition = Column(String, default="generale")
+    # Clé de répartition (charges spéciales, services/cles.py) ; NULL : charges générales.
+    cle_id = Column(Integer, ForeignKey("cles_repartition.id"), nullable=True)
 
     exercice = relationship("Exercice", back_populates="budget_lines")

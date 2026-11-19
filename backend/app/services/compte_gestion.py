@@ -65,7 +65,8 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
             rows.append([
                 Paragraph(m.date.strftime("%d/%m/%Y"), style("cell")),
                 Paragraph(m.libelle, style("cell")),
-                Paragraph("Fonds de travaux" if m.categorie == "fonds_travaux" else "Charges", style("cell")),
+                Paragraph("Fonds de travaux" if m.categorie == "fonds_travaux"
+                          else ("Charges générales" if m.cle is None else f"Charges spéciales : {m.cle.nom}"), style("cell")),
                 Paragraph(f"<b>{fmt_eur(m.montant)}</b>", style("cell")),
             ])
         rows.append([
@@ -76,6 +77,26 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
         dt = Table(rows, colWidths=[42 * 2.835, 72 * 2.835, 36 * 2.835, 30 * 2.835])
         dt.setStyle(table_style())
         el.append(dt)
+        el.append(Spacer(1, 8))
+
+    # Charges spéciales (loi 1965, art. 10) : budget et dépenses de chaque clé de répartition.
+    from app.services import cles as svc_cles
+    budget_cles = svc_cles.budget_par_cle(db, exercice.id)
+    dep_cles: dict = {}
+    for m in depenses:
+        if m.lot_id is None and m.categorie != "fonds_travaux":
+            dep_cles[m.cle_id] = dep_cles.get(m.cle_id, 0) + (m.montant or 0)
+    if (set(budget_cles) | set(dep_cles)) - {None}:
+        from app.models.cle import CleRepartition
+        el.append(Paragraph("RÉPARTITION PAR CLÉ (CHARGES SPÉCIALES)", style("section")))
+        rows = [[Paragraph(f"<b>{t}</b>", style("th")) for t in ("Clé de répartition", "Budget voté", "Dépenses")]]
+        for cle_id in sorted(set(budget_cles) | set(dep_cles), key=lambda k: (k is not None, k or 0)):
+            rows.append([Paragraph(svc_cles.nom(db.get(CleRepartition, cle_id) if cle_id else None), style("cell")),
+                         Paragraph(fmt_eur(budget_cles.get(cle_id, 0)), style("cell")),
+                         Paragraph(fmt_eur(dep_cles.get(cle_id, 0)), style("cell"))])
+        ct = Table(rows, colWidths=[90 * 2.835, 45 * 2.835, 45 * 2.835])
+        ct.setStyle(table_style())
+        el.append(ct)
         el.append(Spacer(1, 8))
 
     # 3. Annexe par lot

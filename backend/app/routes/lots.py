@@ -108,6 +108,8 @@ def delete_lot(lot_id: int, db: Session = Depends(get_db), user: User = Depends(
     lot = get_owned(db, Lot, lot_id, copro, label="Lot")
     for annexe in ensembles.annexes(db, lot):
         annexe.lot_principal_id = None
+    from app.models.cle import CleLot
+    db.query(CleLot).filter(CleLot.lot_id == lot.id).delete(synchronize_session=False)   # ses millièmes de clés
     db.delete(lot)
     db.commit()
     return {"ok": True}
@@ -148,3 +150,4 @@ def lots_soldes(db: Session = Depends(get_db), user: User = Depends(get_current_
             solde=t["solde"],
         ))
     return result
+
