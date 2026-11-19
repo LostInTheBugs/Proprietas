@@ -54,7 +54,8 @@ def test_email_de_convocation_presente_comme_information():
     copro = Copropriete(nom="Les Tilleuls")
     texte = convocation_texte(copro, _ag(), [], "Le syndic")
     assert "Vous êtes convoqué" not in texte
-    assert "ne remplace pas la convocation" in texte
+    # Mention d'une ligne, en bas (choix de Fred, 19/11/2026) : l'e-mail reste une information.
+    assert texte.rstrip().splitlines()[-1].startswith("Pour information : la convocation officielle vous parvient")
     assert "art. 9 et 64" in texte
     assert convocation_sujet(copro, _ag()).startswith("Information")
 
