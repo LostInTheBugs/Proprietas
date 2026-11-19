@@ -1,8 +1,8 @@
 """Dépôts mis en attente quand le drive est injoignable (option COPRO_DRIVE_ATTENTE_MO, demande de Fred, 19/11/2026).
 
 Constat de l'exercice de reprise : pendant une panne du drive, un document déposé était refusé (503).
-Option de l'instance, désactivée par défaut (petits serveurs) : COPRO_DRIVE_ATTENTE_MO = plafond en Mo des
-fichiers en attente, toutes copropriétés confondues ; 0 = désactivé.
+Option de l'instance : COPRO_DRIVE_ATTENTE_MO = plafond en Mo des fichiers en attente, toutes copropriétés
+confondues ; 50 Mo par défaut (choix de Fred : « ça reste du cache, mais modifiable ») ; 0 = désactivé.
 - drive injoignable et place suffisante : le fichier est gardé sur le serveur, document « en attente » (lisible) ;
 - le planificateur (toutes les 5 min) ou le bouton « Ranger maintenant » le range sur le drive à son retour ;
 - plafond atteint : refus, avec la raison ; débrancher le drive : les dépôts en attente restent sur le serveur.
@@ -22,8 +22,9 @@ def attente(monkeypatch):
     return get_settings()
 
 
-def test_desactive_par_defaut(client, db, copro_a, syndic_a, token_a, serveur):
-    assert get_settings().drive_attente_mo == 0
+def test_50_mo_par_defaut_et_0_desactive(client, db, copro_a, syndic_a, token_a, serveur, monkeypatch):
+    assert get_settings().drive_attente_mo == 50
+    monkeypatch.setattr(get_settings(), "drive_attente_mo", 0)
     _brancher(client, token_a)
     serveur.panne = True
     r = _deposer(client, token_a)

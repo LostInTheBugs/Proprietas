@@ -219,7 +219,9 @@ def test_autorisation_retiree_chez_google(client, db, copro_a, syndic_a, token_a
     assert client.get(f"/api/documents/{doc['id']}/download", headers=auth(token_a)).content == b"%PDF-1 essai"
 
 
-def test_google_injoignable_et_drive_plein(client, db, copro_a, syndic_a, token_a, google):
+def test_google_injoignable_et_drive_plein(client, db, copro_a, syndic_a, token_a, google, monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setattr(get_settings(), "drive_attente_mo", 0)      # dépôts en attente désactivés
     _brancher(client, token_a, google)
     google.panne = True
     drive_google._jetons.clear()
