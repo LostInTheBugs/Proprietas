@@ -13,6 +13,11 @@ export interface User {
   // Notifications officielles par lettre recommandée papier (demande du copropriétaire, art. 42-1)
   notification_postale?: boolean;
   notification_postale_depuis?: string | null;
+  // Connexions (Réglages → Sécurité)
+  last_login_at?: string | null;
+  dernier_echec_at?: string | null;
+  bloque?: "" | "temporaire" | "definitif";
+  bloque_jusqua?: string | null;
 }
 
 export interface Copro {
@@ -40,6 +45,13 @@ export interface Copro {
   relance_heure: string;
   relance_minimum: number;
   totp_policy: string;
+  // Connexions : historique complet, blocage après des échecs d'affilée
+  connexions_historique?: boolean;
+  verrouillage_actif?: boolean;
+  verrouillage_seuil?: number;
+  verrouillage_minutes?: number;
+  verrouillage_seuil_definitif?: number; // 0 : jamais
+  verrouillage_avec_2fa?: boolean;
   notes: string;
 }
 
@@ -650,4 +662,34 @@ export interface SoldeAnnuel {
 export interface SoldesAnnuels {
   ancre: { date: string | null; source: "base" | "releve" | "zero" };
   lignes: SoldeAnnuel[];
+}
+
+export interface ConnexionEntree {
+  date: string;
+  action: string; // login | login_failed | login_blocked | account_locked | account_unlocked
+  detail: string;
+  ip: string;
+  navigateur: string;
+}
+
+export interface Connexions {
+  historique: boolean;
+  derniere_connexion: string | null;
+  derniere_ip: string;
+  dernier_echec: string | null;
+  echecs_d_affilee: number;
+  bloque: "" | "temporaire" | "definitif";
+  bloque_jusqua: string | null;
+  entrees: ConnexionEntree[];
+}
+
+export interface CompteBloque {
+  id: number;
+  email: string;
+  nom: string;
+  prenom: string;
+  bloque: "temporaire" | "definitif";
+  bloque_jusqua: string | null;
+  bloque_definitif_le: string | null;
+  coproprietes: string[];
 }

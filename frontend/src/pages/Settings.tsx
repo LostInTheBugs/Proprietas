@@ -7,6 +7,7 @@ import { fmtDate, fmtEUR } from "../types";
 import { Button, Card, Input, Modal, Select, Badge } from "../components/ui";
 import { applyTheme, getStoredTheme, normalizeTheme, type Theme } from "../theme";
 import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
+import { ComptesBloquesCard } from "../components/Connexions";
 import { ComptesACompleterCard, SauvegardeCard } from "../components/Sauvegarde";
 import { EspaceStockageCard } from "../components/EspaceStockage";
 import { DriveCard } from "../components/Drive";
@@ -631,6 +632,7 @@ export default function Settings() {
       {onglet === "serveur" && (<>
       <UpdatesCard />
       <InstanceAdminsCard myId={me?.id} />
+      <ComptesBloquesCard />
       </>)}
 
       {modal && (

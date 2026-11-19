@@ -3,7 +3,7 @@
 - Secret TOTP stocké CHIFFRÉ en base (app.core.crypto), jamais renvoyé après l'enrôlement.
 - 10 codes de secours à usage unique, hachés (HMAC-SHA256) — affichés UNE seule fois.
 - Politique par copropriété : off | syndic | all — comptes démo exemptés.
-- `finaliser_connexion` : dernière connexion + journal + alerte email (nouvelle IP).
+- `finaliser_connexion` : dernière connexion, compteur d'échecs, historique (si activé) + alerte email (nouvelle IP).
 
 Compatible avec toute application TOTP open source (FreeOTP, Aegis, Google
 Authenticator, 1Password…) : aucun service externe, tout vit dans le backend.
@@ -141,15 +141,14 @@ def copro_principale_id(db, user: User) -> int | None:
 
 def finaliser_connexion(db, user: User, request) -> None:
     """Dernière connexion + entrée d'audit + alerte email si l'IP a changé."""
-    from app.services import alertes
+    from app.services import alertes, connexions
 
     ip = audit.client_ip(request)
     ancienne_ip = user.last_login_ip or ""
     user.last_login_at = datetime.now()
     user.last_login_ip = ip
     user.last_login_ua = ((request.headers.get("user-agent") if request else "") or "")[:250]
-    audit.enregistrer(db, "login", user=user,
-                      copro_id=copro_principale_id(db, user), request=request)
+    connexions.succes(db, user, request)   # compteur d'échecs à zéro ; journal si l'historique est activé
     db.commit()
     if ip and ip != ancienne_ip:
         alertes.alerte_connexion(db, user, ip)

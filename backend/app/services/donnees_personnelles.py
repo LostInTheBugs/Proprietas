@@ -58,6 +58,7 @@ def donnees_personnelles(db: Session, user: User) -> dict:
             "double_authentification": bool(user.totp_enabled), "theme": user.theme,
             "derniere_connexion": user.last_login_at, "derniere_ip": user.last_login_ip,
             "dernier_navigateur": user.last_login_ua,
+            "dernier_echec_de_connexion": user.dernier_echec_at, "compte_bloque": user.bloque,
         },
         "coproprietes": [{"nom": c.nom, "adresse": c.adresse, "code_postal": c.code_postal,
                           "ville": c.ville} for c in copros],

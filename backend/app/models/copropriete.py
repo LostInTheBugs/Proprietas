@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Integer, Numeric, String, Boolean
+from sqlalchemy import Column, DateTime, Integer, Numeric, String, Boolean, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.core.crypto import TexteChiffre
@@ -50,6 +50,17 @@ class Copropriete(Base):
     # Défini à la création de la copropriété (COPRO_TOTP_DEFAULT_POLICY) ;
     # les bases existantes restent en « off » après migration.
     totp_policy = Column(String, default="off")
+    # Connexions (Réglages → Sécurité, services/connexions.py). Par défaut, seule la dernière
+    # connexion est gardée ; l'historique garde toutes les connexions réussies et ratées.
+    connexions_historique = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # Blocage après des échecs d'affilée : temporaire au seuil (et à chaque multiple), définitif
+    # (jusqu'au déblocage) au seuil définitif (0 : jamais). Les comptes avec double authentification
+    # n'y sont soumis que si verrouillage_avec_2fa.
+    verrouillage_actif = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    verrouillage_seuil = Column(Integer, nullable=False, default=5, server_default=text("5"))
+    verrouillage_minutes = Column(Integer, nullable=False, default=15, server_default=text("15"))
+    verrouillage_seuil_definitif = Column(Integer, nullable=False, default=10, server_default=text("10"))
+    verrouillage_avec_2fa = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     # Taux de l'intérêt légal (%) pour les intérêts de retard de recouvrement —
     # arrêté semestriel, saisi par le syndic (jamais deviné par l'app).
     taux_legal_retard = Column(Numeric(7, 4), default=0.0)
