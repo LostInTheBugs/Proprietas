@@ -1,6 +1,6 @@
 import html
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from app.services.emailer import (envoyer_email, convocation_sujet, convocation_
                                   EmailError, adresse_publique)
 from app.services.pv_pdf import generer_pv_pdf
 from app.schemas import (
+    ModeleResolutionOut, ResolutionsTypesIn,
     MaReponseOut, PersonneCourteOut, PresenceIn, PresencesOut, ReponseAgIn,
     AGIn, AGOut, ResolutionIn, ResolutionOut, VoteIn, VoteOut, ResolutionResult,
     CreneauIn, CreneauOut, CreneauVoteIn, CreneauVoteOut,
@@ -126,6 +127,24 @@ def _reporter_approbation(db: Session, r: Resolution) -> None:
 def majorites():
     """Description des majorités légales (module France)."""
     return MAJORITES
+
+
+@router.get("/ag/modele-annuelle", response_model=list[ModeleResolutionOut])
+def modele_annuelle(jour: date, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Résolutions types d'une AG annuelle tenue le `jour` (services/modele_ag.py)."""
+    from app.services import modele_ag
+    return modele_ag.modeles(db, get_or_create_copro(db, user), jour)
+
+
+@router.post("/ag/{ag_id}/resolutions-types", response_model=list[ResolutionOut])
+def ajouter_resolutions_types(ag_id: int, data: ResolutionsTypesIn, db: Session = Depends(get_db),
+                              user: User = Depends(require_syndic)):
+    from app.services import modele_ag
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    crees = modele_ag.ajouter(db, copro, ag, data.codes)
+    db.commit()
+    return [_resolution_out(db, r) for r in crees]
 
 
 @router.get("/ag", response_model=list[AGOut])
