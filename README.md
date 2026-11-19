@@ -51,6 +51,10 @@ se créer normalement depuis la page de connexion.
   Mes lots ; aucun nom de locataire enregistré, RGPD)
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
   encaissements / dépenses, solde par lot, état daté, quittances
+- **Factures à payer** : une dépense se saisit « à payer » dès réception de la facture, avec une échéance ;
+  elle compte dans les charges mais pas dans la banque jusqu'à « Marquer payée » (par la copropriété, à la
+  date du virement, ou de sa poche par quelqu'un : elle devient une avance) ; encart sur le tableau de bord
+  du syndic (retards en rouge) et e-mail aux syndics 7 jours avant l'échéance, puis une fois dépassée
 - **Avances** : une dépense payée de sa poche par le syndic ou un copropriétaire (« Payée par » sur la
   dépense, **facture obligatoire**, qui ne peut plus être supprimée) compte dans les charges mais pas dans la
   banque ; la copropriété la règle, au choix et même en plusieurs fois, par un **remboursement** (virement :

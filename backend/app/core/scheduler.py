@@ -86,6 +86,10 @@ def _tick_relances() -> None:
         stats_ag = run_rappels_ag(db)
         if stats_ag["ag_rappel"] > 0:
             log.info("Rappels AG : %s", stats_ag)
+        from app.services.factures import run_rappels
+        stats_factures = run_rappels(db)
+        if stats_factures["avant"] or stats_factures["retard"]:
+            log.info("Rappels des factures à payer : %s", stats_factures)
         from app.services.drive_sauvegarde import run_sauvegardes_drive
         stats_drive = run_sauvegardes_drive(db)
         if stats_drive["sauvegardes"] or stats_drive["echecs"]:

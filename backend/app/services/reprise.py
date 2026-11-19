@@ -131,16 +131,18 @@ def _compte(m: Mouvement) -> str:
 
 def _flux(db: Session, copro_id: int, apres: date | None, jusqu_a: date | None) -> dict:
     """Encaissements et dépenses par compte, datés après `apres` (exclu) et jusqu'à `jusqu_a` (inclus)."""
+    from app.services.factures import date_banque
     q = db.query(Mouvement).filter(Mouvement.copropriete_id == copro_id)
-    if apres is not None:
-        q = q.filter(Mouvement.date > apres)
-    if jusqu_a is not None:
-        q = q.filter(Mouvement.date <= jusqu_a)
     flux = {c: {"encaissement": D(0), "depense": D(0)} for c, _ in COMPTES}
     for m in q:
-        # Avance payée par une personne, déduction de ses charges : rien n'est passé par la banque.
-        if m.type in ("encaissement", "depense") and not m.hors_banque:
-            flux[_compte(m)][m.type] += D(m.montant or 0)
+        # Avance payée par une personne, déduction de ses charges, facture pas encore réglée : rien n'est
+        # passé par la banque. Facture réglée après sa date : la banque la voit à la date du paiement.
+        if m.type not in ("encaissement", "depense") or m.hors_banque or m.a_payer:
+            continue
+        jour = date_banque(m)
+        if (apres is not None and jour <= apres) or (jusqu_a is not None and jour > jusqu_a):
+            continue
+        flux[_compte(m)][m.type] += D(m.montant or 0)
     return flux
 
 

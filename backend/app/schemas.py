@@ -674,6 +674,9 @@ class MouvementIn(BaseModel):
     # Avances (services/avances.py) : dépense payée par cette personne, remboursement (catégorie « avance »)
     # ou déduction de ses charges (encaissement sur son lot).
     avance_par_id: Optional[int] = None
+    # Facture à payer (services/factures.py) : pas encore réglée, échéance facultative.
+    a_payer: bool = False
+    echeance: Optional[date] = None
 
 
 class ReclasserIn(BaseModel):
@@ -732,6 +735,7 @@ class MouvementOut(MouvementIn):
     montant: float = 0.0          # sortie : nombre JSON
     piece_path: str = ""
     hors_banque: bool = False     # n'est pas passé par le compte de la copropriété (avance, déduction)
+    paye_le: Optional[date] = None   # facture réglée après sa date : date du paiement
     avance_par_nom: str = ""
 
 
@@ -1478,3 +1482,22 @@ class MaReponseOut(BaseModel):
     repondu_le: Optional[datetime] = None
     mandataires: List[PersonneCourteOut] = []   # à qui il peut donner pouvoir
     mandats: List[PersonneCourteOut] = []       # qui lui a donné pouvoir
+
+
+# ---------- Factures à payer (services/factures.py) ----------
+class FactureAPayerOut(BaseModel):
+    id: int
+    date: date
+    libelle: str
+    categorie: str
+    montant: float
+    echeance: Optional[date] = None
+    en_retard: bool = False
+    exercice_id: int
+    document_id: Optional[int] = None
+    contrat_id: Optional[int] = None
+
+
+class PayerIn(BaseModel):
+    date: date                            # date du paiement (virement de la copropriété)
+    avance_par_id: Optional[int] = None   # payée de sa poche par cette personne : elle devient une avance
