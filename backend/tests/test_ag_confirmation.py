@@ -48,11 +48,12 @@ def test_lien_personnel_et_confirmation(client, db, copro_a, syndic_a, token_a, 
         liens[dest] = ligne.removeprefix("https://copro.exemple.fr")
     assert len(set(liens.values())) == 2                       # un lien par destinataire
     lien = liens["marie@exemple.fr"]
-    # Ouvrir le lien (GET) ne confirme rien : il faut cliquer sur le bouton.
+    # Ouvrir le lien (GET) ne confirme rien : il faut envoyer le formulaire (depuis la 2026.11.042, la page demande
+    # aussi la réponse : présent, pouvoir, absent, ne sait pas ; tests/test_ag_presences.py).
     page = client.get(lien)
-    assert page.status_code == 200 and "J'ai bien reçu ce message" in page.text and 'method="post"' in page.text
+    assert page.status_code == 200 and "Envoyer ma réponse" in page.text and 'method="post"' in page.text
     assert db.query(Invitation).filter(Invitation.confirme_le.isnot(None)).count() == 0
-    merci = client.post(lien)
+    merci = client.post(lien)                                  # formulaire des liens d'avant : réception seule
     assert merci.status_code == 200 and "confirmée" in merci.text
     invs = {i["personne_email"]: i for i in client.get(f"/api/ag/{ag_id}/invitations", headers=auth(token_a)).json()}
     assert invs["marie@exemple.fr"]["confirme_le"] and invs["paul@exemple.fr"]["confirme_le"] is None
@@ -60,7 +61,6 @@ def test_lien_personnel_et_confirmation(client, db, copro_a, syndic_a, token_a, 
     client.post(lien)
     invs = {i["personne_email"]: i for i in client.get(f"/api/ag/{ag_id}/invitations", headers=auth(token_a)).json()}
     assert invs["marie@exemple.fr"]["confirme_le"] == premiere
-    assert "Déjà confirmé" in client.get(lien).text
 
 
 def test_sans_adresse_publique_pas_de_lien(client, db, copro_a, syndic_a, token_a, envois, monkeypatch):
