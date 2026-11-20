@@ -426,6 +426,7 @@ class BudgetLineIn(BaseModel):
     montant: Montant = Decimal("0.00")
     type_repartition: str = "generale"
     cle_id: Optional[int] = None          # clé de répartition (charges spéciales) ; None : charges générales
+    categorie: str = "charges"            # groupe de charges (annexes comptables) : energie | entretien | assurance | charges | autre
 
 
 class BudgetLineOut(BudgetLineIn):

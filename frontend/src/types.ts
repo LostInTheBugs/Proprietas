@@ -146,6 +146,7 @@ export interface BudgetLine {
   montant: number;
   type_repartition: string;
   cle_id?: number | null;       // clé de répartition (charges spéciales) ; null : charges générales
+  categorie?: string; // groupe de charges des annexes comptables
 }
 
 export interface AppelLot {

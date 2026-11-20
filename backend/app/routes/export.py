@@ -65,6 +65,24 @@ def compte_gestion(exercice_id: int, request: Request, db: Session = Depends(get
     )
 
 
+@router.get("/annexes-comptables/{exercice_id}")
+def annexes_comptables(exercice_id: int, request: Request, db: Session = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    """Annexes 1 à 5 des comptes de l'exercice (décret n° 2005-240 et arrêté du 14 mars 2005), en PDF."""
+    from app.services.annexes_comptables import annexes_pdf
+    copro = get_or_create_copro(db, user)
+    ex = db.query(Exercice).filter(Exercice.id == exercice_id, Exercice.copropriete_id == copro.id).first()
+    if not ex:
+        raise HTTPException(404, "Exercice introuvable")
+    pdf = annexes_pdf(db, copro, ex)
+    audit.enregistrer(db, "export_annexes_comptables", user=user, copro_id=copro.id,
+                      detail=f"Exercice {ex.annee}", request=request)
+    db.commit()
+    nom = f"Annexes_comptables_{ex.annee}_{copro.nom.replace(' ', '_')}.pdf"
+    return Response(content=pdf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": _content_disposition(nom)})
+
+
 @router.get("/quittances/{exercice_id}")
 def quittances(exercice_id: int, request: Request, lot_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Quittances d'appels de fonds de l'exercice, groupées en un PDF (une page par lot).
