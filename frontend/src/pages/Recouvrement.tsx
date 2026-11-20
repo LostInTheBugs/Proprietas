@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
+import { VendeursCard } from "../components/Ventes";
 import { useUser } from "../auth";
 import type {
   DecompteLigne,
@@ -314,6 +315,8 @@ export default function Recouvrement() {
           (bouton « Dossier ») : PDF, enregistrement de l'envoi, suivi des 30 jours et de l'article 19-2.
         </p>
       </Card>
+
+      <VendeursCard />
 
       <Card title="Historique des relances">
         {historique.length === 0 ? (
