@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.048 — 2026-11-20
+
+- Vente d'un lot : transfert du lot et de ses annexes à l'acquéreur, coupure du décompte à la date de l'acte (décret 1967, art. 6-2) avec le compte du vendeur arrêté à cette date, encaissement de son solde après la vente, suivi de la notification et de l'avis de mutation (opposition sous 15 jours), annulation de la dernière vente.
+
 ## 2026.11.047 — 2026-11-20
 
 - Banque : import des relevés bancaires (CSV, OFX, QIF) et rapprochement avec les opérations saisies — l'application propose (même montant à 10 jours près, paiement d'un copropriétaire réparti entre ses lots, facture à payer), le syndic valide ; création de l'opération depuis une ligne du relevé ; opérations saisies absentes du relevé signalées.
