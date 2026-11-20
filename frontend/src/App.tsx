@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Lots from "./pages/Lots";
 import Comptes from "./pages/Comptes";
 import Banque from "./pages/Banque";
+import Messages from "./pages/Messages";
 import Ag from "./pages/Ag";
 import Documents from "./pages/Documents";
 import Contacts from "./pages/Contacts";
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="lots" element={<Lots />} />
           <Route path="comptes" element={<Comptes />} />
           <Route path="banque" element={<SyndicRoute><Banque /></SyndicRoute>} />
+          <Route path="messages" element={<SyndicRoute><Messages /></SyndicRoute>} />
           <Route path="ag" element={<Ag />} />
           <Route path="documents" element={<Documents />} />
           <Route path="contacts" element={<Contacts />} />
