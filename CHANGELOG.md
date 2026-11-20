@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.053 — 2026-11-20
+
+- AG : une résolution peut être réservée aux lots d'une clé de répartition (art. 24, dernier alinéa) : seuls ces copropriétaires votent, avec leurs millièmes de la clé.
+
 ## 2026.11.052 — 2026-11-20
 
 - Comptes : annexes comptables 1 à 5 en PDF pour l'approbation des comptes (état financier, compte de gestion général, opérations courantes par catégorie, travaux, opérations non clôturées) ; catégorie de charges sur chaque ligne de budget.
