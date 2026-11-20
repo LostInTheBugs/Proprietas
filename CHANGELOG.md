@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026.11.047 — 2026-11-20
+
+- Banque : import des relevés bancaires (CSV, OFX, QIF) et rapprochement avec les opérations saisies — l'application propose (même montant à 10 jours près, paiement d'un copropriétaire réparti entre ses lots, facture à payer), le syndic valide ; création de l'opération depuis une ligne du relevé ; opérations saisies absentes du relevé signalées.
+- README : liste des fonctionnalités mise à jour (documents sur le drive de la copropriété).
+
 ## 2026.11.046 — 2026-11-20
 
 - AG annuelle : résolutions types proposées à la création (bureau de séance, comptes, quitus, budget, fonds de travaux, syndic bénévole, conseil syndical, seuils, plan pluriannuel de travaux), avec leur majorité et les montants connus ; bouton « Résolutions types » pour les ajouter ensuite.
