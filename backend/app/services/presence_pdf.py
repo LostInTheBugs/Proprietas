@@ -81,6 +81,9 @@ def feuille_presence_pdf(db, ag, copro) -> BytesIO:
         presence = {"present": "Présent(e)", "absent": "Absent(e)", "incertain": "—", "": "—"}.get(l["reponse"], "")
         if l["reponse"] == "pouvoir":
             presence = f"Représenté(e) par {l['mandataire_nom']}" + (" (pouvoir signé reçu)" if l["pouvoir_recu_le"] else "")
+        if l["reponse"] == "correspondance":
+            presence = "Vote par correspondance" + (f" (formulaire reçu le {l['correspondance_recue_le']:%d/%m/%Y})"
+                                                    if l.get("correspondance_recue_le") else "")
         rows.append([Paragraph(escape(l["nom"]), style("cell")), Paragraph(escape(", ".join(l["lots"])), style("cell")),
                      Paragraph(f"{l['voix']:g}", style("cell")), Paragraph(escape(presence), style("cell")), ""])
     t = Table(rows, colWidths=[48 * mm, 22 * mm, 18 * mm, 48 * mm, 38 * mm], repeatRows=1)
@@ -88,10 +91,70 @@ def feuille_presence_pdf(db, ag, copro) -> BytesIO:
     el += [t, Spacer(1, 8),
            Paragraph(f"D'après les réponses enregistrées : {e['totaux']['presents']} présent(s), "
                      f"{e['totaux']['representes']} représenté(s), soit {e['totaux']['voix_presentes_ou_representees']:g} ‰ "
-                     "des voix. À compléter et à corriger en séance ; certifiée exacte par le président de séance.",
+                     f"des voix ; {e['totaux']['correspondances']} vote(s) par correspondance "
+                     f"({e['totaux']['voix_correspondance']:g} ‰). À compléter et à corriger en séance ; certifiée exacte par le président de séance.",
                      style("small")),
            Spacer(1, 14),
            Paragraph("Le président de séance : ……………………………………", style("normal"))]
+    doc.build(el)
+    buf.seek(0)
+    return buf
+
+
+_MAJORITES = {"art24": "art. 24", "art25": "art. 25", "art26": "art. 26", "unanimite": "unanimité"}
+
+
+def formulaires_correspondance_pdf(db, ag, copro, personnes) -> BytesIO:
+    """Formulaire de vote par correspondance (modèle de l'arrêté du 2 juillet 2020), une page par copropriétaire."""
+    from reportlab.platypus import PageBreak
+    from app.services import correspondance
+    register_fonts()
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, title=f"Vote par correspondance AG {copro.nom} {ag.date}", **page_margins())
+    voix, total = presences._parts(db, ag.copropriete_id)
+    resolutions = correspondance.resolutions_votables(ag)
+    limite = correspondance.date_limite(ag)
+    contact = copro.email_expediteur or ""
+    el = []
+    for i, u in enumerate(personnes):
+        if i:
+            el.append(PageBreak())
+        lots = (db.query(Lot).filter(Lot.copropriete_id == ag.copropriete_id, Lot.proprietaire_id == u.id)
+                .order_by(Lot.numero).all())
+        part = round(float(voix.get(u.id, 0) / total * 1000), 1) if total else 0
+        el += [Paragraph("FORMULAIRE DE VOTE PAR CORRESPONDANCE", style("titre")),
+               Paragraph("Loi du 10 juillet 1965, art. 17-1 A ; décret du 17 mars 1967, art. 9 bis ; "
+                         "modèle de l'arrêté du 2 juillet 2020", style("sous_titre")),
+               Paragraph(f"<b>Syndicat des copropriétaires</b> : {escape(copro.nom)}"
+                         + (f", {escape(_adresse(copro))}" if _adresse(copro) else ""), style("normal")),
+               Paragraph(f"<b>Assemblée</b> : {escape(_seance(ag))}", style("normal")),
+               Paragraph(f"<b>Copropriétaire</b> : {escape(presences.nom(u))}", style("normal")),
+               Paragraph(f"<b>Lot(s)</b> : {escape(', '.join(l.numero for l in lots)) or '—'} — "
+                         f"<b>voix</b> : {part:g} ‰", style("normal", spaceAfter=6))]
+        rows = [[Paragraph(f"<b>{t}</b>", style("th")) for t in ("N°", "Résolution", "Majorité", "Pour", "Contre", "Abstention")]]
+        for r in resolutions:
+            rows.append([Paragraph(str(r.numero), style("cell")), Paragraph(escape(r.libelle), style("cell")),
+                         Paragraph(_MAJORITES.get(r.majorite, r.majorite), style("cell")), "☐", "☐", "☐"])
+        t = Table(rows, colWidths=[10 * mm, 98 * mm, 20 * mm, 14 * mm, 14 * mm, 18 * mm], repeatRows=1)
+        t.setStyle(table_style())
+        el += [t, Spacer(1, 6),
+               Paragraph("Cochez une seule case par résolution. Le texte des résolutions est celui de la convocation.",
+                         style("small")),
+               Spacer(1, 6),
+               Paragraph(f"<b>À retourner au syndic au plus tard le {limite:%d/%m/%Y}</b> (trois jours francs avant "
+                         "l'assemblée), par courrier"
+                         + (f" ou par courrier électronique à {escape(contact)} (reçu à la date d'envoi)" if contact else "")
+                         + ".", style("normal")),
+               Spacer(1, 10),
+               Paragraph("Fait à ……………………………, le ……………………  Signature : ……………………………………", style("normal")),
+               Spacer(1, 10),
+               Paragraph(
+                   "Rappels : un formulaire ne donnant aucun sens précis de vote ou exprimant une abstention est considéré "
+                   "comme un vote défavorable (art. 9 bis). Si une résolution est amendée en séance, un vote favorable "
+                   "exprimé par correspondance sur cette résolution est assimilé à celui d'un copropriétaire défaillant "
+                   "(art. 17-1 A). Le formulaire n'est pas pris en compte si vous êtes présent ou représenté à "
+                   "l'assemblée (art. 14-1). Il est mentionné, avec sa date de réception, sur la feuille de présence.",
+                   style("legal"))]
     doc.build(el)
     buf.seek(0)
     return buf

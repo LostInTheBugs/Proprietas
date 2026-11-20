@@ -3,6 +3,7 @@ import secrets
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_syndic
@@ -42,7 +43,7 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
         id=r.id, ag_id=r.ag_id, numero=r.numero, libelle=r.libelle,
         texte=r.texte, majorite=r.majorite, nature=r.nature or "autre", exercice_id=r.exercice_id,
         statut=r.statut,
-        second_vote_de_id=r.second_vote_de_id,
+        second_vote_de_id=r.second_vote_de_id, amendee=bool(r.amendee),
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
     )
@@ -262,6 +263,9 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     """Recalcule le statut d'une résolution selon la majorité légale (module FR)."""
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    from app.services import correspondance
+    correspondance.appliquer(db, r.ag, r)          # votes par correspondance des absents (art. 17-1 A)
+    db.refresh(r)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     resultat = calculer_statut_resolution(r, lots, r.votes)
     r.statut = resultat["statut"]
@@ -276,6 +280,9 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     """Passerelles art. 25-1 / 26-1 : crée la résolution du second vote immédiat."""
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    from app.services import correspondance
+    correspondance.appliquer(db, r.ag, r)          # votes par correspondance des absents (art. 17-1 A)
+    db.refresh(r)
     lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
     resultat = calculer_statut_resolution(r, lots, r.votes)
     majorite = resultat["second_vote_possible"]
@@ -481,7 +488,8 @@ def _formulaire_reponse(db: Session, ag, personne, reponse, erreur: str = "") ->
 def _resume_reponse(r) -> str:
     if r is None:
         return ""
-    texte = presences.REPONSES[r.reponse] + (f" à {presences.nom(r.mandataire)}" if r.reponse == "pouvoir" else "")
+    texte = (presences.REPONSES.get(r.reponse) or "J'ai voté par correspondance") \
+        + (f" à {presences.nom(r.mandataire)}" if r.reponse == "pouvoir" else "")
     return f"{texte} (le {r.repondu_le:%d/%m/%Y à %H:%M})"
 
 
@@ -640,6 +648,80 @@ def telecharger_feuille_presence(ag_id: int, db: Session = Depends(get_db), user
     ag = get_owned(db, AG, ag_id, copro, label="AG")
     return Response(feuille_presence_pdf(db, ag, copro).getvalue(), media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="feuille-presence-ag-{ag.date}.pdf"'})
+
+
+# ---------- Vote par correspondance (services/correspondance.py) ----------
+class CorrespondanceIn(BaseModel):
+    recu_le: date
+    votes: dict[int, str] = {}
+
+
+class AmendeeIn(BaseModel):
+    amendee: bool
+
+
+@router.get("/ag/{ag_id}/correspondance")
+def lire_correspondance(ag_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    from app.services import correspondance
+    copro = get_or_create_copro(db, user)
+    return correspondance.etat(db, get_owned(db, AG, ag_id, copro, label="AG"))
+
+
+@router.put("/ag/{ag_id}/correspondance/{personne_id}")
+def saisir_correspondance(ag_id: int, personne_id: int, data: CorrespondanceIn, request: Request,
+                          db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Formulaire de vote par correspondance reçu : date de réception et votes, résolution par résolution."""
+    from app.services import correspondance
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    correspondance.enregistrer(db, ag, personne_id, data.recu_le, data.votes, user, request)
+    db.commit()
+    return correspondance.etat(db, ag)
+
+
+@router.delete("/ag/{ag_id}/correspondance/{personne_id}")
+def retirer_correspondance(ag_id: int, personne_id: int, request: Request, db: Session = Depends(get_db),
+                           user: User = Depends(require_syndic)):
+    from app.services import correspondance
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    correspondance.supprimer(db, ag, personne_id, user, request)
+    db.commit()
+    return correspondance.etat(db, ag)
+
+
+@router.put("/resolutions/{res_id}/amendee", response_model=ResolutionOut)
+def marquer_amendee(res_id: int, data: AmendeeIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Résolution amendée en séance : les votes « pour » par correspondance deviennent défaillants."""
+    from app.services import correspondance
+    copro = get_or_create_copro(db, user)
+    r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    r.amendee = data.amendee
+    correspondance.appliquer(db, r.ag, r)
+    db.commit()
+    db.refresh(r)
+    return _resolution_out(db, r)
+
+
+@router.get("/ag/{ag_id}/formulaires-correspondance.pdf")
+def formulaires_correspondance(ag_id: int, personne_id: int | None = None, db: Session = Depends(get_db),
+                               user: User = Depends(get_current_user)):
+    """Formulaires de vote par correspondance à joindre à la convocation : tous (syndic) ou le sien
+    (copropriétaire)."""
+    from app.services.presence_pdf import formulaires_correspondance_pdf
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    if ag.type_ag == "consultation_ecrite":
+        raise HTTPException(422, "Une consultation écrite n'a pas de vote par correspondance.")
+    tous = presences.coproprietaires(db, copro.id)
+    if user.role != "syndic":
+        personne_id = user.id
+    personnes = [u for u in tous if personne_id is None or u.id == personne_id]
+    if not personnes:
+        raise HTTPException(404, "Aucun copropriétaire à qui adresser ce formulaire.")
+    pdf = formulaires_correspondance_pdf(db, ag, copro, personnes)
+    return Response(pdf.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="vote-par-correspondance-ag-{ag.date}.pdf"'})
 
 
 @router.post("/ag/{ag_id}/invitations", response_model=InvitationsResult)

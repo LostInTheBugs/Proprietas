@@ -872,6 +872,7 @@ class ResolutionOut(BaseModel):
     exercice_id: Optional[int] = None
     statut: str = "a_voter"
     second_vote_de_id: Optional[int] = None
+    amendee: bool = False
     votes: List[VoteOut] = []
     resultat: Optional[ResolutionResult] = None
 
@@ -1455,6 +1456,7 @@ class PresenceLigneOut(BaseModel):
     mandataire_nom: str = ""
     mandataire_absent: bool = False       # le mandataire a dit qu'il serait absent (ou a lui-même donné pouvoir)
     pouvoir_recu_le: Optional[datetime] = None
+    correspondance_recue_le: Optional[date] = None   # vote par correspondance : date de réception du formulaire
     mandats: int = 0                      # pouvoirs reçus par ce copropriétaire
     peut_recevoir_pouvoir: bool = True    # False : syndic (art. 22)
 
@@ -1466,6 +1468,8 @@ class PresenceTotauxOut(BaseModel):
     incertains: int = 0
     sans_reponse: int = 0
     voix_presentes_ou_representees: float = 0.0
+    correspondances: int = 0
+    voix_correspondance: float = 0.0
 
 
 class PresencesOut(BaseModel):

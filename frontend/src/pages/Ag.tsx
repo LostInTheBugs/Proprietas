@@ -5,7 +5,7 @@ import type { AG, Lot, Resolution, Majorite, Creneau, Invitation, InvitationsRes
 import { fmtDate, fmtDateTime, toLocalInput } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import NotificationsPVPanel from "../components/NotificationsPV";
-import { MaReponseAg, PresencesSyndic } from "../components/Presences";
+import { CorrespondanceSyndic, MaReponseAg, PresencesSyndic } from "../components/Presences";
 import { ListeModele, ResolutionsTypesModal, useModele } from "../components/ResolutionsTypes";
 export default function Ag() {
   const { user } = useUser();
@@ -126,6 +126,7 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
   const [envoiInfo, setEnvoiInfo] = useState<InvitationsResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyPv, setBusyPv] = useState(false);
+  const [revPresences, setRevPresences] = useState(0);   // recharge les présences après un vote par correspondance
 
   const load = useCallback(async () => {
     const [c, i] = await Promise.all([
@@ -349,7 +350,11 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
       )}
 
       {ag.type_ag !== "consultation_ecrite" && <MaReponseAg agId={agId} onError={onError} />}
-      {isSyndic && ag.type_ag !== "consultation_ecrite" && <PresencesSyndic agId={agId} onError={onError} />}
+      {isSyndic && ag.type_ag !== "consultation_ecrite" && <PresencesSyndic key={revPresences} agId={agId} onError={onError} />}
+      {isSyndic && ag.type_ag !== "consultation_ecrite" && (
+        <CorrespondanceSyndic agId={agId} resolutions={ag.resolutions}
+          onChanged={() => { setRevPresences((x) => x + 1); load(); }} onError={onError} />
+      )}
 
       {isSyndic && ag.resolutions.length > 0 && <NotificationsPVPanel agId={agId} onError={onError} />}
 
@@ -406,6 +411,14 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
 
+  async function amender(amendee: boolean) {
+    try {
+      await api.put(`/resolutions/${r.id}/amendee`, { amendee });
+      await api.post(`/resolutions/${r.id}/calculer`);
+      onChanged();
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
+
   async function vote(lotId: number, voix: string) {
     try {
       await api.post(`/resolutions/${r.id}/votes`, { lot_id: lotId, voix });
@@ -430,6 +443,7 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
         </div>
         <div className="flex items-center gap-2">
           {r.second_vote_de_id !== null && <Badge color="indigo">Second vote</Badge>}
+          {r.amendee && <Badge color="amber">Amendée en séance</Badge>}
           {r.statut === "a_voter" && <Badge color="amber">À voter</Badge>}
           {r.statut === "adoptee" && <Badge color="green">Adoptée</Badge>}
           {r.statut === "rejetee" && <Badge color="red">Rejetée</Badge>}
@@ -471,6 +485,12 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
         </div>
       )}
 
+      {isSyndic && r.second_vote_de_id === null && (
+        <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+          <input type="checkbox" checked={!!r.amendee} onChange={(e) => amender(e.target.checked)} />
+          Amendée en séance (les votes « pour » par correspondance comptent comme défaillants, art. 17-1 A)
+        </label>
+      )}
       {isSyndic && (
         <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
           {lots.map((lot) => {

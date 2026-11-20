@@ -104,6 +104,11 @@ se créer normalement depuis la page de connexion.
   syndic ; trois pouvoirs au plus par mandataire, sauf sous 10 % des voix), produit en PDF à signer ; le syndic
   voit le tableau, note les pouvoirs signés reçus, corrige en séance et imprime la feuille de présence ; le PV
   indique présents et représentés
+- **Vote par correspondance** (loi du 10 juillet 1965, art. 17-1 A ; décret de 1967, art. 9 bis, 14, 14-1 ; modèle de
+  l'arrêté du 2 juillet 2020) : formulaires à joindre à la convocation (PDF, un par copropriétaire, téléchargeable aussi
+  par chacun depuis son compte) ; le syndic saisit les formulaires reçus au plus tard trois jours francs avant l'AG ;
+  abstention ou case vide = vote défavorable ; « pour » sur une résolution amendée en séance = défaillant ; formulaire
+  ignoré si le copropriétaire est présent ou représenté ; feuille de présence et PV le mentionnent
 - **Consultation écrite** (régime petite copropriété, unanimité)
 - **Documents** : contrats, devis, factures, diagnostics — sur le serveur (dossier local ou S3) ou sur le
   **drive de la copropriété** (WebDAV : Nextcloud, ownCloud, Synology… ; Google Drive), choisi dans Réglages,
