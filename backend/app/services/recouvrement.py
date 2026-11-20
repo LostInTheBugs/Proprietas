@@ -50,7 +50,7 @@ LIBELLES_STATUT = {
 CATEGORIES_TRAVAUX = ("fonds_travaux", "travaux")
 
 
-def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
+def ventilation_lot(db: Session, copro: Copropriete, lot, periode=None) -> dict:
     """Décompte du lot, par nature.
 
     Appels triés (échéance puis émission). Imputation en deux passes :
@@ -65,7 +65,12 @@ def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
     Lots non séparables (services/ensembles.py) : le décompte porte sur tout l'ensemble du lot
     (lot principal + annexes) ; appels et paiements de tous ses lots sont mis en commun, et le
     libellé de chaque appel indique son lot.
+
+    Vente du lot (services/mutations.py) : le décompte est celui du propriétaire actuel, depuis la dernière
+    vente ; `periode` (mutations.Periode) donne celui d'un vendeur, arrêté à la date de l'acte.
     """
+    from app.services.mutations import Periode
+    periode = periode or Periode(db, lot)
     lots = ensembles.membres(db, lot)
     ids = [l.id for l in lots]
     rang = {l.id: i for i, l in enumerate(lots)}
@@ -79,11 +84,11 @@ def ventilation_lot(db: Session, copro: Copropriete, lot) -> dict:
     )
     # Appels et encaissements couverts par l'état de reprise de base : hors décompte.
     b = reprise.base(db, copro.id)
-    paires = [x for x in paires if reprise.appel_compte(x[1], b)]
+    paires = [x for x in paires if reprise.appel_compte(x[1], b) and periode.appel(x[1])]
     paires.sort(key=lambda x: (x[1].date_echeance or x[1].date_emission or date.min, x[1].id, rang[x[0].lot_id]))
     encaissements = [m for m in db.query(Mouvement).filter(
         Mouvement.lot_id.in_(ids), Mouvement.type == "encaissement").all()
-        if reprise.encaissement_compte(m, b)]
+        if reprise.encaissement_compte(m, b) and periode.encaissement(m)]
     reste_trav = arrondi(somme(D(m.montant or 0) for m in encaissements
                                if (m.categorie or "") in CATEGORIES_TRAVAUX))
     general = arrondi(somme(D(m.montant or 0) for m in encaissements

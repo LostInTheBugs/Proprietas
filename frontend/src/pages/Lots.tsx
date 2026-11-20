@@ -5,6 +5,7 @@ import type { Lot, User } from "../types";
 import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/ui";
 import { ClesCard } from "../components/Cles";
 import { ImportLotsModal } from "../components/ImportLots";
+import { VentesCard } from "../components/Ventes";
 
 export default function Lots() {
   const { user } = useUser();
@@ -123,6 +124,7 @@ export default function Lots() {
       </Card>
 
       <ClesCard key={lots.map((l) => l.id).join(",")} lots={lots} isSyndic={isSyndic} onError={setError} />
+      {isSyndic && <VentesCard lots={lots} comptes={comptes} onChange={() => { load(); }} onError={setError} />}
       {importer && <ImportLotsModal onClose={() => setImporter(false)} onDone={() => { load(); }} />}
 
       {modal && (

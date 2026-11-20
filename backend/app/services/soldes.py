@@ -16,20 +16,23 @@ from app.services import reprise
 
 
 def parts_lot(db: Session, lot) -> list[tuple[AppelLot, AppelFonds]]:
-    """Parts d'appels du lot qui entrent dans les soldes, avec leur appel."""
-    b = reprise.base(db, lot.copropriete_id)
+    """Parts d'appels du lot qui entrent dans les soldes, avec leur appel. Après une vente, seulement celles
+    du propriétaire actuel (services/mutations.py) : le vendeur a son propre compte."""
+    from app.services.mutations import Periode
+    b, periode = reprise.base(db, lot.copropriete_id), Periode(db, lot)
     return [(p, a) for p, a in
             db.query(AppelLot, AppelFonds).join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
             .filter(AppelLot.lot_id == lot.id).all()
-            if reprise.appel_compte(a, b)]
+            if reprise.appel_compte(a, b) and periode.appel(a)]
 
 
 def encaissements_lot(db: Session, lot) -> list[Mouvement]:
-    """Encaissements du lot qui entrent dans les soldes."""
-    b = reprise.base(db, lot.copropriete_id)
+    """Encaissements du lot qui entrent dans les soldes (du propriétaire actuel, après une vente)."""
+    from app.services.mutations import Periode
+    b, periode = reprise.base(db, lot.copropriete_id), Periode(db, lot)
     return [m for m in db.query(Mouvement).filter(Mouvement.lot_id == lot.id,
                                                   Mouvement.type == "encaissement").all()
-            if reprise.encaissement_compte(m, b)]
+            if reprise.encaissement_compte(m, b) and periode.encaissement(m)]
 
 
 def totaux_lot(db: Session, lot) -> dict[str, Decimal]:
