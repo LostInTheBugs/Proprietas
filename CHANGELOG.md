@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.056 — 2026-11-20
+
+- AG : modifier l'objet, l'exercice, la majorité ou la clé d'une résolution déjà votée efface son résultat et retire l'approbation des comptes qu'elle avait reportée (revue de la 2026.11.055).
+
 ## 2026.11.055 — 2026-11-20
 
 - AG : modifier ou supprimer une assemblée (et chaque résolution) depuis la page Assemblées ; la suppression retire aussi votes, réponses, pouvoirs et votes par correspondance ; une approbation des comptes votée à l'AG suit sa date.
