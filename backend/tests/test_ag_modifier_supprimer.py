@@ -97,3 +97,34 @@ def test_resolution_adoptee_modifiee(client, db, copro_a, syndic_a, token_a):
     assert client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()["statut"] == "adoptee"
     db.expire_all()
     assert db.get(Exercice, ex).comptes_approuves_le == date.today() - timedelta(days=1)
+
+
+def test_votes_gardes_ou_effaces(client, db, copro_a, syndic_a, token_a):
+    """Revue de ChatGPT/Codex sur la 2026.11.056 : une modification décisive garde les votes saisis (correction d'une
+    erreur de saisie, puis recalcul) ; le syndic peut demander de les effacer (choix de Fred, 21/11/2026)."""
+    marie, paul = _immeuble(db, copro_a, syndic_a, [450, 450])
+    ag_id = _ag(client, token_a, jours=30)
+    corps = {"numero": 1, "libelle": "Ravalement", "majorite": "art24"}
+    rid = client.post(f"/api/ag/{ag_id}/resolutions", json=corps, headers=auth(token_a)).json()["id"]
+    client.put(f"/api/ag/{ag_id}/correspondance/{marie.id}", json={"recu_le": str(date.today()), "votes": {rid: "pour"}},
+               headers=auth(token_a))
+    lot = next(l for l in db.get(AG, ag_id).copropriete.lots if l.proprietaire_id == paul.id)
+    client.post(f"/api/resolutions/{rid}/votes", json={"lot_id": lot.id, "voix": "pour"}, headers=auth(token_a))
+    assert client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()["statut"] == "adoptee"
+    # Majorité corrigée sans effacer : résultat à recalculer, votes gardés ; le recalcul les utilise.
+    r = client.put(f"/api/resolutions/{rid}", json={**corps, "majorite": "art25"}, headers=auth(token_a))
+    assert r.status_code == 200 and r.json()["statut"] == "a_voter"
+    db.expire_all()
+    assert db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id == rid).count() == 1
+    res = client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()
+    assert res["statut"] == "adoptee" and res["resultat"]["pour"] == 900
+    # Effacer les votes (même sans autre changement) : séance et correspondance, résultat remis à voter, audit.
+    r = client.put(f"/api/resolutions/{rid}?effacer_votes=true", json={**corps, "majorite": "art25"},
+                   headers=auth(token_a))
+    assert r.status_code == 200 and r.json()["statut"] == "a_voter"
+    db.expire_all()
+    assert db.query(Vote).filter(Vote.resolution_id == rid, Vote.voix != "null").count() == 0
+    assert db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id == rid).count() == 0
+    log = db.query(AuditLog).filter(AuditLog.action == "resolution_modifiee").order_by(AuditLog.id.desc()).first()
+    assert "votes effacés" in log.detail
+    assert client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()["resultat"]["pour"] == 0
