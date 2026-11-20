@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.051 — 2026-11-20
+
+- AG : vote par correspondance — formulaires à joindre à la convocation, saisie des formulaires reçus (trois jours francs avant l'AG), abstention ou case vide comptée contre, « pour » sur une résolution amendée en séance compté défaillant, formulaire écarté si le copropriétaire est présent ou représenté ; feuille de présence et PV.
+
 ## 2026.11.050 — 2026-11-20
 
 - Vente d'un lot : pré-état daté, état daté et projet d'opposition en PDF ; les anciens propriétaires qui doivent encore apparaissent dans Recouvrement.
