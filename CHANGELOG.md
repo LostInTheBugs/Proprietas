@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.055 — 2026-11-20
+
+- AG : modifier ou supprimer une assemblée (et chaque résolution) depuis la page Assemblées ; la suppression retire aussi votes, réponses, pouvoirs et votes par correspondance ; une approbation des comptes votée à l'AG suit sa date.
+
 ## 2026.11.054 — 2026-11-20
 
 - Messages : e-mails groupés du syndic aux copropriétaires (tous, une clé de répartition, une sélection), personnalisés, avec aperçu et historique.
