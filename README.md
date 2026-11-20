@@ -93,6 +93,9 @@ se créer normalement depuis la page de connexion.
   étapes amiables et judiciaires
 - **Assemblées générales** : e-mails d'information (la convocation régulière se notifie par LRE — LRAR si le copropriétaire a demandé la voie postale — ou remise contre récépissé, au moins 21 jours avant) avec un lien personnel « J'ai bien reçu ce message » : le syndic voit qui a confirmé (sans image de suivi ; ce n'est pas un accusé de réception de recommandé), résolutions, moteur de majorités légal
   (art. 24 / 25 / 26, unanimité, régime 2 copropriétaires), procès-verbaux
+- **Modifier ou supprimer une AG** (et chaque résolution) : correction de la date, du type, du lieu… ; suppression d'une
+  AG saisie par erreur ou d'essai avec tout ce qui en dépend (résolutions, votes, réponses et pouvoirs, votes par
+  correspondance, sondage) ; une approbation des comptes votée à cette AG suit sa nouvelle date, ou est retirée
 - **Résolutions types de l'AG annuelle** : à la création (ou bouton « Résolutions types »), bureau de séance,
   approbation des comptes de l'exercice écoulé (reliée à l'exercice), quitus, budget de l'exercice suivant
   (montant repris), cotisation au fonds de travaux (art. 25) pré-cochés ; ajustement du budget en cours,

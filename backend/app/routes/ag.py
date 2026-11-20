@@ -180,10 +180,26 @@ def create_ag(data: AGIn, db: Session = Depends(get_db), user: User = Depends(re
     return _ag_out(db, ag)
 
 
+def _approbations_de(db: Session, ag: AG) -> list[Exercice]:
+    """Exercices dont les comptes ont été approuvés par une résolution adoptée de cette AG (à sa date)."""
+    out = []
+    for r in ag.resolutions:
+        if r.nature == "approbation_comptes" and r.statut == "adoptee" and r.exercice_id:
+            ex = db.get(Exercice, r.exercice_id)
+            if ex is not None and ex.copropriete_id == ag.copropriete_id and ex.comptes_approuves_le == ag.date:
+                out.append(ex)
+    return out
+
+
 @router.put("/ag/{ag_id}", response_model=AGOut)
-def update_ag(ag_id: int, data: AGIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def update_ag(ag_id: int, data: AGIn, request: Request, db: Session = Depends(get_db),
+              user: User = Depends(require_syndic)):
+    """Correction d'une AG (date, heure, type, statut, lieu, notes, e-mail automatique). Une approbation des comptes
+    votée à cette AG suit sa nouvelle date."""
     copro = get_or_create_copro(db, user)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
+    approuves = _approbations_de(db, ag)
+    avant = f"{ag.type_ag} du {ag.date:%d/%m/%Y}"
     if data.type_ag == CONSULTATION and ag.type_ag != CONSULTATION:
         # Transformation en consultation écrite : régime et résolutions déjà saisies contrôlés.
         # Une consultation existante reste modifiable (on ne bloque pas l'existant).
@@ -194,18 +210,43 @@ def update_ag(ag_id: int, data: AGIn, db: Session = Depends(get_db), user: User 
                 raise HTTPException(422, f"Résolution n° {r.numero} : {motif}")
     for field, value in data.model_dump().items():
         setattr(ag, field, value)
+    for ex in approuves:
+        ex.comptes_approuves_le = ag.date
+    audit.enregistrer(db, "ag_modifiee", user=user, copro_id=copro.id, request=request,
+                      detail=f"{avant} → {ag.type_ag} du {ag.date:%d/%m/%Y}")
     db.commit()
     db.refresh(ag)
     return _ag_out(db, ag)
 
 
 @router.delete("/ag/{ag_id}")
-def delete_ag(ag_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def delete_ag(ag_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Supprime une AG saisie par erreur (ou d'essai) avec tout ce qui en dépend : résolutions et votes, créneaux,
+    e-mails d'information, réponses et pouvoirs, votes par correspondance, notifications du PV. Une approbation
+    des comptes votée à cette AG est retirée de l'exercice."""
+    from app.models.ag import VoteCorrespondance
+    from app.models.notification import NotificationPV
     copro = get_or_create_copro(db, user)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
+    retirees = [ex.annee for ex in _approbations_de(db, ag)]
+    for ex in _approbations_de(db, ag):
+        ex.comptes_approuves_le = None
+    # Lignes rattachées à l'AG sans relation ORM : supprimées explicitement (SQLite n'applique pas toujours
+    # les ON DELETE CASCADE).
+    db.query(VoteCorrespondance).filter(VoteCorrespondance.ag_id == ag.id).delete(synchronize_session=False)
+    db.query(AgReponse).filter(AgReponse.ag_id == ag.id).delete(synchronize_session=False)
+    db.query(NotificationPV).filter(NotificationPV.ag_id == ag.id).delete(synchronize_session=False)
+    for r in list(ag.resolutions):
+        if r.second_vote_de_id is not None:
+            db.delete(r)
+    db.flush()
+    db.expire(ag)
+    detail = (f"{ag.type_ag} du {ag.date:%d/%m/%Y} ({len(ag.resolutions)} résolution(s))"
+              + (f" ; approbation des comptes {', '.join(map(str, retirees))} retirée" if retirees else ""))
     db.delete(ag)
+    audit.enregistrer(db, "ag_supprimee", user=user, copro_id=copro.id, request=request, detail=detail)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "approbations_retirees": retirees}
 
 
 # ---------- Résolutions ----------
@@ -245,8 +286,15 @@ def update_resolution(res_id: int, data: ResolutionIn, db: Session = Depends(get
 
 @router.delete("/resolutions/{res_id}")
 def delete_resolution(res_id: int, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    from app.models.ag import VoteCorrespondance
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    if r.statut == "adoptee":
+        for ex in _approbations_de(db, r.ag):
+            if ex.id == r.exercice_id:
+                ex.comptes_approuves_le = None
+    ids = [r.id] + [e.id for e in db.query(Resolution).filter(Resolution.second_vote_de_id == r.id)]
+    db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id.in_(ids)).delete(synchronize_session=False)
     for enfant in db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).all():
         db.delete(enfant)
     db.delete(r)

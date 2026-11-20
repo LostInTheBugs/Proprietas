@@ -15,7 +15,7 @@ export default function Ag() {
   const [ags, setAgs] = useState<AG[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
   const [majorites, setMajorites] = useState<Record<string, Majorite>>({});
-  const [modal, setModal] = useState<null | { type: "ag" } | { type: "resolution"; agId: number }>(null);
+  const [modal, setModal] = useState<null | { type: "ag"; ag?: AG } | { type: "resolution"; agId: number; resolution?: Resolution }>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -31,6 +31,15 @@ export default function Ag() {
   useEffect(() => { load().catch(() => {}); }, [load]);
 
   const total = lots.reduce((s, l) => s + l.tantiemes, 0);
+
+  async function supprimerAg(ag: AG) {
+    const quoi = `${ag.type_ag === "consultation_ecrite" ? "la consultation écrite" : "l'AG"} du ${fmtDate(ag.date)}`;
+    if (!confirm(`Supprimer ${quoi} ? Ses ${ag.resolutions.length} résolution(s), les votes, les réponses et pouvoirs, les `
+      + "votes par correspondance et le sondage de dates seront supprimés. Une approbation des comptes votée à cette AG "
+      + "sera retirée de l'exercice. C'est définitif.")) return;
+    try { await api.del(`/ag/${ag.id}`); setError(""); load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Erreur"); }
+  }
 
   return (
     <div className="space-y-6">
@@ -82,6 +91,16 @@ export default function Ag() {
                     + Résolution
                   </Button>
                 )}
+                {isSyndic && (
+                  <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => setModal({ type: "ag", ag })}>
+                    Modifier
+                  </Button>
+                )}
+                {isSyndic && (
+                  <Button variant="ghost" className="px-2 py-1 text-xs text-red-600" onClick={() => supprimerAg(ag)}>
+                    Supprimer
+                  </Button>
+                )}
               </div>
             }
           >
@@ -93,6 +112,7 @@ export default function Ag() {
                   {ag.resolutions.map((r) => (
                     <ResolutionCard key={r.id} r={r} lots={lots} total={total} majorites={majorites} isSyndic={isSyndic}
                       aUnSecondVote={ag.resolutions.some((x) => x.second_vote_de_id === r.id)}
+                      onEdit={() => setModal({ type: "resolution", agId: ag.id, resolution: r })}
                       onChanged={load} onError={setError} />
                   ))}
                 </div>
@@ -107,9 +127,9 @@ export default function Ag() {
         <ResolutionsTypesModal agId={types.agId} jour={types.jour} onClose={() => setTypes(null)}
           onSaved={() => { setTypes(null); load(); }} onError={setError} />
       )}
-      {modal?.type === "ag" && <AgModal onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />}
+      {modal?.type === "ag" && <AgModal initial={modal.ag} onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />}
       {modal?.type === "resolution" && (
-        <ResolutionModal agId={modal.agId} majorites={majorites}
+        <ResolutionModal agId={modal.agId} initial={modal.resolution} majorites={majorites}
           consultation={ags.find((a) => a.id === modal.agId)?.type_ag === "consultation_ecrite"} onClose={() => setModal(null)} onSaved={() => { setModal(null); load(); }} onError={setError} />
       )}
     </div>
@@ -395,10 +415,14 @@ function CreneauModal({ agId, onClose, onSaved, onError }: {
   );
 }
 
-function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, onChanged, onError }: {
+function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, onEdit, onChanged, onError }: {
   r: Resolution; lots: Lot[]; total: number; majorites: Record<string, Majorite>;
-  isSyndic: boolean; aUnSecondVote: boolean; onChanged: () => void; onError: (e: string) => void;
+  isSyndic: boolean; aUnSecondVote: boolean; onEdit: () => void; onChanged: () => void; onError: (e: string) => void;
 }) {
+  async function supprimer() {
+    if (!confirm(`Supprimer la résolution n° ${r.numero} « ${r.libelle} » et ses votes ?`)) return;
+    try { await api.del(`/resolutions/${r.id}`); onChanged(); } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
   const [cles] = useCles();
   // Résolution sur une clé (art. 24, dernier alinéa) : seuls les lots de la clé votent, avec ses millièmes.
   const cle = r.cle_id != null ? cles.find((c) => c.id === r.cle_id) : undefined;
@@ -456,6 +480,12 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
           {r.statut === "a_voter" && <Badge color="amber">À voter</Badge>}
           {r.statut === "adoptee" && <Badge color="green">Adoptée</Badge>}
           {r.statut === "rejetee" && <Badge color="red">Rejetée</Badge>}
+          {isSyndic && r.second_vote_de_id === null && (
+            <Button variant="ghost" className="px-2 py-1 text-xs" onClick={onEdit}>Modifier</Button>
+          )}
+          {isSyndic && (
+            <Button variant="ghost" className="px-2 py-1 text-xs text-red-600" onClick={supprimer}>Supprimer</Button>
+          )}
         </div>
       </div>
 
@@ -546,15 +576,17 @@ const NATURES: Record<string, string> = {
   approbation_comptes: "Approbation des comptes",
 };
 
-function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: () => void; onError: (e: string) => void }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [heure, setHeure] = useState("");
-  const [typeAg, setTypeAg] = useState("annuelle");
-  const [statut, setStatut] = useState("projet");
-  const [lieu, setLieu] = useState("");
-  const [rappelJours, setRappelJours] = useState("21");
-  // AG annuelle : résolutions types (pré-cochées : celles de chaque année).
-  const [modele, choix, setChoix] = useModele(typeAg === "annuelle" ? date : "");
+function AgModal({ initial, onClose, onSaved, onError }: {
+  initial?: AG; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+}) {
+  const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10));
+  const [heure, setHeure] = useState(initial?.heure ?? "");
+  const [typeAg, setTypeAg] = useState(initial?.type_ag ?? "annuelle");
+  const [statut, setStatut] = useState(initial?.statut ?? "projet");
+  const [lieu, setLieu] = useState(initial?.lieu ?? "");
+  const [rappelJours, setRappelJours] = useState(initial ? String(initial.rappel_jours) : "21");
+  // AG annuelle : résolutions types (pré-cochées : celles de chaque année) — à la création seulement.
+  const [modele, choix, setChoix] = useModele(typeAg === "annuelle" && !initial ? date : "");
   // Consultation écrite réservée aux petites copropriétés (art. 41-8 et 41-12) : null = inconnu.
   const [petite, setPetite] = useState<boolean | null>(null);
   useEffect(() => {
@@ -562,13 +594,15 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
   }, []);
   async function save() {
     try {
-      const ag = await api.post<{ id: number }>("/ag", { date, heure, type_ag: typeAg, statut, lieu, notes: "", rappel_jours: Number(rappelJours) || 0 });
+      const corps = { date, heure, type_ag: typeAg, statut, lieu, notes: initial?.notes ?? "", rappel_jours: Number(rappelJours) || 0 };
+      if (initial) { await api.put(`/ag/${initial.id}`, corps); onSaved(); return; }
+      const ag = await api.post<{ id: number }>("/ag", corps);
       if (typeAg === "annuelle" && choix.size > 0) await api.post(`/ag/${ag.id}/resolutions-types`, { codes: [...choix] });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
   return (
-    <Modal open title="Nouvelle assemblée" onClose={onClose}>
+    <Modal open title={initial ? "Modifier l'assemblée" : "Nouvelle assemblée"} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Input label="Date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -591,7 +625,7 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
             l'approbation des comptes ne peuvent pas être décidés par consultation écrite.
           </p>
         )}
-        {typeAg === "annuelle" && modele.length > 0 && (
+        {typeAg === "annuelle" && !initial && modele.length > 0 && (
           <div>
             <p className="mb-1 text-sm font-medium text-slate-600">Résolutions types à l'ordre du jour</p>
             <ListeModele modele={modele} choix={choix} onChange={setChoix} />
@@ -625,43 +659,45 @@ function AgModal({ onClose, onSaved, onError }: { onClose: () => void; onSaved: 
         )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Créer</Button>
+          <Button onClick={save}>{initial ? "Enregistrer" : "Créer"}</Button>
         </div>
       </div>
     </Modal>
   );
 }
 
-function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onError }: {
-  agId: number; majorites: Record<string, Majorite>; consultation: boolean;
+function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSaved, onError }: {
+  agId: number; initial?: Resolution; majorites: Record<string, Majorite>; consultation: boolean;
   onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
-  const [numero, setNumero] = useState("1");
-  const [libelle, setLibelle] = useState("");
-  const [texte, setTexte] = useState("");
+  const [numero, setNumero] = useState(initial ? String(initial.numero) : "1");
+  const [libelle, setLibelle] = useState(initial?.libelle ?? "");
+  const [texte, setTexte] = useState(initial?.texte ?? "");
   // Consultation écrite : unanimité imposée (art. 41-12).
-  const [majorite, setMajorite] = useState(consultation ? "unanimite" : "art24");
-  const [nature, setNature] = useState("autre");
+  const [majorite, setMajorite] = useState(initial?.majorite ?? (consultation ? "unanimite" : "art24"));
+  const [nature, setNature] = useState(initial?.nature ?? "autre");
   // Approbation des comptes : l'exercice approuvé (reporté sur l'exercice si la résolution est adoptée).
   const [exercices, setExercices] = useState<Exercice[]>([]);
-  const [exerciceId, setExerciceId] = useState("");
+  const [exerciceId, setExerciceId] = useState(initial?.exercice_id != null ? String(initial.exercice_id) : "");
   const [cles] = useCles();
-  const [cleId, setCleId] = useState("");
+  const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
   useEffect(() => {
     api.get<Exercice[]>("/exercices").then(setExercices).catch(() => {});
   }, []);
   async function save() {
     try {
-      await api.post(`/ag/${agId}/resolutions`, {
+      const corps = {
         numero: Number(numero), libelle, texte, majorite, nature,
         exercice_id: nature === "approbation_comptes" && exerciceId ? Number(exerciceId) : null,
         cle_id: nature === "autre" && cleId ? Number(cleId) : null,
-      });
+      };
+      if (initial) await api.put(`/resolutions/${initial.id}`, corps);
+      else await api.post(`/ag/${agId}/resolutions`, corps);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
   }
   return (
-    <Modal open title="Nouvelle résolution" onClose={onClose}>
+    <Modal open title={initial ? `Modifier la résolution n° ${initial.numero}` : "Nouvelle résolution"} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-3 gap-3">
           <Input label="N°" type="number" value={numero} onChange={(e) => setNumero(e.target.value)} />
@@ -720,7 +756,7 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
         )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save}>Ajouter</Button>
+          <Button onClick={save}>{initial ? "Enregistrer" : "Ajouter"}</Button>
         </div>
       </div>
     </Modal>
