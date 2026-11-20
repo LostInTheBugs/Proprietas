@@ -755,18 +755,20 @@ function MouvementModal({ exId, exercices, lots, contrats, documents, comptes, c
   );
 }
 
-/** Un virement d'un copropriétaire réparti entre tous ses lots (plus ancienne échéance d'abord). */
-function PaiementModal({ lots, onClose, onSaved, onError }: {
-  lots: Lot[]; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
+/** Un virement d'un copropriétaire réparti entre tous ses lots (plus ancienne échéance d'abord).
+ * `initial` : ligne d'un relevé bancaire (date, montant, libellé) ; `onSaved` reçoit les encaissements créés. */
+export function PaiementModal({ lots, initial, onClose, onSaved, onError }: {
+  lots: Lot[]; initial?: { date: string; montant: number; libelle: string };
+  onClose: () => void; onSaved: (crees: Mouvement[]) => void; onError: (e: string) => void;
 }) {
   const proprietaires = Array.from(
     new Map(lots.filter((l) => l.proprietaire_id != null)
       .map((l) => [l.proprietaire_id as number, l.proprietaire_nom || `Compte #${l.proprietaire_id}`])).entries(),
   ).sort((a, b) => a[1].localeCompare(b[1]));
   const [proprietaireId, setProprietaireId] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [montant, setMontant] = useState("");
-  const [libelle, setLibelle] = useState("Virement");
+  const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10));
+  const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
+  const [libelle, setLibelle] = useState(initial?.libelle || "Virement");
   const [rep, setRep] = useState<Repartition | null>(null);
   const [parts, setParts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -798,13 +800,13 @@ function PaiementModal({ lots, onClose, onSaved, onError }: {
     if (!rep) return;
     setBusy(true);
     try {
-      await api.post("/paiements", {
+      const crees = await api.post<Mouvement[]>("/paiements", {
         proprietaire_id: Number(proprietaireId), date, montant: montantNum, libelle,
         repartition: rep.lots.map((l) => ({
           lot_id: l.lot_id, montant: valeur(`${l.lot_id}-c`), montant_travaux: valeur(`${l.lot_id}-t`),
         })),
       });
-      onSaved();
+      onSaved(crees);
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); } finally { setBusy(false); }
   }
 

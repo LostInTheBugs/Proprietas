@@ -36,6 +36,8 @@ class Mouvement(Base):
     paye_le = Column(Date, nullable=True)
     rappel_avant_le = Column(DateTime, nullable=True)
     rappel_retard_le = Column(DateTime, nullable=True)
+    # Rapprochement bancaire (services/releves.py) : ligne du relevé où la banque montre cette opération.
+    releve_ligne_id = Column(Integer, ForeignKey("releve_lignes.id", ondelete="SET NULL"), nullable=True, index=True)
 
     copropriete = relationship("Copropriete")
     exercice = relationship("Exercice", back_populates="mouvements")
@@ -43,6 +45,7 @@ class Mouvement(Base):
     appel = relationship("AppelFonds")
     avance_par = relationship("User", foreign_keys=[avance_par_id])
     cle = relationship("CleRepartition")
+    releve_ligne = relationship("LigneReleve", back_populates="mouvements")
 
     @property
     def cle_nom(self) -> str:
