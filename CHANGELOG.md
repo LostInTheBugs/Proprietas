@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.050 — 2026-11-20
+
+- Vente d'un lot : pré-état daté, état daté et projet d'opposition en PDF ; les anciens propriétaires qui doivent encore apparaissent dans Recouvrement.
+
 ## 2026.11.049 — 2026-11-20
 
 - Montants : une opération et un appel de fonds ont un montant positif, une ligne de budget n'est jamais négative.
