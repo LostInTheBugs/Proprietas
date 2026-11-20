@@ -33,7 +33,8 @@ REPONSES = {
     "absent": "Je ne serai pas présent(e)",
     "incertain": "Je ne sais pas encore",
 }
-LIBELLES_COURTS = {"present": "Présent", "pouvoir": "Représenté", "absent": "Absent", "incertain": "Incertain"}
+LIBELLES_COURTS = {"present": "Présent", "pouvoir": "Représenté", "absent": "Absent", "incertain": "Incertain",
+                   "correspondance": "Vote par correspondance"}
 MAX_DELEGATIONS = 3
 PART_MAX = Fraction(1, 10)
 
@@ -135,6 +136,8 @@ def etat(db: Session, ag: AG) -> dict:
     voix, total = _parts(db, ag.copropriete_id)
     lots = _lots(db, ag.copropriete_id)
     reponses = {r.personne_id: r for r in db.query(AgReponse).filter(AgReponse.ag_id == ag.id)}
+    from app.models.ag import VoteCorrespondance
+    recus = {vc.personne_id: vc.recu_le for vc in db.query(VoteCorrespondance).filter(VoteCorrespondance.ag_id == ag.id)}
     lignes = []
     for u in coproprietaires(db, ag.copropriete_id):
         r = reponses.get(u.id)
@@ -150,6 +153,7 @@ def etat(db: Session, ag: AG) -> dict:
             "mandataire_id": mandataire.id if mandataire else None, "mandataire_nom": nom(mandataire) if mandataire else "",
             "mandataire_absent": mandataire_absent,
             "pouvoir_recu_le": r.pouvoir_recu_le if r else None,
+            "correspondance_recue_le": recus.get(u.id) if r is not None and r.reponse == "correspondance" else None,
             "mandats": sum(1 for x in reponses.values() if x.reponse == "pouvoir" and x.mandataire_id == u.id),
             "peut_recevoir_pouvoir": not est_syndic(db, ag.copropriete_id, u),
         })
@@ -163,6 +167,8 @@ def etat(db: Session, ag: AG) -> dict:
             "representes": sum(1 for l in lignes if l["reponse"] == "pouvoir"),
             "absents": sum(1 for l in lignes if l["reponse"] == "absent"),
             "incertains": sum(1 for l in lignes if l["reponse"] == "incertain"),
+            "correspondances": sum(1 for l in lignes if l["reponse"] == "correspondance"),
+            "voix_correspondance": total_voix("correspondance"),
             "sans_reponse": sum(1 for l in lignes if not l["reponse"]),
             "voix_presentes_ou_representees": total_voix("present", "pouvoir"),
         },

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -67,6 +67,9 @@ class Resolution(Base):
     # Second vote immédiat (passerelles art. 25-1 / 26-1) : id de la résolution
     # dont celle-ci est le second vote. NULL pour une résolution « normale ».
     second_vote_de_id = Column(Integer, ForeignKey("resolutions.id", ondelete="CASCADE"), nullable=True)
+    # Résolution amendée en séance : un vote « pour » par correspondance compte comme défaillant
+    # (loi n° 65-557, art. 17-1 A ; services/correspondance.py).
+    amendee = Column(Boolean, nullable=False, default=False, server_default=text("false"))
 
     ag = relationship("AG", back_populates="resolutions")
     votes = relationship("Vote", back_populates="resolution", cascade="all, delete-orphan")
@@ -102,3 +105,16 @@ class AgReponse(Base):
 
     personne = relationship("User", foreign_keys=[personne_id])
     mandataire = relationship("User", foreign_keys=[mandataire_id])
+
+
+class VoteCorrespondance(Base):
+    """Vote par correspondance reçu par le syndic (formulaire de l'arrêté du 2 juillet 2020) : une ligne par
+    copropriétaire et par résolution (services/correspondance.py)."""
+    __tablename__ = "votes_correspondance"
+    __table_args__ = (UniqueConstraint("resolution_id", "personne_id", name="uq_votes_correspondance_res_personne"),)
+    id = Column(Integer, primary_key=True)
+    ag_id = Column(Integer, ForeignKey("ags.id", ondelete="CASCADE"), nullable=False, index=True)
+    resolution_id = Column(Integer, ForeignKey("resolutions.id", ondelete="CASCADE"), nullable=False)
+    personne_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    voix = Column(String, nullable=False, default="")      # pour | contre | abstention | "" (case non cochée)
+    recu_le = Column(Date, nullable=False)                  # date de réception par le syndic

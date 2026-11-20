@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import { Badge, Button, Select } from "./ui";
+import { Badge, Button, Input, Modal, Select } from "./ui";
+import type { Resolution } from "../types";
+import { fmtDate } from "../types";
 
 /** AG : réponse des copropriétaires (présent, pouvoir, absent, ne sait pas) et pouvoirs (loi 1965, art. 22). */
 
@@ -10,9 +12,10 @@ export const REPONSES: [string, string][] = [
   ["absent", "Je ne serai pas présent(e)"],
   ["incertain", "Je ne sais pas encore"],
 ];
-const COURT: Record<string, string> = { present: "Présent", pouvoir: "Représenté", absent: "Absent", incertain: "Incertain", "": "Sans réponse" };
+const COURT: Record<string, string> = { present: "Présent", pouvoir: "Représenté", absent: "Absent", incertain: "Incertain",
+  correspondance: "Par correspondance", "": "Sans réponse" };
 const COULEUR: Record<string, "green" | "indigo" | "slate" | "amber" | "red"> = {
-  present: "green", pouvoir: "indigo", absent: "slate", incertain: "amber", "": "slate",
+  present: "green", pouvoir: "indigo", absent: "slate", incertain: "amber", correspondance: "indigo", "": "slate",
 };
 
 interface Personne { id: number; nom: string }
@@ -24,11 +27,12 @@ interface Ligne {
   personne_id: number; nom: string; lots: string[]; voix: number; reponse: string; repondu_le: string | null;
   source: string; mandataire_id: number | null; mandataire_nom: string; mandataire_absent: boolean;
   pouvoir_recu_le: string | null; mandats: number; peut_recevoir_pouvoir: boolean;
+  correspondance_recue_le?: string | null;
 }
 interface Presences {
   ouvert: boolean; lignes: Ligne[];
   totaux: { presents: number; representes: number; absents: number; incertains: number; sans_reponse: number;
-    voix_presentes_ou_representees: number };
+    voix_presentes_ou_representees: number; correspondances?: number; voix_correspondance?: number };
 }
 
 const RAPPEL_ART22 = "Le syndic, son conjoint ou partenaire, ses parents et ses employés ne peuvent pas recevoir de pouvoir ; "
@@ -88,6 +92,11 @@ export function MaReponseAg({ agId, onError }: { agId: number; onError: (e: stri
       ) : (
         <p className="text-xs text-slate-500">L'assemblée est ouverte : votre réponse ne change plus en ligne.</p>
       )}
+      <p className="mt-2 text-xs text-slate-500">
+        Vous ne viendrez pas ? Vous pouvez aussi voter par correspondance :{" "}
+        <a className="text-indigo-600 hover:underline" href={`/api/ag/${agId}/formulaires-correspondance.pdf`}>
+          formulaire de vote (PDF)</a>, à renvoyer signé au syndic au plus tard trois jours francs avant l'assemblée.
+      </p>
       {m.mandats.length > 0 && (
         <p className="mt-2 text-xs text-slate-600">
           Vous représentez : {m.mandats.map((p, i) => (
@@ -138,7 +147,7 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
       </div>
       <p className="mb-2 text-xs text-slate-600">
         <strong>{t.presents}</strong> présent(s) · <strong>{t.representes}</strong> représenté(s) · {t.absents} absent(s) ·{" "}
-        {t.incertains} incertain(s) · {t.sans_reponse} sans réponse — présents ou représentés :{" "}
+        {t.incertains} incertain(s) · {t.correspondances ?? 0} par correspondance · {t.sans_reponse} sans réponse — présents ou représentés :{" "}
         <strong>{t.voix_presentes_ou_representees.toLocaleString("fr-FR")} ‰</strong> des voix.
         {!p.ouvert && " L'assemblée est ouverte : vous tenez la feuille de présence ici."}
       </p>
@@ -168,7 +177,9 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
                   <select className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs" value={l.reponse}
                     onChange={(e) => saisir(l, { reponse: e.target.value })}>
                     <option value="" disabled>Sans réponse</option>
-                    {Object.entries(COURT).filter(([k]) => k).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {Object.entries(COURT).filter(([k]) => k).map(([k, v]) => (
+                      <option key={k} value={k} disabled={k === "correspondance"}>{v}</option>
+                    ))}
                   </select>
                   {l.source === "syndic" && <span className="ml-1 text-xs text-slate-400" title="Saisi par le syndic">✎</span>}
                 </td>
@@ -183,6 +194,9 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
                     </select>
                   )}
                   {l.mandataire_absent && <span className="block text-xs text-amber-700">le mandataire ne sera pas présent</span>}
+                  {l.reponse === "correspondance" && l.correspondance_recue_le && (
+                    <span className="block text-xs text-slate-500">formulaire reçu le {fmtDate(l.correspondance_recue_le)}</span>
+                  )}
                 </td>
                 <td className="py-1.5 text-right whitespace-nowrap text-xs">
                   {l.reponse === "pouvoir" && l.mandataire_id && (<>
@@ -200,6 +214,127 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
       </div>
       <p className="mt-2 text-xs text-slate-500">{RAPPEL_ART22} Les copropriétaires répondent par le lien de l'e-mail ou
         depuis leur compte, jusqu'à l'ouverture de l'assemblée ; vous pouvez corriger à tout moment.</p>
+    </div>
+  );
+}
+
+interface Formulaire { personne_id: number; nom: string; recu_le: string; votes: Record<string, string>; ecarte: boolean }
+interface EtatCorrespondance { date_limite: string; formulaires: Formulaire[] }
+const VOIX: [string, string][] = [["pour", "Pour"], ["contre", "Contre"], ["abstention", "Abstention"], ["", "Non coché"]];
+
+/** Syndic : formulaires de vote par correspondance (loi 1965, art. 17-1 A ; décret 1967, art. 9 bis). */
+export function CorrespondanceSyndic({ agId, resolutions, onChanged, onError }: {
+  agId: number; resolutions: Resolution[]; onChanged: () => void; onError: (e: string) => void;
+}) {
+  const [etat, setEtat] = useState<EtatCorrespondance | null>(null);
+  const [personnes, setPersonnes] = useState<Ligne[]>([]);
+  const [saisie, setSaisie] = useState<null | { personne_id: string; recu_le: string; votes: Record<number, string> }>(null);
+  const charger = useCallback(() => {
+    api.get<EtatCorrespondance>(`/ag/${agId}/correspondance`).then(setEtat).catch(() => {});
+    api.get<Presences>(`/ag/${agId}/presences`).then((p) => setPersonnes(p.lignes)).catch(() => {});
+  }, [agId]);
+  useEffect(charger, [charger]);
+  const votables = resolutions.filter((r) => r.second_vote_de_id === null).sort((a, b) => a.numero - b.numero);
+  if (!etat) return null;
+
+  function ouvrir(f?: Formulaire) {
+    setSaisie({ personne_id: f ? String(f.personne_id) : "", recu_le: f?.recu_le ?? new Date().toISOString().slice(0, 10),
+      votes: f ? Object.fromEntries(Object.entries(f.votes).map(([k, v]) => [Number(k), v])) : {} });
+  }
+  async function recalculer() {
+    // Résultats des résolutions avec les votes par correspondance, puis rafraîchissement de l'AG et des présences.
+    for (const r of votables) await api.post(`/resolutions/${r.id}/calculer`);
+    onChanged();
+  }
+  async function enregistrer() {
+    if (!saisie) return;
+    try {
+      setEtat(await api.put<EtatCorrespondance>(`/ag/${agId}/correspondance/${saisie.personne_id}`,
+        { recu_le: saisie.recu_le, votes: saisie.votes }));
+      setSaisie(null); await recalculer();
+    } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
+  async function retirer(f: Formulaire) {
+    if (!confirm(`Retirer le formulaire de ${f.nom} ?`)) return;
+    try { setEtat(await api.del<EtatCorrespondance>(`/ag/${agId}/correspondance/${f.personne_id}`)); await recalculer(); }
+    catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+  }
+  const lib = (v: string) => VOIX.find(([k]) => k === v)?.[1] ?? v;
+
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-700">✉ Votes par correspondance</p>
+        <div className="flex gap-2">
+          <a href={`/api/ag/${agId}/formulaires-correspondance.pdf`}
+            className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">
+            📄 Formulaires à joindre à la convocation (PDF)
+          </a>
+          <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => ouvrir()} disabled={votables.length === 0}>
+            + Saisir un formulaire reçu
+          </Button>
+        </div>
+      </div>
+      <p className="mb-2 text-xs text-slate-600">
+        Le formulaire est joint à la convocation ; il doit vous parvenir au plus tard le <b>{fmtDate(etat.date_limite)}</b>{" "}
+        (trois jours francs avant l'assemblée ; par e-mail : reçu à la date d'envoi). Abstention ou case vide : vote
+        défavorable. Résolution amendée en séance : un « pour » par correspondance devient défaillant. Formulaire ignoré si
+        le copropriétaire est présent ou représenté.
+      </p>
+      {etat.formulaires.length === 0 ? (
+        <p className="text-xs text-slate-500">Aucun formulaire reçu.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 text-sm">
+          {etat.formulaires.map((f) => (
+            <li key={f.personne_id} className="flex flex-wrap items-center gap-2 py-1.5">
+              <span className="font-medium text-slate-800">{f.nom}</span>
+              <span className="text-xs text-slate-500">reçu le {fmtDate(f.recu_le)}</span>
+              {f.ecarte && <Badge color="amber">écarté : présent ou représenté</Badge>}
+              <span className="text-xs text-slate-600">
+                {votables.map((r) => `n° ${r.numero} : ${lib(f.votes[String(r.id)] ?? "")}`).join(" · ")}
+              </span>
+              <span className="ml-auto flex gap-1">
+                <Button variant="ghost" className="text-xs" onClick={() => ouvrir(f)}>Modifier</Button>
+                <Button variant="ghost" className="text-xs" onClick={() => retirer(f)}>Retirer</Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {saisie && (
+        <Modal open title="Formulaire de vote par correspondance reçu" onClose={() => setSaisie(null)}>
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <Select label="Copropriétaire" value={saisie.personne_id}
+                onChange={(e) => setSaisie({ ...saisie, personne_id: e.target.value })}>
+                <option value="">— Choisir —</option>
+                {personnes.map((p) => <option key={p.personne_id} value={p.personne_id}>{p.nom}</option>)}
+              </Select>
+              <Input label="Reçu le" type="date" value={saisie.recu_le} onChange={(e) => setSaisie({ ...saisie, recu_le: e.target.value })} />
+            </div>
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-slate-100">
+                {votables.map((r) => (
+                  <tr key={r.id}>
+                    <td className="py-1.5 pr-2 text-slate-700">n° {r.numero} — {r.libelle}</td>
+                    <td className="py-1.5 text-right">
+                      <select className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs"
+                        value={saisie.votes[r.id] ?? ""}
+                        onChange={(e) => setSaisie({ ...saisie, votes: { ...saisie.votes, [r.id]: e.target.value } })}>
+                        {VOIX.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setSaisie(null)}>Annuler</Button>
+              <Button onClick={enregistrer} disabled={!saisie.personne_id || !saisie.recu_le}>Enregistrer</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

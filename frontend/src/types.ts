@@ -288,6 +288,7 @@ export interface Resolution {
   exercice_id: number | null; // exercice approuvé (nature « approbation_comptes »)
   statut: string;
   second_vote_de_id: number | null;
+  amendee?: boolean; // amendée en séance : les votes « pour » par correspondance deviennent défaillants
   votes: Vote[];
   resultat: ResolutionResult | null;
 }

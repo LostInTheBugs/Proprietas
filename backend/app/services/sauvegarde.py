@@ -64,7 +64,7 @@ TABLES = [
     "exercices",
     "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
     "releve_lignes", "mutations", "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
-    "ag_reponses", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
+    "ag_reponses", "votes_correspondance", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
 ]
 # Lignes d'une table : directement par copropriété, ou par leur parent (colonne → table parente).
 PAR_PARENT = {
@@ -79,6 +79,7 @@ PAR_PARENT = {
     "votes": ("resolution_id", "resolutions"),
     "invitations": ("ag_id", "ags"),
     "ag_reponses": ("ag_id", "ags"),
+    "votes_correspondance": ("ag_id", "ags"),
     "notifications_pv": ("ag_id", "ags"),
     "relances": ("lot_id", "lots"),
 }
