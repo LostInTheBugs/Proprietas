@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.054 — 2026-11-20
+
+- Messages : e-mails groupés du syndic aux copropriétaires (tous, une clé de répartition, une sélection), personnalisés, avec aperçu et historique.
+
 ## 2026.11.053 — 2026-11-20
 
 - AG : une résolution peut être réservée aux lots d'une clé de répartition (art. 24, dernier alinéa) : seuls ces copropriétaires votent, avec leurs millièmes de la clé.
