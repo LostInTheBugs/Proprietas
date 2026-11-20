@@ -20,11 +20,12 @@ from app.models.notification import NotificationPV
 from app.models.reprise import EtatReprise, EtatRepriseLigne
 from app.models.releve import LigneReleve
 from app.models.mutation import Mutation
+from app.models.message import Message
 
 __all__ = [
     "User", "UserCopro", "Copropriete", "Lot", "Exercice", "BudgetLine",
     "AppelFonds", "AppelLot", "Mouvement", "AG", "Resolution", "Vote",
     "AgCreneau", "AgCreneauVote", "AgReponse", "CleRepartition", "CleLot", "Document", "Entretien", "Invitation", "Relance",
     "Travaux", "Contact", "Contrat", "AuditLog", "InstanceState", "ActeRecouvrement",
-    "NotificationPV", "EtatReprise", "EtatRepriseLigne", "LigneReleve", "Mutation", "VoteCorrespondance",
+    "NotificationPV", "EtatReprise", "EtatRepriseLigne", "LigneReleve", "Mutation", "Message", "VoteCorrespondance",
 ]

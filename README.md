@@ -116,6 +116,10 @@ se créer normalement depuis la page de connexion.
 - **Documents** : contrats, devis, factures, diagnostics — sur le serveur (dossier local ou S3) ou sur le
   **drive de la copropriété** (WebDAV : Nextcloud, ownCloud, Synology… ; Google Drive), choisi dans Réglages,
   rangés par dossier (Factures, Contrats…) ; sauvegardes chiffrées hebdomadaires sur le drive
+- **Messages aux copropriétaires** (page Messages, syndic) : information par e-mail à tous, aux copropriétaires d'une
+  clé de répartition ou à une sélection ; un envoi par personne (personne ne voit l'adresse des autres), personnalisé
+  ({prenom}, {nom}, {lots}) ; aperçu avant l'envoi, historique ; ce n'est pas une convocation ni une notification
+  officielle (le pied du message le rappelle)
 - **Contacts** : annuaire des entreprises, fournisseurs et artisans (téléphone, email,
   adresse, site web), recherche, catégories
 - **Contrats** : énergie (EDF…), assurance copro, entretien — montant, période,

@@ -13,6 +13,7 @@ const NAV: { to: string; label: string; icon: string; syndic?: boolean }[] = [
   { to: "/historique", label: "Historique", icon: "🕰", syndic: true },
   { to: "/ag", label: "Assemblées", icon: "🗳" },
   { to: "/documents", label: "Documents", icon: "▤" },
+  { to: "/messages", label: "Messages", icon: "✉", syndic: true },
   { to: "/contacts", label: "Contacts", icon: "👥" },
   { to: "/contrats", label: "Contrats", icon: "📄" },
   { to: "/carnet", label: "Carnet d'entretien", icon: "🔧" },

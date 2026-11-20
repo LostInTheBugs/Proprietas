@@ -64,7 +64,7 @@ TABLES = [
     "exercices",
     "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
     "releve_lignes", "mutations", "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
-    "ag_reponses", "votes_correspondance", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
+    "ag_reponses", "votes_correspondance", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement", "messages",
 ]
 # Lignes d'une table : directement par copropriété, ou par leur parent (colonne → table parente).
 PAR_PARENT = {
@@ -110,6 +110,7 @@ VIDES_SANS_DONNEES_PERSONNELLES = {
     "notifications_pv": ("reference",),
     "releve_lignes": ("libelle",),       # libellés de la banque : noms des personnes des virements
     "mutations": ("vendeur_nom", "acquereur_nom", "notaire", "notes"),
+    "messages": ("corps", "destinataires", "erreurs"),
 }
 
 
