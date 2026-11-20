@@ -225,9 +225,11 @@ def regles_fonds_travaux(copro) -> dict:
         "obligatoire": True,
         "taux_minimum_pct": taux_min,
         "texte": (
-            "Fonds de travaux obligatoire (loi ALUR, modifiée) dès 10 ans après "
-            "réception des travaux, quel que soit le nombre de lots. "
-            "Cotisation annuelle minimale : 5 % du budget prévisionnel "
+            "Fonds de travaux obligatoire dans les immeubles à destination totale ou partielle d'habitation "
+            "(loi du 10 juillet 1965, art. 14-2-1), quel que soit le nombre de lots, à l'issue d'une période de "
+            "10 ans à compter de la réception des travaux de construction de l'immeuble (immeuble neuf : pas "
+            "de fonds pendant ces 10 ans). Voir l'article pour les autres cas particuliers. "
+            "Cotisation annuelle minimale : 5 % du budget prévisionnel. "
             "Si un plan pluriannuel de travaux (PPT) est adopté : au moins 2,5 % du montant des "
             "travaux du plan et au moins 5 % du budget, soit le plus élevé des deux montants "
             "(art. 14-2-1 ; les deux taux ne s'additionnent pas). "

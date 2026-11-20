@@ -384,6 +384,7 @@ function ExerciceStatut({ ex, isSyndic, onSaved, onError }: {
   }
   const resume = ex.comptes_approuves_le
     ? `Comptes ${ex.annee} approuvés par l'AG le ${fmtDate(ex.comptes_approuves_le)}`
+      + (ex.approbation_ag ? " (résolution votée dans Proprietas)" : " (date saisie à la main, sans vote enregistré dans Proprietas)")
     : ex.cloture ? `Exercice ${ex.annee} clôturé — comptes non encore approuvés` : `Exercice ${ex.annee} en cours`;
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">

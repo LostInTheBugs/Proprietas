@@ -130,6 +130,8 @@ def generer_rapport_annuel_pdf(copro, exercice, db) -> BytesIO:
         solde_lot = totaux_lot(db, lot)["solde"]
         if solde_lot > D("0.005"):
             total_impayes += solde_lot
+    from app.services import mutations as svc_mutations
+    total_impayes += somme(du for _, du in svc_mutations.dus_vendeurs(db, copro))
 
     # ===== Page de garde =====
     el.append(Spacer(1, 60))

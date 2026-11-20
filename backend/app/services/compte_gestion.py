@@ -36,6 +36,10 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     el.append(Paragraph(f"Copropriété {copro.nom} — exercice {exercice.annee}", style("sous_titre")))
     if copro.adresse:
         el.append(Paragraph(f"{copro.adresse} {copro.code_postal or ''} {copro.ville or ''}".strip(), style("normal", alignment=1, spaceAfter=8)))
+    el.append(Paragraph(
+        "Synthèse de gestion de l'exercice. Elle ne remplace pas les documents comptables à joindre à la convocation "
+        "de l'assemblée appelée à approuver les comptes (décret n° 67-223 du 17 mars 1967, art. 11 ; modèles de "
+        "l'arrêté du 14 mars 2005).", style("small", textColor=colors.HexColor("#666666"), spaceAfter=6)))
 
     # 1. Synthèse
     el.append(Paragraph("1. SYNTHÈSE DE L'EXERCICE", style("section")))
@@ -99,14 +103,19 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
         el.append(ct)
         el.append(Spacer(1, 8))
 
-    # 3. Annexe par lot
-    el.append(Paragraph("3. ANNEXE — ÉTAT PAR LOT", style("section")))
+    # 3. Annexe par lot : appels et encaissements de CET exercice seulement (le solde cumulé de chaque lot,
+    # tous exercices confondus, est celui des impayés, section 4).
+    from app.models.appel import AppelFonds, AppelLot
+    el.append(Paragraph(f"3. ANNEXE — ÉTAT PAR LOT (EXERCICE {exercice.annee})", style("section")))
     rows = [[Paragraph("<b>Lot</b>", style("th")), Paragraph("<b>Propriétaire</b>", style("th")),
              Paragraph("<b>Appels charges</b>", style("th")), Paragraph("<b>Appels fonds travaux</b>", style("th")),
-             Paragraph("<b>Encaissé</b>", style("th")), Paragraph("<b>Solde</b>", style("th"))]]
+             Paragraph("<b>Encaissé</b>", style("th")), Paragraph("<b>Solde de l'exercice</b>", style("th"))]]
+    parts_ex = (db.query(AppelLot).join(AppelFonds, AppelLot.appel_id == AppelFonds.id)
+                .filter(AppelFonds.exercice_id == exercice.id).all())
     for lot in lots:
-        t = totaux_lot(db, lot)
-        appels_c, appels_f, enc = t["appels_charges"], t["appels_fonds"], t["encaisse"]
+        appels_c = somme(D(x.montant_charges or 0) for x in parts_ex if x.lot_id == lot.id)
+        appels_f = somme(D(x.montant_fonds_travaux or 0) for x in parts_ex if x.lot_id == lot.id)
+        enc = somme(D(m.montant or 0) for m in encaissements if m.lot_id == lot.id)
         p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
         solde = appels_c + appels_f - enc
         couleur = "#dc2626" if solde > D("0.005") else "#059669"
@@ -123,25 +132,29 @@ def story_compte_gestion(copro, exercice, db, el) -> None:
     el.append(lt)
     el.append(Spacer(1, 8))
 
-    # 4. Impayés
+    # 4. Impayés : solde de chaque lot à ce jour, tous exercices confondus (propriétaire actuel).
     impayes = []
     for lot in lots:
         t = totaux_lot(db, lot)
         appels_c, appels_f, enc = t["appels_charges"], t["appels_fonds"], t["encaisse"]
         solde = appels_c + appels_f - enc
         if solde > D("0.005"):
-            impayes.append((lot, solde))
+            p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+            impayes.append((f"Lot {lot.numero}", f"{p.prenom} {p.nom}".strip() if p else "—", solde))
+    # Anciens propriétaires : solde arrêté à la vente (services/mutations.py).
+    from app.services import mutations as svc_mutations
+    for m, du in svc_mutations.dus_vendeurs(db, copro):
+        impayes.append((f"Lot {m.lot.numero}", f"{m.vendeur_nom} (vendeur, vente du {m.date_acte:%d/%m/%Y})", du))
     el.append(Paragraph(f"4. IMPAYÉS AU {_date_fr(date.today()).upper()}", style("section")))
     if not impayes:
         el.append(Paragraph("Aucun impayé : tous les lots sont à jour.", style("small", textColor=colors.HexColor("#059669"))))
     else:
         rows = [[Paragraph("<b>Lot</b>", style("th")), Paragraph("<b>Propriétaire</b>", style("th")),
                  Paragraph("<b>Solde dû</b>", style("th"))]]
-        for lot, solde in impayes:
-            p = db.query(User).filter(User.id == lot.proprietaire_id).first() if lot.proprietaire_id else None
+        for lot_lib, nom, solde in impayes:
             rows.append([
-                Paragraph(f"Lot {lot.numero}", style("cell")),
-                Paragraph(f"{p.prenom} {p.nom}".strip() if p else "—", style("cell")),
+                Paragraph(lot_lib, style("cell")),
+                Paragraph(nom, style("cell")),
                 Paragraph(f"<b>{fmt_eur(solde)}</b>", style("cell")),
             ])
         it = Table(rows, colWidths=[22 * 2.835, 120 * 2.835, 38 * 2.835])
