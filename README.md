@@ -67,6 +67,15 @@ se créer normalement depuis la page de connexion.
   sort de la banque, n'est pas une charge) ou en la **déduisant de ses charges** (crédit sur son lot, imputé
   sur ses appels). Jamais plus que le reste dû ; « Avances à régler » dans Comptes, « Mes avances » sur le
   tableau de bord de la personne ; un compte à qui la copropriété doit encore de l'argent ne se supprime pas
+- **Banque : relevés et rapprochement** (page Banque, syndic) : import des relevés exportés de la banque en
+  ligne — **CSV** (en-tête de la banque, débit/crédit ou montant signé, formats français), **OFX** ou **QIF** —
+  pour le compte du syndicat ou celui du fonds de travaux ; « Vérifier » avant d'importer, refus en bloc avec le
+  numéro de ligne de chaque erreur, opérations déjà importées jamais ajoutées deux fois (relevés qui se
+  chevauchent). **Rapprochement proposé, validé par le syndic** : même sens et même montant à 10 jours près, paiement
+  d'un copropriétaire réparti entre ses lots (plusieurs encaissements pour un virement), facture à payer (payée à
+  la date du relevé) ; un bouton valide d'un coup les propositions sûres. Ligne sans équivalent : créer la dépense
+  ou l'encaissement, ou le paiement d'un copropriétaire, depuis la ligne ; ou la mettre de côté. Opérations
+  saisies absentes du relevé signalées. Pas de connexion directe à la banque (agrément DSP2) : l'export suffit
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
 - **Recouvrement des impayés** : décompte détaillé par provision (imputation FIFO, échu / à
   échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,
@@ -86,7 +95,9 @@ se créer normalement depuis la page de connexion.
   voit le tableau, note les pouvoirs signés reçus, corrige en séance et imprime la feuille de présence ; le PV
   indique présents et représentés
 - **Consultation écrite** (régime petite copropriété, unanimité)
-- **Documents** : contrats, devis, factures, diagnostics (stockage local)
+- **Documents** : contrats, devis, factures, diagnostics — sur le serveur (dossier local ou S3) ou sur le
+  **drive de la copropriété** (WebDAV : Nextcloud, ownCloud, Synology… ; Google Drive), choisi dans Réglages,
+  rangés par dossier (Factures, Contrats…) ; sauvegardes chiffrées hebdomadaires sur le drive
 - **Contacts** : annuaire des entreprises, fournisseurs et artisans (téléphone, email,
   adresse, site web), recherche, catégories
 - **Contrats** : énergie (EDF…), assurance copro, entretien — montant, période,

@@ -63,7 +63,7 @@ TABLES = [
     "coproprietes", "users", "user_coproprietes", "contacts", "contrats", "lots", "cles_repartition", "cles_lots",
     "exercices",
     "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
-    "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
+    "releve_lignes", "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
     "ag_reponses", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement",
 ]
 # Lignes d'une table : directement par copropriété, ou par leur parent (colonne → table parente).
@@ -107,6 +107,7 @@ VIDES_SANS_DONNEES_PERSONNELLES = {
     "invitations": ("message",),
     "actes_recouvrement": ("libelle", "reference"),
     "notifications_pv": ("reference",),
+    "releve_lignes": ("libelle",),       # libellés de la banque : noms des personnes des virements
 }
 
 

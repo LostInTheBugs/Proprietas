@@ -6,6 +6,7 @@ import Layout from "./pages/Layout";
 import Dashboard from "./pages/Dashboard";
 import Lots from "./pages/Lots";
 import Comptes from "./pages/Comptes";
+import Banque from "./pages/Banque";
 import Ag from "./pages/Ag";
 import Documents from "./pages/Documents";
 import Contacts from "./pages/Contacts";
@@ -54,6 +55,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="lots" element={<Lots />} />
           <Route path="comptes" element={<Comptes />} />
+          <Route path="banque" element={<SyndicRoute><Banque /></SyndicRoute>} />
           <Route path="ag" element={<Ag />} />
           <Route path="documents" element={<Documents />} />
           <Route path="contacts" element={<Contacts />} />
