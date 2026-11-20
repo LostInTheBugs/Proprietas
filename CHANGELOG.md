@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.057 — 2026-11-21
+
+- AG : en modifiant une résolution, case « Effacer aussi les votes saisis » (en séance et par correspondance). Sans elle, les votes sont gardés et comptent au recalcul (revue de la 2026.11.056).
+
 ## 2026.11.056 — 2026-11-20
 
 - AG : modifier l'objet, l'exercice, la majorité ou la clé d'une résolution déjà votée efface son résultat et retire l'approbation des comptes qu'elle avait reportée (revue de la 2026.11.055).
