@@ -35,15 +35,16 @@ router = APIRouter(prefix="/api", tags=["ag"])
 
 
 def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
+    from app.services import cles
     copro_id = r.ag.copropriete_id if r.ag else None
-    lots = (db.query(Lot).filter(Lot.copropriete_id == copro_id).all()
-            if copro_id else [])
-    resultat = calculer_statut_resolution(r, lots, r.votes)
+    lots, votes = cles.votants(db, copro_id, r) if copro_id else ([], [])
+    resultat = calculer_statut_resolution(r, lots, votes)
     return ResolutionOut(
         id=r.id, ag_id=r.ag_id, numero=r.numero, libelle=r.libelle,
         texte=r.texte, majorite=r.majorite, nature=r.nature or "autre", exercice_id=r.exercice_id,
         statut=r.statut,
-        second_vote_de_id=r.second_vote_de_id, amendee=bool(r.amendee),
+        second_vote_de_id=r.second_vote_de_id, amendee=bool(r.amendee), cle_id=r.cle_id,
+        cle_nom=r.cle.nom if r.cle is not None else "",
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
     )
@@ -88,6 +89,18 @@ def _exiger_petite_copro(db: Session, copro: Copropriete) -> None:
                              f"de la loi du 10 juillet 1965) : {regime['nb_lots_principaux']} lots de logements, "
                              f"bureaux ou commerces (5 au plus), budget moyen sur 3 exercices : {budget} "
                              "(moins de 15 000 €). Réunissez une assemblée générale.")
+
+
+def _cle_resolution(db: Session, copro: Copropriete, data: ResolutionIn) -> int | None:
+    """Clé d'une résolution : de la copropriété, avec des millièmes ; jamais pour le budget ni les comptes,
+    qui concernent tous les copropriétaires."""
+    if data.cle_id is None:
+        return None
+    if data.nature in ("budget", "approbation_comptes"):
+        raise HTTPException(422, "Le budget et l'approbation des comptes sont votés par tous les copropriétaires : "
+                                 "pas de clé de répartition pour ces résolutions.")
+    from app.services import cles
+    return cles.controler(db, copro.id, data.cle_id).id
 
 
 def _controler_resolution(ag: AG, majorite: str, nature: str) -> None:
@@ -205,6 +218,7 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
     _controler_resolution(ag, data.majorite, data.nature)
     valeurs = data.model_dump()
     valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
+    valeurs["cle_id"] = _cle_resolution(db, copro, data)
     r = Resolution(ag_id=ag.id, **valeurs)
     db.add(r)
     db.commit()
@@ -221,6 +235,7 @@ def update_resolution(res_id: int, data: ResolutionIn, db: Session = Depends(get
     _controler_resolution(r.ag, data.majorite, data.nature)
     valeurs = data.model_dump()
     valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
+    valeurs["cle_id"] = _cle_resolution(db, copro, data)
     for field, value in valeurs.items():
         setattr(r, field, value)
     db.commit()
@@ -266,8 +281,9 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     from app.services import correspondance
     correspondance.appliquer(db, r.ag, r)          # votes par correspondance des absents (art. 17-1 A)
     db.refresh(r)
-    lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
-    resultat = calculer_statut_resolution(r, lots, r.votes)
+    from app.services import cles
+    lots, votes = cles.votants(db, copro.id, r)
+    resultat = calculer_statut_resolution(r, lots, votes)
     r.statut = resultat["statut"]
     _reporter_approbation(db, r)
     db.commit()
@@ -283,8 +299,9 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     from app.services import correspondance
     correspondance.appliquer(db, r.ag, r)          # votes par correspondance des absents (art. 17-1 A)
     db.refresh(r)
-    lots = db.query(Lot).filter(Lot.copropriete_id == copro.id).all()
-    resultat = calculer_statut_resolution(r, lots, r.votes)
+    from app.services import cles
+    lots, votes = cles.votants(db, copro.id, r)
+    resultat = calculer_statut_resolution(r, lots, votes)
     majorite = resultat["second_vote_possible"]
     if majorite is None:
         raise HTTPException(400, "Aucun second vote possible pour cette résolution")
@@ -293,7 +310,7 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     article = "art. 25-1" if majorite == "art24" else "art. 26-1"
     r.statut = resultat["statut"]
     sv = Resolution(ag_id=r.ag_id, numero=r.numero, texte=r.texte, majorite=majorite,
-                    nature=r.nature or "autre", exercice_id=r.exercice_id,
+                    nature=r.nature or "autre", exercice_id=r.exercice_id, cle_id=r.cle_id,
                     libelle=f"{r.libelle} — second vote ({article})", second_vote_de_id=r.id)
     db.add(sv)
     db.commit()

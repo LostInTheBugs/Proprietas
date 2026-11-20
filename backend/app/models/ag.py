@@ -70,8 +70,12 @@ class Resolution(Base):
     # Résolution amendée en séance : un vote « pour » par correspondance compte comme défaillant
     # (loi n° 65-557, art. 17-1 A ; services/correspondance.py).
     amendee = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # Dépenses d'une partie de l'immeuble ou d'un équipement réparties par une clé : seuls les copropriétaires
+    # concernés votent, avec les millièmes de la clé (loi n° 65-557, art. 24, dernier alinéa ; services/cles.py).
+    cle_id = Column(Integer, ForeignKey("cles_repartition.id", ondelete="SET NULL"), nullable=True)
 
     ag = relationship("AG", back_populates="resolutions")
+    cle = relationship("CleRepartition")
     votes = relationship("Vote", back_populates="resolution", cascade="all, delete-orphan")
 
 

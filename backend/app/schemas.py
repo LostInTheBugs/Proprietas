@@ -830,6 +830,8 @@ class ResolutionIn(BaseModel):
     nature: str = "autre"
     # Exercice approuvé : obligatoire pour « approbation_comptes », ignoré sinon.
     exercice_id: Optional[int] = None
+    # Clé de répartition : seuls les copropriétaires concernés votent, avec ses millièmes (art. 24, dernier alinéa).
+    cle_id: Optional[int] = None
 
     @field_validator("nature")
     @classmethod
@@ -874,6 +876,8 @@ class ResolutionOut(BaseModel):
     statut: str = "a_voter"
     second_vote_de_id: Optional[int] = None
     amendee: bool = False
+    cle_id: Optional[int] = None
+    cle_nom: str = ""
     votes: List[VoteOut] = []
     resultat: Optional[ResolutionResult] = None
 

@@ -7,6 +7,7 @@ import { Button, Card, Input, Modal, Select, Badge, Empty } from "../components/
 import NotificationsPVPanel from "../components/NotificationsPV";
 import { CorrespondanceSyndic, MaReponseAg, PresencesSyndic } from "../components/Presences";
 import { ListeModele, ResolutionsTypesModal, useModele } from "../components/ResolutionsTypes";
+import { useCles } from "../components/Cles";
 export default function Ag() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
@@ -398,6 +399,13 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
   r: Resolution; lots: Lot[]; total: number; majorites: Record<string, Majorite>;
   isSyndic: boolean; aUnSecondVote: boolean; onChanged: () => void; onError: (e: string) => void;
 }) {
+  const [cles] = useCles();
+  // Résolution sur une clé (art. 24, dernier alinéa) : seuls les lots de la clé votent, avec ses millièmes.
+  const cle = r.cle_id != null ? cles.find((c) => c.id === r.cle_id) : undefined;
+  const votants = cle
+    ? lots.filter((l) => cle.lots.some((x) => x.lot_id === l.id))
+        .map((l) => ({ ...l, tantiemes: cle.lots.find((x) => x.lot_id === l.id)?.tantiemes ?? 0 }))
+    : lots;
   const res = r.resultat;
   // Base de calcul : le total de référence du moteur (réduit par l'art. 22 le cas échéant).
   const base = res && res.total > 0 ? res.total : total;
@@ -444,6 +452,7 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
         <div className="flex items-center gap-2">
           {r.second_vote_de_id !== null && <Badge color="indigo">Second vote</Badge>}
           {r.amendee && <Badge color="amber">Amendée en séance</Badge>}
+          {r.cle_id != null && <Badge color="indigo">Clé : {r.cle_nom || cle?.nom || "?"}</Badge>}
           {r.statut === "a_voter" && <Badge color="amber">À voter</Badge>}
           {r.statut === "adoptee" && <Badge color="green">Adoptée</Badge>}
           {r.statut === "rejetee" && <Badge color="red">Rejetée</Badge>}
@@ -493,7 +502,7 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
       )}
       {isSyndic && (
         <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
-          {lots.map((lot) => {
+          {votants.map((lot) => {
             const v = r.votes.find((x) => x.lot_id === lot.id);
             const current = v?.voix ?? "null";
             return (
@@ -636,6 +645,8 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
   // Approbation des comptes : l'exercice approuvé (reporté sur l'exercice si la résolution est adoptée).
   const [exercices, setExercices] = useState<Exercice[]>([]);
   const [exerciceId, setExerciceId] = useState("");
+  const [cles] = useCles();
+  const [cleId, setCleId] = useState("");
   useEffect(() => {
     api.get<Exercice[]>("/exercices").then(setExercices).catch(() => {});
   }, []);
@@ -644,6 +655,7 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
       await api.post(`/ag/${agId}/resolutions`, {
         numero: Number(numero), libelle, texte, majorite, nature,
         exercice_id: nature === "approbation_comptes" && exerciceId ? Number(exerciceId) : null,
+        cle_id: nature === "autre" && cleId ? Number(cleId) : null,
       });
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
@@ -673,6 +685,19 @@ function ResolutionModal({ agId, majorites, consultation, onClose, onSaved, onEr
               <option key={e.id} value={e.id}>{e.annee}{e.comptes_approuves_le ? " (déjà approuvés)" : ""}</option>
             ))}
           </Select>
+        )}
+        {nature === "autre" && cles.length > 0 && (
+          <Select label="Votants" value={cleId} onChange={(e) => setCleId(e.target.value)}>
+            <option value="">Tous les copropriétaires (tantièmes généraux)</option>
+            {cles.map((c) => <option key={c.id} value={c.id}>Seuls les lots de la clé « {c.nom} » (ses millièmes)</option>)}
+          </Select>
+        )}
+        {nature === "autre" && cleId && (
+          <p className="text-xs text-slate-500">
+            Dépenses d'une partie de l'immeuble ou d'un équipement : si le règlement de copropriété le prévoit, seuls les
+            copropriétaires qui y participent votent, avec leurs millièmes de la clé (loi du 10 juillet 1965, art. 24,
+            dernier alinéa).
+          </p>
         )}
         {consultation && (
           <p className="text-xs text-slate-500">

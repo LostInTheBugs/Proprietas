@@ -109,6 +109,9 @@ se créer normalement depuis la page de connexion.
   par chacun depuis son compte) ; le syndic saisit les formulaires reçus au plus tard trois jours francs avant l'AG ;
   abstention ou case vide = vote défavorable ; « pour » sur une résolution amendée en séance = défaillant ; formulaire
   ignoré si le copropriétaire est présent ou représenté ; feuille de présence et PV le mentionnent
+- **Vote sur une clé de répartition** (loi du 10 juillet 1965, art. 24, dernier alinéa) : pour les dépenses d'une partie
+  de l'immeuble ou d'un équipement, si le règlement le prévoit, une résolution peut être réservée aux lots d'une clé ;
+  seuls ces copropriétaires votent, avec leurs millièmes de la clé (majorités calculées sur le total de la clé)
 - **Consultation écrite** (régime petite copropriété, unanimité)
 - **Documents** : contrats, devis, factures, diagnostics — sur le serveur (dossier local ou S3) ou sur le
   **drive de la copropriété** (WebDAV : Nextcloud, ownCloud, Synology… ; Google Drive), choisi dans Réglages,
