@@ -681,6 +681,7 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
   const [exerciceId, setExerciceId] = useState(initial?.exercice_id != null ? String(initial.exercice_id) : "");
   const [cles] = useCles();
   const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
+  const [effacerVotes, setEffacerVotes] = useState(false);
   useEffect(() => {
     api.get<Exercice[]>("/exercices").then(setExercices).catch(() => {});
   }, []);
@@ -691,7 +692,7 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
         exercice_id: nature === "approbation_comptes" && exerciceId ? Number(exerciceId) : null,
         cle_id: nature === "autre" && cleId ? Number(cleId) : null,
       };
-      if (initial) await api.put(`/resolutions/${initial.id}`, corps);
+      if (initial) await api.put(`/resolutions/${initial.id}${effacerVotes ? "?effacer_votes=true" : ""}`, corps);
       else await api.post(`/ag/${agId}/resolutions`, corps);
       onSaved();
     } catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
@@ -757,8 +758,15 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
         {initial && initial.statut !== "a_voter" && (
           <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
             Résolution déjà votée : corriger le libellé ou le texte garde le résultat ; changer l'objet, l'exercice, la
-            majorité ou la clé l'efface (à recalculer) et retire une approbation des comptes qu'elle avait reportée.
+            majorité ou la clé l'efface (à recalculer) et retire une approbation des comptes qu'elle avait reportée. Les
+            votes saisis sont gardés et comptent au recalcul, sauf si vous cochez la case ci-dessous.
           </p>
+        )}
+        {initial && (
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={effacerVotes} onChange={(e) => setEffacerVotes(e.target.checked)} />
+            Effacer aussi les votes saisis (en séance et par correspondance) : ils seront à ressaisir.
+          </label>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>

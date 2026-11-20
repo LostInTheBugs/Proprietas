@@ -268,11 +268,14 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
 
 
 @router.put("/resolutions/{res_id}", response_model=ResolutionOut)
-def update_resolution(res_id: int, data: ResolutionIn, request: Request, db: Session = Depends(get_db),
-                      user: User = Depends(require_syndic)):
+def update_resolution(res_id: int, data: ResolutionIn, request: Request, effacer_votes: bool = False,
+                      db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     """Correction d'une résolution. Libellé, texte, numéro : le résultat est gardé. Objet, exercice approuvé, majorité
     ou clé : ce qui a été voté n'est plus la même décision — le résultat est effacé (« à voter », à recalculer) et
-    une approbation des comptes reportée par cette résolution est retirée de l'exercice."""
+    une approbation des comptes reportée par cette résolution est retirée de l'exercice. Les votes saisis sont gardés
+    (cas courant : erreur de saisie corrigée, puis recalcul) ; `effacer_votes=true` les supprime, en séance et par
+    correspondance, et remet aussi le résultat à voter (revue de ChatGPT/Codex sur la 2026.11.056, choix de Fred)."""
+    from app.models.ag import VoteCorrespondance
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
     if data.majorite not in MAJORITES:
@@ -282,7 +285,7 @@ def update_resolution(res_id: int, data: ResolutionIn, request: Request, db: Ses
     valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
     valeurs["cle_id"] = _cle_resolution(db, copro, data)
     decisif = any(getattr(r, k) != valeurs[k] for k in ("nature", "exercice_id", "majorite", "cle_id"))
-    if decisif and r.statut != "a_voter":
+    if (decisif or effacer_votes) and r.statut != "a_voter":
         if db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).first():
             raise HTTPException(409, "Cette résolution a un second vote : supprimez-le avant de changer l'objet, l'exercice, "
                                      "la majorité ou la clé.")
@@ -292,8 +295,15 @@ def update_resolution(res_id: int, data: ResolutionIn, request: Request, db: Ses
                 ex.comptes_approuves_le = None
         audit.enregistrer(db, "resolution_modifiee", user=user, copro_id=copro.id, request=request,
                           detail=f"n° {r.numero} « {r.libelle} » : résultat effacé ({r.statut})"
-                                 + (f", approbation des comptes {', '.join(map(str, retirees))} retirée" if retirees else ""))
+                                 + (f", approbation des comptes {', '.join(map(str, retirees))} retirée" if retirees else "")
+                                 + (", votes effacés" if effacer_votes else ""))
         r.statut = "a_voter"
+    elif effacer_votes:
+        audit.enregistrer(db, "resolution_modifiee", user=user, copro_id=copro.id, request=request,
+                          detail=f"n° {r.numero} « {r.libelle} » : votes effacés")
+    if effacer_votes:
+        db.query(Vote).filter(Vote.resolution_id == r.id).delete(synchronize_session=False)
+        db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id == r.id).delete(synchronize_session=False)
     for field, value in valeurs.items():
         setattr(r, field, value)
     db.commit()
