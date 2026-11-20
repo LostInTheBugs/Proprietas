@@ -196,7 +196,14 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
             ))
         if r.texte:
             el.append(Paragraph(r.texte, style("small", textColor=colors.HexColor("#444444"), spaceAfter=2)))
-        resultat = calculer_statut_resolution(r, lots, r.votes)
+        from app.services import cles
+        lots_r, votes_r = cles.votants(db, copro.id, r)
+        resultat = calculer_statut_resolution(r, lots_r, votes_r)
+        if r.cle_id is not None:
+            el.append(Paragraph(
+                f"Dépenses de la clé « {escape(cles.nom(r.cle))} » : seuls les copropriétaires concernés votent, avec "
+                "leurs millièmes de cette clé (loi du 10 juillet 1965, art. 24, dernier alinéa).",
+                style("small", textColor=colors.HexColor("#444444"), spaceAfter=2)))
         maj_label = MAJORITES.get(r.majorite, {}).get("label", r.majorite)
         el.append(Paragraph(
             f"<b>Majorité requise :</b> {maj_label}",
@@ -204,8 +211,8 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
         ))
 
         rows = [[Paragraph("<b>Lot</b>", style("th")), Paragraph("<b>Millièmes</b>", style("th")), Paragraph("<b>Voix</b>", style("th"))]]
-        for lot in lots:
-            v = next((x for x in r.votes if x.lot_id == lot.id), None)
+        for lot in lots_r:
+            v = next((x for x in votes_r if x.lot_id == lot.id), None)
             if v and v.voix == "pour":
                 voix = "<font color='#059669'><b>Pour</b></font>"
             elif v and v.voix == "contre":
@@ -237,13 +244,13 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
             style("normal", fontSize=9.5, spaceBefore=2),
         ))
         if resultat.get("reduction_art22") is not None:
-            somme = sum(l.tantiemes for l in lots)
+            somme = sum(l.tantiemes for l in lots_r)
             el.append(Paragraph(
                 f"Réduction art. 22 al. 2 : les voix du copropriétaire majoritaire sont réduites à la somme "
                 f"des voix des autres — total de référence {resultat['total']} voix (au lieu de {somme}).",
                 style("small", spaceAfter=2),
             ))
-        noms = votants_nommes(r, lots, db)
+        noms = votants_nommes(r, lots_r, db)
         for cle, libelle in listes:
             el.append(Paragraph(
                 f"<b>{libelle} :</b> {_liste_nominative(noms[cle], u)}",

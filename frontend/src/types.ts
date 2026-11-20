@@ -290,6 +290,8 @@ export interface Resolution {
   statut: string;
   second_vote_de_id: number | null;
   amendee?: boolean; // amendée en séance : les votes « pour » par correspondance deviennent défaillants
+  cle_id?: number | null; // seuls les lots de cette clé votent (art. 24, dernier alinéa)
+  cle_nom?: string;
   votes: Vote[];
   resultat: ResolutionResult | null;
 }

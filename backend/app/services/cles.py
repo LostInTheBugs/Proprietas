@@ -143,16 +143,19 @@ def modifier(db: Session, copro_id: int, cle: CleRepartition, data) -> CleRepart
 
 
 def utilisations(db: Session, cle_id: int) -> dict[str, int]:
+    from app.models.ag import Resolution
     return {"lignes_budget": db.query(BudgetLine).filter(BudgetLine.cle_id == cle_id).count(),
             "appels": db.query(AppelFonds).filter(AppelFonds.cle_id == cle_id).count(),
-            "depenses": db.query(Mouvement).filter(Mouvement.cle_id == cle_id).count()}
+            "depenses": db.query(Mouvement).filter(Mouvement.cle_id == cle_id).count(),
+            "resolutions": db.query(Resolution).filter(Resolution.cle_id == cle_id).count()}
 
 
 def supprimer(db: Session, cle: CleRepartition) -> None:
     u = utilisations(db, cle.id)
     if any(u.values()):
         raise HTTPException(409, f"La clé « {cle.nom} » sert encore : {u['lignes_budget']} ligne(s) de budget, "
-                                 f"{u['appels']} appel(s), {u['depenses']} dépense(s). Changez-leur de clé d'abord.")
+                                 f"{u['appels']} appel(s), {u['depenses']} dépense(s), {u['resolutions']} résolution(s). "
+                                 "Changez-leur de clé d'abord.")
     db.delete(cle)
 
 
@@ -167,6 +170,21 @@ def etat(db: Session, copro_id: int) -> list[dict]:
                              for cl in sorted(lignes, key=lambda cl: cl.lot_id)],
                     "utilisations": utilisations(db, c.id)})
     return out
+
+
+def votants(db: Session, copro_id: int, resolution) -> tuple[list, list]:
+    """(lots, votes) d'une résolution. Résolution sur une clé (loi 1965, art. 24, dernier alinéa) : seuls les lots
+    de la clé votent, chacun avec ses millièmes de la clé ; les votes des autres lots ne comptent pas."""
+    votes = list(resolution.votes)
+    if getattr(resolution, "cle_id", None) is None:
+        return db.query(Lot).filter(Lot.copropriete_id == copro_id).all(), votes
+    lots = {l.id: l for l in db.query(Lot).filter(Lot.copropriete_id == copro_id)}
+    concernes = [SimpleNamespace(id=cl.lot_id, tantiemes=cl.tantiemes, numero=lots[cl.lot_id].numero,
+                                 proprietaire_id=lots[cl.lot_id].proprietaire_id)
+                 for cl in db.query(CleLot).filter(CleLot.cle_id == resolution.cle_id, CleLot.tantiemes > 0)
+                 if cl.lot_id in lots]
+    ids = {l.id for l in concernes}
+    return concernes, [v for v in votes if v.lot_id in ids]
 
 
 def total_repartition(parts: dict[int, D]) -> D:
