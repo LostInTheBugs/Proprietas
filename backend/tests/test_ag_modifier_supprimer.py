@@ -65,3 +65,35 @@ def test_droits(client, db, copro_a, syndic_a, token_a, token_b):
     assert client.delete(f"/api/ag/{ag_id}", headers=auth(t)).status_code == 403
     assert client.delete(f"/api/ag/{ag_id}", headers=auth(token_b)).status_code == 404
     assert client.put(f"/api/ag/{ag_id}", json={"date": "2030-01-01"}, headers=auth(token_b)).status_code == 404
+
+
+def test_resolution_adoptee_modifiee(client, db, copro_a, syndic_a, token_a):
+    """Revue de ChatGPT/Codex sur la 2026.11.055 : une approbation adoptée puis transformée en décision ordinaire
+    laissait l'exercice approuvé."""
+    marie, = _immeuble(db, copro_a, syndic_a, [1000])
+    annee = date.today().year - 1
+    ex = client.post("/api/exercices", json={"annee": annee}, headers=auth(token_a)).json()["id"]
+    client.put(f"/api/exercices/{ex}", json={"annee": annee, "cloture": True}, headers=auth(token_a))
+    ag_id = client.post("/api/ag", json={"date": str(date.today() - timedelta(days=1)), "statut": "terminee"},
+                        headers=auth(token_a)).json()["id"]
+    corps = {"libelle": "Comptes", "nature": "approbation_comptes", "exercice_id": ex}
+    rid = client.post(f"/api/ag/{ag_id}/resolutions", json=corps, headers=auth(token_a)).json()["id"]
+    lot = next(l for l in db.get(AG, ag_id).copropriete.lots if l.proprietaire_id == marie.id)
+    client.post(f"/api/resolutions/{rid}/votes", json={"lot_id": lot.id, "voix": "pour"}, headers=auth(token_a))
+    assert client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()["statut"] == "adoptee"
+    # Correction du libellé : le résultat et l'approbation restent.
+    r = client.put(f"/api/resolutions/{rid}", json={**corps, "libelle": "Approbation des comptes"}, headers=auth(token_a))
+    assert r.json()["statut"] == "adoptee"
+    db.expire_all()
+    assert db.get(Exercice, ex).comptes_approuves_le is not None
+    # Transformée en décision ordinaire : résultat effacé, approbation retirée.
+    r = client.put(f"/api/resolutions/{rid}", json={"libelle": "Autre chose", "nature": "autre"}, headers=auth(token_a))
+    assert r.status_code == 200 and r.json()["statut"] == "a_voter"
+    db.expire_all()
+    assert db.get(Exercice, ex).comptes_approuves_le is None
+    assert db.query(AuditLog).filter(AuditLog.action == "resolution_modifiee").count() == 1
+    # Redevenue approbation et recalculée : l'approbation revient.
+    client.put(f"/api/resolutions/{rid}", json=corps, headers=auth(token_a))
+    assert client.post(f"/api/resolutions/{rid}/calculer", headers=auth(token_a)).json()["statut"] == "adoptee"
+    db.expire_all()
+    assert db.get(Exercice, ex).comptes_approuves_le == date.today() - timedelta(days=1)
