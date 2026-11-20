@@ -231,3 +231,13 @@ def vue(db: Session, copro, m: Mutation) -> dict:
 def liste(db: Session, copro) -> list[dict]:
     return [vue(db, copro, m) for m in db.query(Mutation).filter(Mutation.copropriete_id == copro.id)
             .order_by(Mutation.date_acte.desc(), Mutation.id.desc())]
+
+
+def dus_vendeurs(db: Session, copro) -> list[tuple[Mutation, D]]:
+    """Ventes dont le vendeur doit encore quelque chose (impayés de la copropriété, hors décompte des lots)."""
+    out = []
+    for m in db.query(Mutation).filter(Mutation.copropriete_id == copro.id).order_by(Mutation.date_acte):
+        du = compte_vendeur(db, copro, m)["du"]
+        if du > 0:
+            out.append((m, du))
+    return out

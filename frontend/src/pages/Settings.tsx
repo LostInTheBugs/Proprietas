@@ -418,9 +418,11 @@ export default function Settings() {
       {isSyndic && (<Card title="Fonds de travaux">
         <div className="space-y-3">
           <p className="rounded-lg bg-indigo-50 px-3 py-2 text-xs leading-relaxed text-indigo-800">
-            <b>Obligation légale (France)</b> : fonds de travaux obligatoire dès 10 ans après réception des travaux,
-            quel que soit le nombre de lots. Cotisation annuelle minimale : 5 % du budget prévisionnel
-            (ou 2,5 % du plan pluriannuel de travaux + 5 % du budget si PPT voté). Versement sur compte séparé,
+            <b>Obligation légale (France)</b> : fonds de travaux obligatoire dans les immeubles à destination totale
+            ou partielle d'habitation, quel que soit le nombre de lots, passé 10 ans après la réception des travaux de
+            construction (loi du 10 juillet 1965, art. 14-2-1). Cotisation annuelle minimale : 5 % du budget
+            prévisionnel ; si un plan pluriannuel de travaux est adopté, au moins 2,5 % du montant de ses travaux et au
+            moins 5 % du budget (le plus élevé des deux, les taux ne s'additionnent pas). Versement sur compte séparé,
             montant voté chaque année en AG.
           </p>
           <label className="flex items-center gap-2 text-sm text-slate-700">

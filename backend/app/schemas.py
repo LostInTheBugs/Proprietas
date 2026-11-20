@@ -440,6 +440,7 @@ class ExerciceOut(BaseModel):
     annee: int
     cloture: bool = False
     comptes_approuves_le: Optional[date] = None
+    approbation_ag: bool = False      # approbation issue d'une résolution adoptée (sinon : date saisie à la main)
     budget_total: float = 0.0
 
 

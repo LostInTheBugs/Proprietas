@@ -136,6 +136,7 @@ export interface Exercice {
   annee: number;
   cloture: boolean;
   comptes_approuves_le: string | null; // date de l'AG qui a approuvé les comptes (art. 19-2)
+  approbation_ag?: boolean; // approbation issue d'une résolution adoptée (sinon : date saisie à la main)
   budget_total: number;
 }
 

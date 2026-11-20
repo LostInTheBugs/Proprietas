@@ -35,9 +35,21 @@ def get_exercice(db: Session, exercice_id: int, copro) -> Exercice:
 
 
 # ---------- Exercices ----------
+def _approbation_ag(ex: Exercice) -> bool:
+    """L'approbation vient-elle d'une résolution adoptée en AG (sinon : date saisie à la main, par exemple pour un
+    exercice approuvé avant Proprietas) ?"""
+    if ex.comptes_approuves_le is None:
+        return False
+    from sqlalchemy.orm import object_session
+    from app.models.ag import AG, Resolution
+    return object_session(ex).query(Resolution).join(AG, Resolution.ag_id == AG.id).filter(
+        Resolution.exercice_id == ex.id, Resolution.nature == "approbation_comptes",
+        Resolution.statut == "adoptee", AG.date == ex.comptes_approuves_le).first() is not None
+
+
 def _exercice_out(ex: Exercice) -> ExerciceOut:
     return ExerciceOut(id=ex.id, annee=ex.annee, cloture=ex.cloture,
-                       comptes_approuves_le=ex.comptes_approuves_le,
+                       comptes_approuves_le=ex.comptes_approuves_le, approbation_ag=_approbation_ag(ex),
                        budget_total=arrondi(somme(b.montant for b in ex.budget_lines)))
 
 
@@ -77,13 +89,21 @@ def create_exercice(data: ExerciceIn, db: Session = Depends(get_db), user: User 
 
 
 @router.put("/exercices/{exercice_id}", response_model=ExerciceOut)
-def update_exercice(exercice_id: int, data: ExerciceIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+def update_exercice(exercice_id: int, data: ExerciceIn, request: Request, db: Session = Depends(get_db),
+                    user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
     _controler_approbation(data)
+    avant = ex.comptes_approuves_le
     ex.annee = data.annee
     ex.cloture = data.cloture
     ex.comptes_approuves_le = data.comptes_approuves_le
+    if avant != ex.comptes_approuves_le:
+        # Saisie à la main (hors vote d'une résolution) : tracée, et affichée comme telle (approbation_ag).
+        audit.enregistrer(db, "approbation_comptes_saisie", user=user, copro_id=copro.id, request=request,
+                          detail=f"exercice {ex.annee} : "
+                                 + (f"approuvé le {ex.comptes_approuves_le:%d/%m/%Y}" if ex.comptes_approuves_le
+                                    else "approbation retirée"))
     db.commit()
     db.refresh(ex)
     return _exercice_out(ex)
@@ -109,10 +129,16 @@ def get_budget(exercice_id: int, db: Session = Depends(get_db), user: User = Dep
     return ex.budget_lines
 
 
+def _controler_ligne_budget(data: BudgetLineIn) -> None:
+    if data.montant is None or data.montant < 0:
+        raise HTTPException(422, "Le montant d'une ligne de budget ne peut pas être négatif.")
+
+
 @router.post("/exercices/{exercice_id}/budget", response_model=BudgetLineOut)
 def add_budget_line(exercice_id: int, data: BudgetLineIn, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     ex = get_exercice(db, exercice_id, copro)
+    _controler_ligne_budget(data)
     cles.controler(db, copro.id, data.cle_id)
     line = BudgetLine(exercice_id=ex.id, **data.model_dump())
     db.add(line)
@@ -126,6 +152,7 @@ def update_budget_line(line_id: int, data: BudgetLineIn, db: Session = Depends(g
                        user: User = Depends(require_syndic)):
     copro = get_or_create_copro(db, user)
     line = get_owned_via(db, BudgetLine, Exercice, line_id, copro, "exercice_id", label="Ligne")
+    _controler_ligne_budget(data)
     cles.controler(db, copro.id, data.cle_id)
     for champ, valeur in data.model_dump().items():
         setattr(line, champ, valeur)
@@ -176,6 +203,9 @@ def create_appel(exercice_id: int, data: AppelIn, db: Session = Depends(get_db),
     lots = db.query(Lot).filter(Lot.copropriete_id == ex.copropriete_id).all()
     if not lots:
         raise HTTPException(400, "Créez d'abord des lots avec des tantièmes")
+    if data.montant_total is None or data.montant_total <= 0:
+        raise HTTPException(422, "Le montant d'un appel de fonds doit être positif (un trop-perçu se rend par la "
+                                 "régularisation des charges).")
     cles.controler(db, copro.id, data.cle_id)
 
     appel = AppelFonds(
@@ -276,6 +306,10 @@ def _controler_mouvement(db: Session, copro, data: MouvementIn, mouvement=None) 
     (services/avances.py). Renvoie la valeur de `hors_banque`."""
     if data.type not in TYPES_MOUVEMENT:
         raise HTTPException(422, "Type de mouvement inconnu (encaissement ou dépense).")
+    if data.montant is None or data.montant <= 0:
+        # Le sens est donné par le type : un montant négatif fausserait les totaux (encaissement « négatif »
+        # compté comme un encaissement). Un avoir se saisit en encaissement, un remboursement en dépense.
+        raise HTTPException(422, "Le montant doit être positif : le type (encaissement ou dépense) donne le sens.")
     if data.categorie not in CATEGORIES_MOUVEMENT + (avances.CATEGORIE,):
         raise HTTPException(422, f"Catégorie inconnue : {data.categorie}.")
     if data.lot_id is not None and not db.query(Lot).filter(
