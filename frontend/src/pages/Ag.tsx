@@ -754,6 +754,12 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
         {majorite && majorites[majorite] && (
           <p className="text-xs text-slate-500">{majorites[majorite].description}</p>
         )}
+        {initial && initial.statut !== "a_voter" && (
+          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            Résolution déjà votée : corriger le libellé ou le texte garde le résultat ; changer l'objet, l'exercice, la
+            majorité ou la clé l'efface (à recalculer) et retire une approbation des comptes qu'elle avait reportée.
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
           <Button onClick={save}>{initial ? "Enregistrer" : "Ajouter"}</Button>
