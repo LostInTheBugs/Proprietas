@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.045 — 2026-11-20
+
+- Import des lots depuis un tableur (CSV, Excel .xlsx, LibreOffice .ods) : numéro, tantièmes, désignation, type, surface, propriétaire (e-mail) et millièmes des clés de répartition ; vérification avant import, erreurs avec leur ligne, modèle à télécharger (page Lots).
+
 ## 2026.11.044 — 2026-11-19
 
 - Charges spéciales : clés de répartition (bâtiment, ascenseur…) avec leurs millièmes par lot (page Lots) ; une clé par ligne de budget et par dépense commune ; un appel de provisions se partage comme le budget, clé par clé (ou sur une seule clé) ; régularisation et compte de gestion par clé (issue #65). Correctif : PDF d'une copropriété au nom accentué. Migration b4c5d6e7f8a9.

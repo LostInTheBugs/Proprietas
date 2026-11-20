@@ -1,7 +1,7 @@
 {
   "name": "proprietas-frontend",
   "private": true,
-  "version": "2026.11.044",
+  "version": "2026.11.045",
   "type": "module",
   "scripts": {
     "dev": "vite",
