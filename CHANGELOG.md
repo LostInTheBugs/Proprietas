@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.046 — 2026-11-20
+
+- AG annuelle : résolutions types proposées à la création (bureau de séance, comptes, quitus, budget, fonds de travaux, syndic bénévole, conseil syndical, seuils, plan pluriannuel de travaux), avec leur majorité et les montants connus ; bouton « Résolutions types » pour les ajouter ensuite.
+
 ## 2026.11.045 — 2026-11-20
 
 - Import des lots depuis un tableur (CSV, Excel .xlsx, LibreOffice .ods) : numéro, tantièmes, désignation, type, surface, propriétaire (e-mail) et millièmes des clés de répartition ; vérification avant import, erreurs avec leur ligne, modèle à télécharger (page Lots).
