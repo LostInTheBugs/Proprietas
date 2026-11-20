@@ -38,6 +38,9 @@ class Mouvement(Base):
     rappel_retard_le = Column(DateTime, nullable=True)
     # Rapprochement bancaire (services/releves.py) : ligne du relevé où la banque montre cette opération.
     releve_ligne_id = Column(Integer, ForeignKey("releve_lignes.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Vente d'un lot (services/mutations.py) : encaissement du solde dû par le vendeur, reçu après la vente
+    # (en général du notaire) ; il entre au compte du vendeur, pas dans le décompte de l'acquéreur.
+    mutation_id = Column(Integer, ForeignKey("mutations.id", ondelete="SET NULL"), nullable=True, index=True)
 
     copropriete = relationship("Copropriete")
     exercice = relationship("Exercice", back_populates="mouvements")

@@ -50,7 +50,7 @@ se créer normalement depuis la page de connexion.
   « loué » ou « vacant » — déclarée lot par lot par son propriétaire dans Réglages →
   Mes lots ; aucun nom de locataire enregistré, RGPD)
 - **Comptabilité simplifiée** : budget prévisionnel, appels de fonds automatiques par tantièmes,
-  encaissements / dépenses, solde par lot, état daté, quittances
+  encaissements / dépenses, solde par lot, quittances
 - **Charges spéciales** (loi du 10 juillet 1965, art. 10) : **clés de répartition** (bâtiment, escalier,
   ascenseur, garages…) avec leurs propres millièmes par lot (page Lots) ; une clé par ligne de budget et par
   dépense commune ; un appel de provisions se partage comme le budget, chaque part par sa clé (ou sur une
@@ -76,6 +76,12 @@ se créer normalement depuis la page de connexion.
   la date du relevé) ; un bouton valide d'un coup les propositions sûres. Ligne sans équivalent : créer la dépense
   ou l'encaissement, ou le paiement d'un copropriétaire, depuis la ligne ; ou la mettre de côté. Opérations
   saisies absentes du relevé signalées. Pas de connexion directe à la banque (agrément DSP2) : l'export suffit
+- **Vente d'un lot** (page Lots, syndic) : le lot et ses annexes passent à l'acquéreur à la date de l'acte ;
+  **coupure du décompte** (décret du 17 mars 1967, art. 6-2) : appels exigibles et paiements reçus jusqu'à la
+  vente restent au **compte du vendeur**, le décompte de l'acquéreur repart de zéro (la régularisation des comptes
+  approuvés après la vente lui revient) ; solde du vendeur encaissé après la vente (notaire) porté à son compte ;
+  suivi de la notification (art. 6) et de l'avis de mutation, avec l'échéance de l'opposition (15 jours, loi du
+  10 juillet 1965, art. 20) ; une vente saisie par erreur s'annule
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
 - **Recouvrement des impayés** : décompte détaillé par provision (imputation FIFO, échu / à
   échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,
