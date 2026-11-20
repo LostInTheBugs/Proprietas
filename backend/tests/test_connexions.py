@@ -26,7 +26,7 @@ def _essai(client, email, mdp):
     """Une tentative depuis une IP différente à chaque fois : le limiteur par (e-mail, IP) n'intervient pas."""
     _n[0] += 1
     return client.post("/api/auth/login", json={"email": email, "password": mdp},
-                       headers={"cf-connecting-ip": f"203.0.113.{_n[0] % 250 + 1}"})
+                       headers={"x-forwarded-for": f"203.0.113.{_n[0] % 250 + 1}"})
 
 
 def _actions(db, user):

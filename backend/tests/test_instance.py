@@ -49,8 +49,8 @@ def test_instance_maj_et_validation(client, db, copro_a, syndic_a, token_a):
 
 
 def test_detection_premiere_requete_externe(client, db, copro_a, syndic_a, token_a):
-    # Requête « depuis internet » : IP publique dans CF-Connecting-IP
-    r = client.get("/api/health", headers={"cf-connecting-ip": "93.184.216.34"})
+    # Requête « depuis internet » : arrivée par Cloudflare (adresse de Cloudflare transmise par le proxy local)
+    r = client.get("/api/health", headers={"x-forwarded-for": "162.158.10.1", "cf-connecting-ip": "93.184.216.34"})
     assert r.status_code == 200
     d = client.get("/api/instance", headers=auth(token_a)).json()
     assert d["first_external_at"] is not None
@@ -58,7 +58,7 @@ def test_detection_premiere_requete_externe(client, db, copro_a, syndic_a, token
 
 
 def test_detection_ignoree_en_interne(client, db, copro_a, syndic_a, token_a):
-    client.get("/api/health", headers={"cf-connecting-ip": "192.168.1.10"})
+    client.get("/api/health", headers={"x-forwarded-for": "192.168.1.10"})
     d = client.get("/api/instance", headers=auth(token_a)).json()
     assert d["first_external_at"] is None
 
