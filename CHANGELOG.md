@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.052 — 2026-11-20
+
+- Comptes : annexes comptables 1 à 5 en PDF pour l'approbation des comptes (état financier, compte de gestion général, opérations courantes par catégorie, travaux, opérations non clôturées) ; catégorie de charges sur chaque ligne de budget.
+
 ## 2026.11.051 — 2026-11-20
 
 - AG : vote par correspondance — formulaires à joindre à la convocation, saisie des formulaires reçus (trois jours francs avant l'AG), abstention ou case vide comptée contre, « pour » sur une résolution amendée en séance compté défaillant, formulaire écarté si le copropriétaire est présent ou représenté ; feuille de présence et PV.
