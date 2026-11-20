@@ -7,7 +7,7 @@ import { Badge, Button, Card, Input, Modal, Select } from "./ui";
 /** Vente d'un lot (mutation) : lots transférés à l'acquéreur, compte du vendeur arrêté à la date de l'acte
  * (décret 1967, art. 6-2), suivi de la notification (art. 6) et de l'avis de mutation (loi 1965, art. 20). */
 
-interface Vente {
+export interface Vente {
   id: number; lot_id: number; lots: string; date_acte: string; vendeur_nom: string; acquereur_nom: string;
   notaire: string; notifiee_le: string | null; avis_mutation_le: string | null; opposition_le: string | null;
   opposition_avant_le: string | null; notes: string; derniere: boolean;
@@ -73,6 +73,10 @@ export function VentesCard({ lots, comptes, onChange, onError }: {
                 )}
                 <div className="flex flex-wrap gap-1">
                   <Button variant="ghost" className="text-xs" onClick={() => setModal({ vente: v })}>Suivi</Button>
+                  {c.du > 0 && (
+                    <a className="rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                      href={`/api/mutations/${v.id}/opposition.pdf`}>Projet d'opposition (PDF)</a>
+                  )}
                   {c.du > 0 && <Button variant="ghost" className="text-xs" onClick={() => setEncaisser(v)}>Encaisser le solde du vendeur</Button>}
                   {v.derniere && <Button variant="ghost" className="text-xs" onClick={() => annuler(v)}>Annuler la vente</Button>}
                 </div>
@@ -81,6 +85,7 @@ export function VentesCard({ lots, comptes, onChange, onError }: {
           })}
         </ul>
       )}
+      <DocumentsVente lots={lots} />
       {modal && (
         <VenteModal vente={modal.vente} lots={lots} comptes={comptes} onClose={() => setModal(null)}
           onSaved={() => { setModal(null); apres(); }} onError={onError} />
@@ -183,5 +188,69 @@ function EncaissementModal({ vente, onClose, onSaved, onError }: {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Avant la vente : pré-état daté (promesse) et état daté (notaire), situation arrêtée à une date. */
+function DocumentsVente({ lots }: { lots: Lot[] }) {
+  const vendables = lots.filter((l) => l.proprietaire_id != null && !l.lot_principal_id);
+  const [lotId, setLotId] = useState("");
+  const [jour, setJour] = useState(new Date().toISOString().slice(0, 10));
+  const [procedures, setProcedures] = useState("");
+  const q = `lot_id=${lotId}&jour=${jour}`;
+  const lien = "rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50";
+  return (
+    <div className="mt-4 space-y-2 border-t border-slate-100 pt-3 text-sm">
+      <p className="font-medium text-slate-700">Documents pour une vente en préparation</p>
+      <p className="text-xs text-slate-500">
+        Pré-état daté : informations financières à joindre à la promesse de vente (CCH, art. L721-2). État daté : demandé
+        par le notaire avant l'acte (décret du 17 mars 1967, art. 5 ; 380 € TTC au plus, à la charge du vendeur).
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Select label="Lot" value={lotId} onChange={(e) => setLotId(e.target.value)} className="w-56">
+          <option value="">— Choisir —</option>
+          {vendables.map((l) => <option key={l.id} value={l.id}>Lot {l.numero} — {l.proprietaire_nom || "?"}</option>)}
+        </Select>
+        <Input label="Situation au" type="date" value={jour} onChange={(e) => setJour(e.target.value)} />
+      </div>
+      <Input label="Procédures en cours (état daté, facultatif)" value={procedures} onChange={(e) => setProcedures(e.target.value)}
+        placeholder="Aucune procédure judiciaire en cours connue du syndic où le syndicat est partie." />
+      {lotId && (
+        <div className="flex flex-wrap gap-2">
+          <a className={lien} href={`/api/mutations/documents/pre-etat-date.pdf?${q}`}>Pré-état daté (PDF)</a>
+          <a className={lien} href={`/api/mutations/documents/etat-date.pdf?${q}&procedures=${encodeURIComponent(procedures)}`}>
+            État daté (PDF)
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Page Recouvrement : ce que doivent encore les vendeurs de lots (compte arrêté à la vente). */
+export function VendeursCard() {
+  const [ventes, setVentes] = useState<Vente[]>([]);
+  useEffect(() => { api.get<Vente[]>("/mutations").then(setVentes).catch(() => {}); }, []);
+  const dues = ventes.filter((v) => v.compte_vendeur.du > 0);
+  if (dues.length === 0) return null;
+  return (
+    <Card title="Anciens propriétaires (lots vendus)">
+      <p className="mb-2 text-xs text-slate-500">
+        Sommes exigibles avant la vente et toujours dues : elles ne figurent plus au décompte des lots (celui de
+        l'acquéreur). Encaissement et projet d'opposition : page Lots, « Ventes de lots ».
+      </p>
+      <ul className="divide-y divide-slate-100 text-sm">
+        {dues.map((v) => (
+          <li key={v.id} className="flex flex-wrap items-center gap-2 py-1.5">
+            <span className="font-medium text-slate-800">{v.vendeur_nom}</span>
+            <span className="text-slate-600">{v.lots}, vendu le {fmtDate(v.date_acte)}</span>
+            <span className="ml-auto font-semibold tabular-nums text-red-700">{fmtEUR(v.compte_vendeur.du)}</span>
+            {v.opposition_avant_le && !v.opposition_le && (
+              <Badge color="red">opposition avant le {fmtDate(v.opposition_avant_le)}</Badge>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

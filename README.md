@@ -81,7 +81,11 @@ se créer normalement depuis la page de connexion.
   vente restent au **compte du vendeur**, le décompte de l'acquéreur repart de zéro (la régularisation des comptes
   approuvés après la vente lui revient) ; solde du vendeur encaissé après la vente (notaire) porté à son compte ;
   suivi de la notification (art. 6) et de l'avis de mutation, avec l'échéance de l'opposition (15 jours, loi du
-  10 juillet 1965, art. 20) ; une vente saisie par erreur s'annule
+  10 juillet 1965, art. 20) ; une vente saisie par erreur s'annule. Documents en PDF : **pré-état daté**
+  (informations financières de l'art. L721-2 du CCH, pour la promesse), **état daté** (décret de 1967, art. 5 :
+  dû par le vendeur, dû au vendeur, à la charge de l'acquéreur, annexe des deux exercices précédents) et **projet
+  d'opposition** (montant et causes, par catégorie de l'art. 5-1) ; les vendeurs qui doivent encore apparaissent
+  dans Recouvrement et dans les impayés du compte de gestion
 - **Fonds de travaux** : taux configurable (min. légal 5 %), suivi dédié
 - **Recouvrement des impayés** : décompte détaillé par provision (imputation FIFO, échu / à
   échoir), relances email, **mise en demeure générée** (PDF), suivi du délai de 30 jours,
