@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026.11.049 — 2026-11-20
+
+- Montants : une opération et un appel de fonds ont un montant positif, une ligne de budget n'est jamais négative.
+- Compte de gestion : annexe par lot limitée à l'exercice ; impayés des vendeurs de lots inclus (aussi dans le rapport annuel).
+- Sécurité : l'adresse IP du client (journal, limitation des connexions) ne se falsifie plus par un en-tête.
+- Approbation des comptes saisie à la main : tracée au journal et signalée comme telle.
+- Fonds de travaux : texte de l'obligation légale précisé (art. 14-2-1).
+
 ## 2026.11.048 — 2026-11-20
 
 - Vente d'un lot : transfert du lot et de ses annexes à l'acquéreur, coupure du décompte à la date de l'acte (décret 1967, art. 6-2) avec le compte du vendeur arrêté à cette date, encaissement de son solde après la vente, suivi de la notification et de l'avis de mutation (opposition sous 15 jours), annulation de la dernière vente.
