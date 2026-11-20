@@ -109,6 +109,13 @@ export default function Comptes() {
                 📑 Rapport annuel (PDF)
               </a>
               <a
+                href={`/api/export/annexes-comptables/${exId}`}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+                title="Annexes 1 à 5 des comptes du syndicat (décret du 14 mars 2005) pour l'approbation des comptes"
+              >
+                📑 Annexes comptables (PDF)
+              </a>
+              <a
                 href={`/api/export/compte-gestion?exercice_id=${exId}`}
                 className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
                 title="Grand livre comptable de l'exercice au format CSV (Excel)"
@@ -497,16 +504,24 @@ function ExerciceModal({ onClose, onSaved, onError }: { onClose: () => void; onS
   );
 }
 
+/** Groupes de charges des annexes comptables (mêmes catégories que les dépenses). */
+const GROUPES_CHARGES: [string, string][] = [
+  ["energie", "Eau, électricité, chauffage"], ["entretien", "Nettoyage, maintenance, entretien"],
+  ["assurance", "Assurances"], ["charges", "Administration, honoraires, impôts et autres charges courantes"],
+  ["autre", "Autres charges (frais financiers, divers)"],
+];
+
 function BudgetModal({ exId, cles, initial, onClose, onSaved, onError }: {
   exId: number; cles: Cle[]; initial?: BudgetLine; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
 }) {
   const [libelle, setLibelle] = useState(initial?.libelle ?? "");
   const [montant, setMontant] = useState(initial ? String(initial.montant) : "");
   const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
+  const [categorie, setCategorie] = useState(initial?.categorie ?? "charges");
   async function save() {
     try {
       const corps = { libelle, montant: Number(montant), type_repartition: initial?.type_repartition ?? "generale",
-        cle_id: cleId === "" ? null : Number(cleId) };
+        cle_id: cleId === "" ? null : Number(cleId), categorie };
       if (initial) await api.put(`/budget/${initial.id}`, corps);
       else await api.post(`/exercices/${exId}/budget`, corps);
       onSaved();
@@ -517,6 +532,9 @@ function BudgetModal({ exId, cles, initial, onClose, onSaved, onError }: {
       <div className="space-y-3">
         <Input label="Poste" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Entretien courant" />
         <Input label="Montant (€)" type="number" step="0.01" value={montant} onChange={(e) => setMontant(e.target.value)} />
+        <Select label="Catégorie de charges (annexes comptables)" value={categorie} onChange={(e) => setCategorie(e.target.value)}>
+          {GROUPES_CHARGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </Select>
         {cles.length > 0 && (
           <Select label="Répartition" value={cleId} onChange={(e) => setCleId(e.target.value)}>
             <OptionsCles cles={cles} />

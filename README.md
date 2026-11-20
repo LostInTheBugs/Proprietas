@@ -119,7 +119,10 @@ se créer normalement depuis la page de connexion.
   renouvellement automatique, fournisseur lié, **échéances suivies automatiquement**
   (alertes J-60, badges Expiré / Expire bientôt, tri par urgence)
 - **Carnet d'entretien** : interventions, prestataires, coûts
-- **Exports** : registre des copropriétés, compte de gestion annuel
+- **Exports** : registre des copropriétés, compte de gestion annuel, **annexes comptables** 1 à 5 pour l'approbation
+  des comptes (décret n° 2005-240 et arrêté du 14 mars 2005 : état financier, compte de gestion général, opérations
+  courantes par catégorie — réalisé N-1, budget N, réalisé N, budget N+1 —, travaux et opérations exceptionnelles,
+  opérations non clôturées), tirées de la comptabilité de trésorerie ; chaque ligne de budget a sa catégorie de charges
 - **Multi-copropriétés** : un compte, plusieurs immeubles isolés, vue consolidée
 - **Import des lots** depuis un tableur (CSV, Excel .xlsx, LibreOffice .ods) : numéro, tantièmes, désignation,
   type, surface, propriétaire (e-mail d'un compte) et millièmes de chaque clé de répartition (colonnes « clé :

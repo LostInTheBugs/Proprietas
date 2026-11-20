@@ -132,6 +132,9 @@ def get_budget(exercice_id: int, db: Session = Depends(get_db), user: User = Dep
 def _controler_ligne_budget(data: BudgetLineIn) -> None:
     if data.montant is None or data.montant < 0:
         raise HTTPException(422, "Le montant d'une ligne de budget ne peut pas être négatif.")
+    from app.services.annexes_comptables import GROUPES
+    if data.categorie not in GROUPES:
+        raise HTTPException(422, f"Catégorie de charges inconnue : {data.categorie}.")
 
 
 @router.post("/exercices/{exercice_id}/budget", response_model=BudgetLineOut)

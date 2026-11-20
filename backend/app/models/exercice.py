@@ -31,5 +31,8 @@ class BudgetLine(Base):
     type_repartition = Column(String, default="generale")
     # Clé de répartition (charges spéciales, services/cles.py) ; NULL : charges générales.
     cle_id = Column(Integer, ForeignKey("cles_repartition.id"), nullable=True)
+    # Groupe de charges des annexes comptables (services/annexes_comptables.py) : mêmes catégories que les
+    # dépenses (énergie, entretien, assurance, charges, autre), pour comparer budget et réalisé.
+    categorie = Column(String, nullable=False, default="charges", server_default="charges")
 
     exercice = relationship("Exercice", back_populates="budget_lines")
