@@ -34,7 +34,7 @@ jobs:
           python-version: "3.11"
       - name: Outils
         run: pip install ruff pip-audit
-      - name: ruff (erreurs graves seulement : syntaxe, noms indéfinis)
+      - name: "ruff (erreurs graves seulement : syntaxe, noms indéfinis)"
         run: ruff check --select E9,F63,F7,F82 backend deploy
       - name: pip-audit (failles connues des dépendances Python)
         run: pip-audit -r backend/requirements.txt --progress-spinner off
