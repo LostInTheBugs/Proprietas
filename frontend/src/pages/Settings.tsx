@@ -205,6 +205,19 @@ export default function Settings() {
     }
   }
 
+  async function saveJitsi() {
+    if (!copro) return;
+    setSaved(false);
+    setError("");
+    try {
+      const r = await api.put<Copro>("/copro", { jitsi_url: copro.jitsi_url ?? "" });
+      setCopro({ ...copro, jitsi_url: r.jitsi_url });
+      setSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur");
+    }
+  }
+
   async function testSmtp() {
     if (!copro) return;
     setSmtpBusy(true);
@@ -412,6 +425,19 @@ export default function Settings() {
           />
           <Input label="Compte bancaire séparé (syndicat)" value={copro.compte_bancaire_separe} onChange={(e) => setCopro({ ...copro, compte_bancaire_separe: e.target.value })} placeholder="IBAN / référence" />
           {isSyndic && <Button onClick={saveCopro}>Enregistrer</Button>}
+        </div>
+      </Card>)}
+
+      {isSyndic && (<Card title="Réunion en ligne">
+        <div className="space-y-3">
+          <Input label="Serveur Jitsi (facultatif)" value={copro.jitsi_url ?? ""} placeholder="https://meet.jit.si (par défaut)"
+            onChange={(e) => setCopro({ ...copro, jitsi_url: e.target.value })} />
+          <p className="text-xs text-slate-500">
+            Serveur des salles créées par le bouton « Créer une salle Jitsi » d'une AG. Vide : meet.jit.si, le service public
+            de Jitsi (ou le serveur réglé pour l'instance). Pour installer votre propre serveur, voir docs/jitsi.md (profil
+            « jitsi » de docker-compose, éteint par défaut).
+          </p>
+          <Button onClick={saveJitsi}>Enregistrer</Button>
         </div>
       </Card>)}
 

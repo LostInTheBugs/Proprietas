@@ -39,6 +39,7 @@ export interface Copro {
   // smtp_password absent : le backend ne renvoie jamais le secret
   email_expediteur: string;
   frontend_url: string;
+  jitsi_url?: string; // réunion en ligne : serveur Jitsi de la copropriété (vide : celui de l'instance)
   relance_auto: boolean;
   relance_frequence: string;
   relance_jour: number;

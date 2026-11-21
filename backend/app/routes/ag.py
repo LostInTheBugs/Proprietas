@@ -424,12 +424,13 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
 # ---------- Réunion en ligne ----------
 @router.post("/ag/{ag_id}/lien-jitsi", response_model=AGOut)
 def lien_jitsi(ag_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
-    """Crée (ou remplace) le lien de visioconférence de l'AG : une salle Jitsi au nom difficile à deviner,
-    sur le serveur réglé pour l'instance (COPRO_JITSI_URL, meet.jit.si par défaut)."""
+    """Crée (ou remplace) le lien de visioconférence de l'AG : une salle Jitsi au nom difficile à deviner, sur le
+    serveur de la copropriété (Réglages), sinon celui de l'instance (COPRO_JITSI_URL, meet.jit.si par défaut)."""
     from app.core.config import get_settings
     copro = get_or_create_copro(db, user)
     ag = get_owned(db, AG, ag_id, copro, label="AG")
-    ag.lien_visio = f"{get_settings().jitsi_url.rstrip('/')}/Proprietas-{secrets.token_hex(12)}"
+    serveur = (copro.jitsi_url or get_settings().jitsi_url).rstrip("/")
+    ag.lien_visio = f"{serveur}/Proprietas-{secrets.token_hex(12)}"
     audit.enregistrer(db, "ag_lien_visio", user=user, copro_id=copro.id, request=request,
                       detail=f"AG du {ag.date:%d/%m/%Y} : lien Jitsi créé")
     db.commit()

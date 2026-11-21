@@ -214,6 +214,7 @@ class CoproOut(BaseModel):
     # (chiffré en base : core.crypto.TexteChiffre)
     email_expediteur: str = ""
     frontend_url: str = ""
+    jitsi_url: str = ""
     relance_auto: bool = False
     relance_frequence: str = "hebdo"
     relance_jour: int = 1
@@ -285,6 +286,18 @@ class CoproUpdate(BaseModel):
     verrouillage_seuil_definitif: Optional[int] = Field(None, ge=0, le=1000)   # 0 : jamais
     verrouillage_avec_2fa: Optional[bool] = None
     notes: Optional[str] = None
+    # Serveur Jitsi des réunions en ligne : https://…, ou vide (serveur de l'instance).
+    jitsi_url: Optional[str] = None
+
+    @field_validator("jitsi_url")
+    @classmethod
+    def _jitsi_ok(cls, v):
+        if v is None:
+            return v
+        v = v.strip().rstrip("/")
+        if v and (not v.startswith("https://") or len(v) > 200 or any(c.isspace() for c in v) or v == "https:/"):
+            raise ValueError("Serveur Jitsi : une adresse https:// (200 caractères au plus), ou rien")
+        return v
 
     @field_validator("totp_policy")
     @classmethod
