@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.066 — 2026-11-22
+
+- Supervision : relevés toutes les 5 minutes (processeur, mémoire, disque, requêtes, erreurs, temps de réponse), gardés 7 jours ; carte « État du serveur » dans Réglages → Serveur.
+
 ## 2026.11.065 — 2026-11-22
 
 - Documents : le contenu doit correspondre à l'extension (un exécutable renommé en .pdf est refusé). Diagnostic : contrôle de la clé secrète et rappel de sauvegarder le `.env`.
