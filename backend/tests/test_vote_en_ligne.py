@@ -12,7 +12,7 @@ from app.core.security import create_access_token
 from app.models.ag import AG, Vote
 from app.models.audit import AuditLog
 from tests.conftest import auth
-from tests.test_ag_presences import _immeuble, _repondre
+from tests.test_ag_presences import _immeuble
 
 
 def _ag_du_jour(client, token, lien=True):
@@ -31,6 +31,13 @@ def _res(client, token, ag_id, libelle="Ravalement", **extra):
     return r.json()["id"]
 
 
+def _presence(client, token, ag_id, u, reponse, mandataire_id=None):
+    """Présence saisie par le syndic : l'AG du jour peut déjà être ouverte (réponses en ligne closes)."""
+    r = client.put(f"/api/ag/{ag_id}/presences/{u.id}", json={"reponse": reponse, "mandataire_id": mandataire_id},
+                   headers=auth(token))
+    assert r.status_code == 200, r.text
+
+
 def _tok(u, copro):
     return create_access_token(u.id, copro.id)
 
@@ -40,9 +47,9 @@ def test_vote_en_direct(client, db, copro_a, syndic_a, token_a):
     ag_id = _ag_du_jour(client, token_a)
     r1 = _res(client, token_a, ag_id)
     r2 = _res(client, token_a, ag_id, "Interphone")
-    _repondre(client, ag_id, marie, copro_a, reponse="visio")
-    _repondre(client, ag_id, paul, copro_a, reponse="present")
-    _repondre(client, ag_id, jean, copro_a, reponse="absent")
+    _presence(client, token_a, ag_id, marie, "visio")
+    _presence(client, token_a, ag_id, paul, "present")
+    _presence(client, token_a, ag_id, jean, "absent")
     url = f"/api/ag/{ag_id}/vote-en-ligne"
     # Rien d'ouvert : on ne vote pas.
     assert client.get(url, headers=auth(_tok(marie, copro_a))).json()["resolution"] is None
@@ -84,8 +91,8 @@ def test_vote_en_direct(client, db, copro_a, syndic_a, token_a):
 def test_pouvoirs_et_cle(client, db, copro_a, syndic_a, token_a):
     marie, paul, anne = _immeuble(db, copro_a, syndic_a, [300, 300, 300])
     ag_id = _ag_du_jour(client, token_a, lien=False)
-    _repondre(client, ag_id, marie, copro_a, reponse="present")
-    _repondre(client, ag_id, anne, copro_a, reponse="pouvoir", mandataire_id=marie.id)
+    _presence(client, token_a, ag_id, marie, "present")
+    _presence(client, token_a, ag_id, anne, "pouvoir", marie.id)
     r1 = _res(client, token_a, ag_id)
     client.post(f"/api/resolutions/{r1}/vote-en-ligne/ouvrir", headers=auth(token_a))
     t_marie = _tok(marie, copro_a)
