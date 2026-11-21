@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.059 — 2026-11-21
+
+- AG : réunion en ligne ; lien de visioconférence (ou salle Jitsi créée en un clic) dans l'e-mail d'information ; réponse « en visioconférence », comptée présente sur la feuille de présence et le PV.
+
 ## 2026.11.058 — 2026-11-21
 
 - AG : mandats du syndic bénévole et du conseil syndical (durée, échéance, AG d'origine) ; enregistrés par la résolution adoptée ou saisis à la main ; alerte six mois avant la fin.
