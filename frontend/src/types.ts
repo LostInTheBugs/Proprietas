@@ -295,6 +295,7 @@ export interface Resolution {
   cle_nom?: string;
   mandat_mois?: number | null; // désignation du syndic / élection du conseil : durée (36 mois au plus)
   mandat_personnes?: number[] | null; // comptes désignés ; adoptée, la résolution enregistre le mandat
+  vote_en_ligne?: string; // "" | ouvert | clos : vote en direct pendant l'AG
   votes: Vote[];
   resultat: ResolutionResult | null;
 }

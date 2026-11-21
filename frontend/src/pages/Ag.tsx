@@ -9,6 +9,14 @@ import { CorrespondanceSyndic, MaReponseAg, PresencesSyndic } from "../component
 import { ListeModele, ResolutionsTypesModal, useModele } from "../components/ResolutionsTypes";
 import { useCles } from "../components/Cles";
 import { MandatsCard, useMandats } from "../components/Mandats";
+import { BoutonVoteEnLigne, VoteEnDirect } from "../components/VoteEnDirect";
+
+/** Séance : l'AG a lieu aujourd'hui ou a eu lieu (vote en ligne possible), hors consultation écrite. */
+function enSeance(ag: AG) {
+  const d = new Date();
+  const aujourdhui = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return ag.type_ag !== "consultation_ecrite" && ag.date <= aujourdhui;
+}
 export default function Ag() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
@@ -116,6 +124,7 @@ export default function Ag() {
                 <div className="space-y-4">
                   {ag.resolutions.map((r) => (
                     <ResolutionCard key={r.id} r={r} lots={lots} total={total} majorites={majorites} isSyndic={isSyndic}
+                      seance={enSeance(ag)}
                       aUnSecondVote={ag.resolutions.some((x) => x.second_vote_de_id === r.id)}
                       onEdit={() => setModal({ type: "resolution", agId: ag.id, resolution: r })}
                       onChanged={load} onError={setError} />
@@ -250,12 +259,14 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
     return ag.type_ag !== "consultation_ecrite" ? (
       <div className="space-y-4 border-t border-slate-100 pt-4">
         <Visio ag={ag} isSyndic={false} onAgChanged={onAgChanged} onError={onError} />
+        <VoteEnDirect agId={agId} seance={enSeance(ag)} onError={onError} />
         <MaReponseAg agId={agId} visio={!!ag.lien_visio} onError={onError} />
       </div>) : null;
 
   return (
     <div className="space-y-4 border-t border-slate-100 pt-4">
       {ag.type_ag !== "consultation_ecrite" && <Visio ag={ag} isSyndic={isSyndic} onAgChanged={onAgChanged} onError={onError} />}
+      <VoteEnDirect agId={agId} seance={enSeance(ag)} onError={onError} />
       {/* Sondage de dates */}
       {creneaux.length > 0 && (
         <div>
@@ -466,9 +477,9 @@ function CreneauModal({ agId, onClose, onSaved, onError }: {
   );
 }
 
-function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, onEdit, onChanged, onError }: {
+function ResolutionCard({ r, lots, total, majorites, isSyndic, seance, aUnSecondVote, onEdit, onChanged, onError }: {
   r: Resolution; lots: Lot[]; total: number; majorites: Record<string, Majorite>;
-  isSyndic: boolean; aUnSecondVote: boolean; onEdit: () => void; onChanged: () => void; onError: (e: string) => void;
+  isSyndic: boolean; seance: boolean; aUnSecondVote: boolean; onEdit: () => void; onChanged: () => void; onError: (e: string) => void;
 }) {
   async function supprimer() {
     if (!confirm(`Supprimer la résolution n° ${r.numero} « ${r.libelle} » et ses votes ?`)) return;
@@ -527,6 +538,10 @@ function ResolutionCard({ r, lots, total, majorites, isSyndic, aUnSecondVote, on
         <div className="flex items-center gap-2">
           {r.second_vote_de_id !== null && <Badge color="indigo">Second vote</Badge>}
           {r.amendee && <Badge color="amber">Amendée en séance</Badge>}
+          {r.vote_en_ligne === "ouvert" && <Badge color="indigo">Vote en ligne ouvert</Badge>}
+          {isSyndic && seance && (
+            <BoutonVoteEnLigne resolutionId={r.id} etat={r.vote_en_ligne ?? ""} onChanged={onChanged} onError={onError} />
+          )}
           {r.cle_id != null && <Badge color="indigo">Clé : {r.cle_nom || cle?.nom || "?"}</Badge>}
           {r.statut === "a_voter" && <Badge color="amber">À voter</Badge>}
           {r.statut === "adoptee" && <Badge color="green">Adoptée</Badge>}
