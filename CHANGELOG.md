@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.061 — 2026-11-21
+
+- AG : vote en direct en ligne ; le syndic ouvre puis clôt le vote de chaque résolution, les présents et les participants en visio votent depuis leur compte (pouvoirs compris), décompte en direct.
+
 ## 2026.11.060 — 2026-11-21
 
 - Réunion en ligne : serveur Jitsi propre en option (réglage de la copropriété ; profil docker-compose « jitsi », éteint par défaut ; docs/jitsi.md).
