@@ -150,7 +150,9 @@ def generer_pv_pdf(copro, ag, db) -> BytesIO:
         tot = etat["totaux"]
         el.append(Paragraph("PRÉSENCE", style("section")))
         el.append(Paragraph(
-            f"{tot['presents']} copropriétaire(s) présent(s) et {tot['representes']} représenté(s), totalisant "
+            f"{tot['presents']} copropriétaire(s) présent(s)"
+            + (f", dont {tot['visio']} par visioconférence," if tot.get("visio") else "")
+            + f" et {tot['representes']} représenté(s), totalisant "
             f"{tot['voix_presentes_ou_representees']:g} ‰ des voix (feuille de présence)"
             + (f" ; {tot['correspondances']} copropriétaire(s) ont voté par correspondance "
                f"({tot['voix_correspondance']:g} ‰)" if tot.get("correspondances") else "") + ".",

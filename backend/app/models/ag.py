@@ -16,6 +16,8 @@ class AG(Base):
     # Rappel automatique de la convocation (cron)
     rappel_jours = Column(Integer, default=21)  # e-mail d'information auto N jours avant (0 = désactivé)
     convocation_envoyee = Column(Boolean, default=False)  # déjà convoquée (manuelle ou auto)
+    # Réunion en ligne (loi n° 65-557, art. 17-1 A) : lien https de la visioconférence (Teams, Zoom, Jitsi…).
+    lien_visio = Column(String, nullable=False, default="", server_default="")
 
     copropriete = relationship("Copropriete", back_populates="ags")
     resolutions = relationship("Resolution", back_populates="ag", cascade="all, delete-orphan")

@@ -799,6 +799,16 @@ class AGIn(BaseModel):
     # Envoi automatique de l'E-MAIL D'INFORMATION N jours avant l'AG (0 = désactivé).
     # 0 ou au moins 21 : délai de convocation de l'art. 9 du décret n° 67-223.
     rappel_jours: int = DELAI_CONVOCATION_JOURS
+    # Réunion en ligne : lien https de la visioconférence, ou vide.
+    lien_visio: str = ""
+
+    @field_validator("lien_visio")
+    @classmethod
+    def _lien_visio_ok(cls, v):
+        v = (v or "").strip()
+        if v and (not v.startswith("https://") or len(v) > 500 or any(c.isspace() for c in v)):
+            raise ValueError("Lien de visioconférence : une adresse https:// (500 caractères au plus), ou rien")
+        return v
 
     @field_validator("type_ag")
     @classmethod
@@ -899,6 +909,7 @@ class AGOut(BaseModel):
     notes: str = ""
     rappel_jours: int = DELAI_CONVOCATION_JOURS
     convocation_envoyee: bool = False
+    lien_visio: str = ""
     resolutions: List[ResolutionOut] = []
 
 
@@ -1447,7 +1458,7 @@ class AvancePersonneOut(BaseModel):
 
 # ---------- AG : présence et pouvoirs (services/presences.py) ----------
 class ReponseAgIn(BaseModel):
-    reponse: str                          # present | pouvoir | absent | incertain
+    reponse: str                          # present | visio | pouvoir | absent | incertain
     mandataire_id: Optional[int] = None   # pouvoir : copropriétaire qui représente
 
 
@@ -1481,6 +1492,7 @@ class PresenceTotauxOut(BaseModel):
     voix_presentes_ou_representees: float = 0.0
     correspondances: int = 0
     voix_correspondance: float = 0.0
+    visio: int = 0                        # présents par visioconférence (comptés dans `presents`)
 
 
 class PresencesOut(BaseModel):

@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     email_expediteur: str = ""
     # Adresse publique de l'instance, citée dans les e-mails quand la copropriété n'a pas la sienne.
     frontend_url: str = ""
+    # Réunion en ligne : serveur Jitsi des liens créés par l'application (COPRO_JITSI_URL).
+    jitsi_url: str = "https://meet.jit.si"
     # Stockage des documents : « local » (dossier upload_dir) ou « s3 » (bucket compatible S3 :
     # AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…). Voir app/core/stockage.py.
     stockage: str = "local"

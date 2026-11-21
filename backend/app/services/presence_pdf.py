@@ -78,7 +78,7 @@ def feuille_presence_pdf(db, ag, copro) -> BytesIO:
     rows = [[Paragraph(f"<b>{t}</b>", style("th")) for t in
              ("Copropriétaire", "Lots", "Voix (‰)", "Présence", "Signature")]]
     for l in e["lignes"]:
-        presence = {"present": "Présent(e)", "absent": "Absent(e)", "incertain": "—", "": "—"}.get(l["reponse"], "")
+        presence = {"present": "Présent(e)", "visio": "Présent(e) en visioconférence", "absent": "Absent(e)", "incertain": "—", "": "—"}.get(l["reponse"], "")
         if l["reponse"] == "pouvoir":
             presence = f"Représenté(e) par {l['mandataire_nom']}" + (" (pouvoir signé reçu)" if l["pouvoir_recu_le"] else "")
         if l["reponse"] == "correspondance":

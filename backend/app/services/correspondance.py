@@ -110,7 +110,7 @@ def appliquer(db: Session, ag: AG, resolution: Resolution | None = None) -> int:
         q = q.filter(VoteCorrespondance.resolution_id == resolution.id)
     n = 0
     for vc in q:
-        if reponses.get(vc.personne_id) in ("present", "pouvoir"):
+        if reponses.get(vc.personne_id) in ("present", "visio", "pouvoir"):
             continue                       # présent ou représenté : le formulaire n'est pas pris en compte
         res = db.get(Resolution, vc.resolution_id)
         voix = voix_retenue(vc, res)
@@ -134,5 +134,5 @@ def etat(db: Session, ag: AG) -> dict:
         l["votes"][vc.resolution_id] = vc.voix
     reponses = {r.personne_id: r.reponse for r in db.query(AgReponse).filter(AgReponse.ag_id == ag.id)}
     for l in lignes.values():
-        l["ecarte"] = reponses.get(l["personne_id"]) in ("present", "pouvoir")
+        l["ecarte"] = reponses.get(l["personne_id"]) in ("present", "visio", "pouvoir")
     return {"date_limite": date_limite(ag), "formulaires": sorted(lignes.values(), key=lambda l: l["nom"])}

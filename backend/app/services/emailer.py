@@ -225,6 +225,8 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str, lien_confirmation
         lieu = ag.lieu or "à définir"
         lignes.append(f"Date : {date_str} à {heure}")
         lignes.append(f"Lieu : {lieu}")
+        if getattr(ag, "lien_visio", ""):
+            lignes.append(f"Participation possible en visioconférence : {ag.lien_visio}")
     lignes += ["", "Ordre du jour :"]
     if resolutions:
         for r in sorted(resolutions, key=lambda x: x.numero):
@@ -235,8 +237,9 @@ def convocation_texte(copro, ag, resolutions, syndic_nom: str, lien_confirmation
     if url:
         lignes += ["", "Vous pouvez consulter les détails et répondre en ligne :", url]
     if lien_confirmation:
-        lignes += ["", "Merci de confirmer que vous avez bien reçu ce message, et d'indiquer si vous serez présent(e), "
-                       "absent(e) ou représenté(e) (pouvoir à un autre copropriétaire) :", lien_confirmation]
+        lignes += ["", "Merci de confirmer que vous avez bien reçu ce message, et d'indiquer si vous serez présent(e)"
+                       + (", en visioconférence" if getattr(ag, "lien_visio", "") else "")
+                       + ", absent(e) ou représenté(e) (pouvoir à un autre copropriétaire) :", lien_confirmation]
     lignes += [
         "",
         "Cordialement,",

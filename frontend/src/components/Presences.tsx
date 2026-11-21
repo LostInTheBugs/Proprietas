@@ -8,14 +8,15 @@ import { fmtDate } from "../types";
 
 export const REPONSES: [string, string][] = [
   ["present", "Je serai présent(e)"],
+  ["visio", "Je participerai en visioconférence"],
   ["pouvoir", "Je ne serai pas présent(e) et je donne pouvoir à…"],
   ["absent", "Je ne serai pas présent(e)"],
   ["incertain", "Je ne sais pas encore"],
 ];
-const COURT: Record<string, string> = { present: "Présent", pouvoir: "Représenté", absent: "Absent", incertain: "Incertain",
+const COURT: Record<string, string> = { present: "Présent", visio: "En visio", pouvoir: "Représenté", absent: "Absent", incertain: "Incertain",
   correspondance: "Par correspondance", "": "Sans réponse" };
 const COULEUR: Record<string, "green" | "indigo" | "slate" | "amber" | "red"> = {
-  present: "green", pouvoir: "indigo", absent: "slate", incertain: "amber", correspondance: "indigo", "": "slate",
+  present: "green", visio: "green", pouvoir: "indigo", absent: "slate", incertain: "amber", correspondance: "indigo", "": "slate",
 };
 
 interface Personne { id: number; nom: string }
@@ -32,14 +33,14 @@ interface Ligne {
 interface Presences {
   ouvert: boolean; lignes: Ligne[];
   totaux: { presents: number; representes: number; absents: number; incertains: number; sans_reponse: number;
-    voix_presentes_ou_representees: number; correspondances?: number; voix_correspondance?: number };
+    voix_presentes_ou_representees: number; correspondances?: number; voix_correspondance?: number; visio?: number };
 }
 
 const RAPPEL_ART22 = "Le syndic, son conjoint ou partenaire, ses parents et ses employés ne peuvent pas recevoir de pouvoir ; "
   + "un copropriétaire ne peut pas en recevoir plus de trois, sauf s'il reste sous 10 % des voix (loi du 10 juillet 1965, art. 22).";
 
 /** Le copropriétaire connecté : sa réponse, et les pouvoirs qu'il a reçus. */
-export function MaReponseAg({ agId, onError }: { agId: number; onError: (e: string) => void }) {
+export function MaReponseAg({ agId, visio = false, onError }: { agId: number; visio?: boolean; onError: (e: string) => void }) {
   const [m, setM] = useState<MaReponse | null>(null);
   const [reponse, setReponse] = useState("");
   const [mandataire, setMandataire] = useState("");
@@ -69,7 +70,7 @@ export function MaReponseAg({ agId, onError }: { agId: number; onError: (e: stri
       )}
       {m.ouvert ? (
         <div className="space-y-2 text-sm">
-          {REPONSES.map(([k, l]) => (
+          {REPONSES.filter(([k]) => visio || k !== "visio").map(([k, l]) => (
             <label key={k} className="flex items-center gap-2 text-slate-700">
               <input type="radio" name={`reponse-${agId}`} checked={reponse === k} onChange={() => setReponse(k)} />
               {l}
@@ -117,7 +118,7 @@ function PouvoirLien({ agId }: { agId: number }) {
 }
 
 /** Syndic : réponses de tous les copropriétaires, pouvoirs, feuille de présence. */
-export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: string) => void }) {
+export function PresencesSyndic({ agId, visio = false, onError }: { agId: number; visio?: boolean; onError: (e: string) => void }) {
   const [p, setP] = useState<Presences | null>(null);
   const charger = useCallback(() => { api.get<Presences>(`/ag/${agId}/presences`).then(setP).catch(() => {}); }, [agId]);
   useEffect(charger, [charger]);
@@ -146,7 +147,7 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
         </a>
       </div>
       <p className="mb-2 text-xs text-slate-600">
-        <strong>{t.presents}</strong> présent(s) · <strong>{t.representes}</strong> représenté(s) · {t.absents} absent(s) ·{" "}
+        <strong>{t.presents}</strong> présent(s){t.visio ? ` (dont ${t.visio} en visio)` : ""} · <strong>{t.representes}</strong> représenté(s) · {t.absents} absent(s) ·{" "}
         {t.incertains} incertain(s) · {t.correspondances ?? 0} par correspondance · {t.sans_reponse} sans réponse — présents ou représentés :{" "}
         <strong>{t.voix_presentes_ou_representees.toLocaleString("fr-FR")} ‰</strong> des voix.
         {!p.ouvert && " L'assemblée est ouverte : vous tenez la feuille de présence ici."}
@@ -177,7 +178,7 @@ export function PresencesSyndic({ agId, onError }: { agId: number; onError: (e: 
                   <select className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs" value={l.reponse}
                     onChange={(e) => saisir(l, { reponse: e.target.value })}>
                     <option value="" disabled>Sans réponse</option>
-                    {Object.entries(COURT).filter(([k]) => k).map(([k, v]) => (
+                    {Object.entries(COURT).filter(([k]) => k && (visio || k !== "visio" || l.reponse === "visio")).map(([k, v]) => (
                       <option key={k} value={k} disabled={k === "correspondance"}>{v}</option>
                     ))}
                   </select>
