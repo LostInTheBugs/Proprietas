@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.062 — 2026-11-21
+
+- Réglages → Serveur : ressources du serveur (processeur, mémoire, disque) et détail par service (application, base de données, Jitsi), relevés par l'applicateur de mises à jour.
+
 ## 2026.11.061 — 2026-11-21
 
 - AG : vote en direct en ligne ; le syndic ouvre puis clôt le vote de chaque résolution, les présents et les participants en visio votent depuis leur compte (pouvoirs compris), décompte en direct.
