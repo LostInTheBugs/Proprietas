@@ -7,6 +7,7 @@ import { fmtEUR, fmtDate } from "../types";
 import { Card, Stat, Badge, Empty } from "../components/ui";
 import { MesAvances } from "../components/Avances";
 import { FacturesAPayerCard } from "../components/FacturesAPayer";
+import { MandatsAlerte } from "../components/Mandats";
 
 const MOIS_COURTS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
@@ -99,6 +100,7 @@ export default function Dashboard() {
       </div>
 
       <MesAvances />
+      {user?.role === "syndic" && <MandatsAlerte />}
       {user?.role === "syndic" && <FacturesAPayerCard />}
 
       {/* Ce qui devrait être en banque, d'après les opérations saisies (à rapprocher du relevé). */}

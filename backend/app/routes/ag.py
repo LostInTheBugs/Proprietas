@@ -45,6 +45,7 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
         statut=r.statut,
         second_vote_de_id=r.second_vote_de_id, amendee=bool(r.amendee), cle_id=r.cle_id,
         cle_nom=r.cle.nom if r.cle is not None else "",
+        mandat_mois=r.mandat_mois, mandat_personnes=r.mandat_personnes,
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
     )
@@ -108,6 +109,17 @@ def _controler_resolution(ag: AG, majorite: str, nature: str) -> None:
         motif = refus_consultation_ecrite(majorite, nature)
         if motif:
             raise HTTPException(422, motif)
+
+
+def _mandat_resolution(db: Session, copro: Copropriete, data: ResolutionIn, valeurs: dict) -> None:
+    """Désignation du syndic / élection du conseil : durée et comptes contrôlés (services/mandats.py) ; effacés
+    pour les autres résolutions."""
+    from app.services import mandats
+    if data.nature in mandats.ROLES:
+        mandats.controler(db, copro.id, data.nature, data.mandat_mois, data.mandat_personnes)
+        valeurs["mandat_personnes"] = list(data.mandat_personnes) if data.mandat_personnes else None
+    else:
+        valeurs["mandat_mois"] = valeurs["mandat_personnes"] = None
 
 
 def _exercice_approuve(db: Session, copro: Copropriete, data: ResolutionIn) -> int | None:
@@ -212,6 +224,9 @@ def update_ag(ag_id: int, data: AGIn, request: Request, db: Session = Depends(ge
         setattr(ag, field, value)
     for ex in approuves:
         ex.comptes_approuves_le = ag.date
+    from app.services import mandats
+    for r in ag.resolutions:
+        mandats.synchroniser(db, r)                # un mandat voté commence le jour de l'AG
     audit.enregistrer(db, "ag_modifiee", user=user, copro_id=copro.id, request=request,
                       detail=f"{avant} → {ag.type_ag} du {ag.date:%d/%m/%Y}")
     db.commit()
@@ -236,6 +251,8 @@ def delete_ag(ag_id: int, request: Request, db: Session = Depends(get_db), user:
     db.query(VoteCorrespondance).filter(VoteCorrespondance.ag_id == ag.id).delete(synchronize_session=False)
     db.query(AgReponse).filter(AgReponse.ag_id == ag.id).delete(synchronize_session=False)
     db.query(NotificationPV).filter(NotificationPV.ag_id == ag.id).delete(synchronize_session=False)
+    from app.services import mandats
+    mandats.retirer_ag(db, ag)
     for r in list(ag.resolutions):
         if r.second_vote_de_id is not None:
             db.delete(r)
@@ -260,6 +277,7 @@ def add_resolution(ag_id: int, data: ResolutionIn, db: Session = Depends(get_db)
     valeurs = data.model_dump()
     valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
     valeurs["cle_id"] = _cle_resolution(db, copro, data)
+    _mandat_resolution(db, copro, data, valeurs)
     r = Resolution(ag_id=ag.id, **valeurs)
     db.add(r)
     db.commit()
@@ -284,7 +302,9 @@ def update_resolution(res_id: int, data: ResolutionIn, request: Request, effacer
     valeurs = data.model_dump()
     valeurs["exercice_id"] = _exercice_approuve(db, copro, data)
     valeurs["cle_id"] = _cle_resolution(db, copro, data)
-    decisif = any(getattr(r, k) != valeurs[k] for k in ("nature", "exercice_id", "majorite", "cle_id"))
+    _mandat_resolution(db, copro, data, valeurs)
+    decisif = any(getattr(r, k) != valeurs[k] for k in ("nature", "exercice_id", "majorite", "cle_id", "mandat_mois",
+                                                         "mandat_personnes"))
     if (decisif or effacer_votes) and r.statut != "a_voter":
         if db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).first():
             raise HTTPException(409, "Cette résolution a un second vote : supprimez-le avant de changer l'objet, l'exercice, "
@@ -306,6 +326,8 @@ def update_resolution(res_id: int, data: ResolutionIn, request: Request, effacer
         db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id == r.id).delete(synchronize_session=False)
     for field, value in valeurs.items():
         setattr(r, field, value)
+    from app.services import mandats
+    mandats.synchroniser(db, r)
     db.commit()
     db.refresh(r)
     return _resolution_out(db, r)
@@ -322,6 +344,8 @@ def delete_resolution(res_id: int, db: Session = Depends(get_db), user: User = D
                 ex.comptes_approuves_le = None
     ids = [r.id] + [e.id for e in db.query(Resolution).filter(Resolution.second_vote_de_id == r.id)]
     db.query(VoteCorrespondance).filter(VoteCorrespondance.resolution_id.in_(ids)).delete(synchronize_session=False)
+    from app.models.mandat import Mandat
+    db.query(Mandat).filter(Mandat.resolution_id.in_(ids)).delete(synchronize_session=False)
     for enfant in db.query(Resolution).filter(Resolution.second_vote_de_id == r.id).all():
         db.delete(enfant)
     db.delete(r)
@@ -361,6 +385,8 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     resultat = calculer_statut_resolution(r, lots, votes)
     r.statut = resultat["statut"]
     _reporter_approbation(db, r)
+    from app.services import mandats
+    mandats.synchroniser(db, r)
     db.commit()
     db.refresh(r)
     return _resolution_out(db, r)
@@ -386,6 +412,7 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     r.statut = resultat["statut"]
     sv = Resolution(ag_id=r.ag_id, numero=r.numero, texte=r.texte, majorite=majorite,
                     nature=r.nature or "autre", exercice_id=r.exercice_id, cle_id=r.cle_id,
+                    mandat_mois=r.mandat_mois, mandat_personnes=r.mandat_personnes,
                     libelle=f"{r.libelle} — second vote ({article})", second_vote_de_id=r.id)
     db.add(sv)
     db.commit()

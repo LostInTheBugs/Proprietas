@@ -285,13 +285,15 @@ export interface Resolution {
   libelle: string;
   texte: string;
   majorite: string;
-  nature: string; // autre | budget | approbation_comptes
+  nature: string; // autre | budget | approbation_comptes | syndic | conseil
   exercice_id: number | null; // exercice approuvé (nature « approbation_comptes »)
   statut: string;
   second_vote_de_id: number | null;
   amendee?: boolean; // amendée en séance : les votes « pour » par correspondance deviennent défaillants
   cle_id?: number | null; // seuls les lots de cette clé votent (art. 24, dernier alinéa)
   cle_nom?: string;
+  mandat_mois?: number | null; // désignation du syndic / élection du conseil : durée (36 mois au plus)
+  mandat_personnes?: number[] | null; // comptes désignés ; adoptée, la résolution enregistre le mandat
   votes: Vote[];
   resultat: ResolutionResult | null;
 }

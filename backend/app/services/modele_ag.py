@@ -8,7 +8,8 @@ résolutions habituelles, avec leur majorité (loi n° 65-557 du 10 juillet 1965
   quitus au syndic (art. 24) ; budget prévisionnel de l'exercice suivant (art. 24 ; art. 14-1) ; cotisation au
   fonds de travaux (art. 25 ; art. 14-2) ;
 - à cocher si besoin : ajustement du budget de l'exercice en cours (art. 24) ; désignation du syndic bénévole
-  (art. 25 ; 3 ans au plus) ; élection du conseil syndical (art. 25) ; seuils de consultation du conseil
+  (art. 25 ; 3 ans au plus) ; élection du conseil syndical (art. 25) — ces deux-là cochées quand le mandat
+  enregistré finit avant l'AG annuelle suivante (services/mandats.py) ; seuils de consultation du conseil
   syndical et de mise en concurrence (art. 25 ; art. 21) ; plan pluriannuel de travaux (art. 24 ; art. 14-2).
 
 Les montants connus (dépenses de l'exercice écoulé, budget de l'exercice suivant, taux du fonds de travaux)
@@ -50,6 +51,19 @@ def _syndic(db: Session, copro_id: int) -> str:
          .filter(UserCopro.copropriete_id == copro_id, User.role == "syndic", User.is_demo.isnot(True))
          .order_by(User.id).first())
     return (u.nom_complet or u.email) if u else A_COMPLETER
+
+
+def _echeance(db: Session, copro_id: int, role: str, jour: date) -> dict:
+    """Cochée si le dernier mandat enregistré finit avant l'AG annuelle suivante (un an après `jour`)."""
+    from app.services import mandats
+    dernier = mandats.dernier(db, copro_id, role)
+    if dernier is None:
+        return {"coche": False, "remarque": "Aucun mandat enregistré (carte « Syndic et conseil syndical ») : à "
+                                            "l'échéance du mandat, ou pour une première désignation."}
+    fin = f"{dernier.fin:%d/%m/%Y}"
+    if dernier.fin < mandats.plus_mois(jour, 12):
+        return {"coche": True, "remarque": f"Le mandat {'finit' if dernier.fin >= jour else 'a fini'} le {fin}."}
+    return {"coche": False, "remarque": f"Mandat en cours jusqu'au {fin}."}
 
 
 def modeles(db: Session, copro, jour: date) -> list[dict]:
@@ -114,11 +128,11 @@ def modeles(db: Session, copro, jour: date) -> list[dict]:
           f"L'assemblée générale désigne en qualité de syndic non professionnel {_syndic(db, copro.id)}, "
           f"copropriétaire, pour une durée de {A_COMPLETER} mois (36 mois au plus), du {A_COMPLETER} au "
           f"{A_COMPLETER}. Le syndic exerce ses fonctions à titre bénévole.",
-          majorite="art25", coche=False, remarque="À l'échéance du mandat du syndic."),
+          majorite="art25", nature="syndic", **_echeance(db, copro.id, "syndic", jour)),
         m("conseil", "Élection des membres du conseil syndical",
           f"L'assemblée générale élit membres du conseil syndical, pour une durée de {A_COMPLETER} an(s) "
           f"(3 ans au plus) : {A_COMPLETER}.",
-          majorite="art25", coche=False, remarque="À l'échéance des mandats, ou pour un premier conseil."),
+          majorite="art25", nature="conseil", **_echeance(db, copro.id, "conseil", jour)),
         m("seuil_conseil", "Montant à partir duquel le conseil syndical est consulté",
           f"L'assemblée générale fixe à {A_COMPLETER} € TTC le montant des marchés et contrats à partir duquel la "
           "consultation du conseil syndical est obligatoire (loi du 10 juillet 1965, art. 21).",
@@ -152,7 +166,8 @@ def ajouter(db: Session, copro, ag: AG, codes: list[str]) -> list[Resolution]:
     for r in choisies:
         numero += 1
         res = Resolution(ag_id=ag.id, numero=numero, libelle=r["libelle"], texte=r["texte"], majorite=r["majorite"],
-                         nature=r["nature"], exercice_id=r["exercice_id"])
+                         nature=r["nature"], exercice_id=r["exercice_id"],
+                         mandat_mois=36 if r["nature"] == "syndic" else None)
         db.add(res)
         crees.append(res)
     db.flush()

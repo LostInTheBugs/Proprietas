@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean, UniqueConstraint, text
+from sqlalchemy import JSON, Column, Integer, String, ForeignKey, Date, Text, DateTime, Boolean, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -73,6 +73,10 @@ class Resolution(Base):
     # Dépenses d'une partie de l'immeuble ou d'un équipement réparties par une clé : seuls les copropriétaires
     # concernés votent, avec les millièmes de la clé (loi n° 65-557, art. 24, dernier alinéa ; services/cles.py).
     cle_id = Column(Integer, ForeignKey("cles_repartition.id", ondelete="SET NULL"), nullable=True)
+    # Désignation du syndic / élection du conseil syndical (nature « syndic » | « conseil ») : durée en mois et
+    # comptes désignés ; adoptée, la résolution enregistre le mandat (services/mandats.py).
+    mandat_mois = Column(Integer, nullable=True)
+    mandat_personnes = Column(JSON, nullable=True)
 
     ag = relationship("AG", back_populates="resolutions")
     cle = relationship("CleRepartition")
