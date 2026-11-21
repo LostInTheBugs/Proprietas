@@ -79,6 +79,9 @@ class Resolution(Base):
     # comptes désignés ; adoptée, la résolution enregistre le mandat (services/mandats.py).
     mandat_mois = Column(Integer, nullable=True)
     mandat_personnes = Column(JSON, nullable=True)
+    # Vote en direct pendant l'AG (services/vote_en_ligne.py) : ouvert par le syndic, puis clos (résultat calculé).
+    vote_ouvert_le = Column(DateTime, nullable=True)
+    vote_clos_le = Column(DateTime, nullable=True)
 
     ag = relationship("AG", back_populates="resolutions")
     cle = relationship("CleRepartition")

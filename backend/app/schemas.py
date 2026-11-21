@@ -907,6 +907,7 @@ class ResolutionOut(BaseModel):
     cle_nom: str = ""
     mandat_mois: Optional[int] = None
     mandat_personnes: Optional[List[int]] = None
+    vote_en_ligne: str = ""               # "" | ouvert | clos (vote en direct pendant l'AG)
     votes: List[VoteOut] = []
     resultat: Optional[ResolutionResult] = None
 

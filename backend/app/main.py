@@ -15,7 +15,7 @@ from app.core.version import VERSION
 from app.core.database import SessionLocal
 from app.core.httpinfo import est_externe, requete_https
 from app.models.instance import InstanceState
-from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats
+from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne
 
 settings = get_settings()
 
@@ -112,7 +112,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats):
+for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne):
     app.include_router(r.router)
 app.include_router(securite.router_audit)
 

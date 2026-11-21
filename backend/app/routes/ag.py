@@ -46,9 +46,15 @@ def _resolution_out(db: Session, r: Resolution) -> ResolutionOut:
         second_vote_de_id=r.second_vote_de_id, amendee=bool(r.amendee), cle_id=r.cle_id,
         cle_nom=r.cle.nom if r.cle is not None else "",
         mandat_mois=r.mandat_mois, mandat_personnes=r.mandat_personnes,
+        vote_en_ligne=_etat_vote_en_ligne(r),
         votes=[VoteOut.model_validate(v) for v in r.votes],
         resultat=ResolutionResult(**resultat),
     )
+
+
+def _etat_vote_en_ligne(r: Resolution) -> str:
+    from app.services import vote_en_ligne
+    return vote_en_ligne.etat_resolution(r)
 
 
 def _ag_out(db: Session, ag: AG) -> AGOut:
@@ -378,6 +384,14 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     """Recalcule le statut d'une résolution selon la majorité légale (module FR)."""
     copro = get_or_create_copro(db, user)
     r = get_owned_via(db, Resolution, AG, res_id, copro, "ag_id", label="Résolution")
+    calculer_resultat(db, copro, r)
+    db.commit()
+    db.refresh(r)
+    return _resolution_out(db, r)
+
+
+def calculer_resultat(db: Session, copro: Copropriete, r: Resolution) -> None:
+    """Résultat d'une résolution selon sa majorité ; reporté sur l'exercice (comptes) et les mandats."""
     from app.services import correspondance
     correspondance.appliquer(db, r.ag, r)          # votes par correspondance des absents (art. 17-1 A)
     db.refresh(r)
@@ -388,9 +402,6 @@ def calculer(res_id: int, db: Session = Depends(get_db), user: User = Depends(re
     _reporter_approbation(db, r)
     from app.services import mandats
     mandats.synchroniser(db, r)
-    db.commit()
-    db.refresh(r)
-    return _resolution_out(db, r)
 
 
 @router.post("/resolutions/{res_id}/second-vote", response_model=ResolutionOut)
