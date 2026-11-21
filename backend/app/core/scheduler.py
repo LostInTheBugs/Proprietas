@@ -54,6 +54,14 @@ def start_scheduler() -> None:
         max_instances=1,
         coalesce=True,
     )
+    # Supervision : relevé de l'état du serveur et de l'activité, toutes les 5 minutes.
+    _scheduler.add_job(
+        _tick_supervision,
+        IntervalTrigger(minutes=5),
+        id="supervision",
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.start()
     log.info("Scheduler démarré (relances auto toutes les 30 min, purge des journaux quotidienne)")
 
@@ -65,6 +73,17 @@ def _tick_drive_attente() -> None:
         run_ranger_en_attente(db)
     except Exception:
         log.exception("Erreur pendant le rangement des dépôts en attente du drive")
+    finally:
+        db.close()
+
+
+def _tick_supervision() -> None:
+    from app.services.supervision import releve
+    db = SessionLocal()
+    try:
+        releve(db)
+    except Exception:
+        log.exception("Erreur pendant le relevé de supervision")
     finally:
         db.close()
 

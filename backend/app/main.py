@@ -129,6 +129,20 @@ _CSP = (
 
 
 @app.middleware("http")
+async def compter_requetes(request: Request, call_next):
+    """Supervision : nombre, erreurs 5xx et durée des requêtes de l'API (services/supervision.py)."""
+    from app.services import supervision
+    debut = time.monotonic()
+    statut = 500
+    try:
+        response = await call_next(request)
+        statut = response.status_code
+        return response
+    finally:
+        supervision.noter_requete(request.url.path, statut, time.monotonic() - debut)
+
+
+@app.middleware("http")
 async def entetes_securite(request: Request, call_next):
     response = await call_next(request)
     h = response.headers

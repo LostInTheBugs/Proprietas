@@ -8,7 +8,7 @@ l'exposition ne soit jamais silencieuse. Le diagnostic vérifie l'état RÉEL
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core import audit
@@ -103,3 +103,11 @@ def ressources(db: Session = Depends(get_db), user: User = Depends(require_insta
     st = _stockage()
     chemin = st.dossier if isinstance(st, StockageLocal) else "."
     return svc.etat(chemin, _taille_base(db))
+
+
+@router.get("/supervision")
+def supervision(heures: int = Query(24, ge=1, le=168), db: Session = Depends(get_db),
+                user: User = Depends(require_instance_admin)):
+    """Historique de l'état du serveur et de l'activité (relevés toutes les 5 minutes, 7 jours au plus)."""
+    from app.services import supervision as svc
+    return svc.historique(db, heures)
