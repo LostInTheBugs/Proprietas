@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.058 — 2026-11-21
+
+- AG : mandats du syndic bénévole et du conseil syndical (durée, échéance, AG d'origine) ; enregistrés par la résolution adoptée ou saisis à la main ; alerte six mois avant la fin.
+
 ## 2026.11.057 — 2026-11-21
 
 - AG : en modifiant une résolution, case « Effacer aussi les votes saisis » (en séance et par correspondance). Sans elle, les votes sont gardés et comptent au recalcul (revue de la 2026.11.056).
