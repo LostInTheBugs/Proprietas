@@ -28,6 +28,18 @@ settings = get_settings()
 CATEGORIES = {"contrat", "assurance", "facture", "devis", "diagnostic", "pv", "convocation", "autre"}
 # Liste blanche d'extensions acceptées à l'upload (refus des exécutables, etc.)
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".xls", ".xlsx", ".odt", ".ods"}
+# Signature des premiers octets de chaque type accepté : le contenu doit correspondre à l'extension (un
+# exécutable ou une page HTML renommés en .pdf sont refusés). Office récent et OpenDocument sont des archives
+# ZIP ; .doc et .xls, des fichiers OLE2.
+_ZIP, _OLE = (b"PK\x03\x04",), (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",)
+SIGNATURES = {".pdf": (b"%PDF-",), ".png": (b"\x89PNG\r\n\x1a\n",), ".jpg": (b"\xff\xd8\xff",),
+              ".jpeg": (b"\xff\xd8\xff",), ".docx": _ZIP, ".xlsx": _ZIP, ".odt": _ZIP, ".ods": _ZIP,
+              ".doc": _OLE, ".xls": _OLE}
+
+
+def contenu_conforme(ext: str, debut: bytes) -> bool:
+    """Les premiers octets du fichier correspondent-ils à son extension ?"""
+    return any(debut.startswith(s) for s in SIGNATURES.get(ext, ()))
 
 
 def _safe_download_name(libelle: str) -> str:
@@ -120,6 +132,10 @@ async def upload_document(
                 raise HTTPException(413, f"Fichier trop volumineux (maximum {settings.upload_max_mb:g} Mo)")
             empreinte.update(bloc)
             tmp.write(bloc)
+        tmp.seek(0)
+        if not contenu_conforme(ext, tmp.read(16)):
+            raise HTTPException(400, f"Le contenu du fichier ne correspond pas à son extension {ext} : "
+                                     "enregistrez-le de nouveau au bon format.")
         tmp.seek(0)
         sur_le_drive = False
         try:
