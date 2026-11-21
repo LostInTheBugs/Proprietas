@@ -73,8 +73,100 @@ services:
     depends_on:
       - backend
 
+  # ---------- Serveur Jitsi (réunions en ligne), en option ----------
+  # Profil « jitsi », éteint par défaut : sans lui, les salles sont créées sur meet.jit.si (ou sur le
+  # serveur saisi dans Réglages → Réunion en ligne). Mode d'emploi : docs/jitsi.md. L'activer :
+  #   JITSI_PUBLIC_URL=https://visio.exemple.fr JICOFO_AUTH_PASSWORD=… JVB_AUTH_PASSWORD=… \
+  #   docker compose --profile jitsi up -d
+  # Images officielles (github.com/jitsi/docker-jitsi-meet) ; JITSI_IMAGE_VERSION pour figer une version.
+  jitsi-web:
+    image: jitsi/web:${JITSI_IMAGE_VERSION:-stable}
+    profiles: ["jitsi"]
+    restart: unless-stopped
+    ports:
+      - "${JITSI_HTTP_PORT:-8080}:80"
+      - "${JITSI_HTTPS_PORT:-8443}:443"
+    environment:
+      PUBLIC_URL: ${JITSI_PUBLIC_URL:-}
+      TZ: ${TZ:-Europe/Paris}
+      XMPP_BOSH_URL_BASE: http://xmpp.meet.jitsi:5280
+      ENABLE_LETSENCRYPT: "0"
+    volumes:
+      - jitsi_web:/config
+    networks:
+      meet.jitsi:
+      default:          # joignable par Caddy (profil « internet ») : voir docs/jitsi.md
+    depends_on:
+      - jitsi-jvb
+
+  jitsi-prosody:
+    image: jitsi/prosody:${JITSI_IMAGE_VERSION:-stable}
+    profiles: ["jitsi"]
+    restart: unless-stopped
+    expose:
+      - "5222"
+      - "5280"
+      - "5347"
+    environment:
+      PUBLIC_URL: ${JITSI_PUBLIC_URL:-}
+      TZ: ${TZ:-Europe/Paris}
+      JICOFO_AUTH_PASSWORD: ${JICOFO_AUTH_PASSWORD:-}
+      JVB_AUTH_PASSWORD: ${JVB_AUTH_PASSWORD:-}
+    volumes:
+      - jitsi_prosody_config:/config
+      - jitsi_prosody_plugins:/prosody-plugins-custom
+    networks:
+      meet.jitsi:
+        aliases:
+          - xmpp.meet.jitsi
+
+  jitsi-jicofo:
+    image: jitsi/jicofo:${JITSI_IMAGE_VERSION:-stable}
+    profiles: ["jitsi"]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+      JICOFO_AUTH_PASSWORD: ${JICOFO_AUTH_PASSWORD:-}
+      XMPP_SERVER: xmpp.meet.jitsi
+    volumes:
+      - jitsi_jicofo:/config
+    networks:
+      meet.jitsi:
+    depends_on:
+      - jitsi-prosody
+
+  jitsi-jvb:
+    image: jitsi/jvb:${JITSI_IMAGE_VERSION:-stable}
+    profiles: ["jitsi"]
+    restart: unless-stopped
+    ports:
+      # Audio et vidéo : ce port UDP doit être ouvert (et redirigé par la box) vers ce serveur.
+      - "${JITSI_JVB_PORT:-10000}:${JITSI_JVB_PORT:-10000}/udp"
+    environment:
+      PUBLIC_URL: ${JITSI_PUBLIC_URL:-}
+      TZ: ${TZ:-Europe/Paris}
+      JVB_PORT: ${JITSI_JVB_PORT:-10000}
+      JVB_AUTH_PASSWORD: ${JVB_AUTH_PASSWORD:-}
+      JVB_ADVERTISE_IPS: ${JITSI_ADVERTISE_IPS:-}
+      XMPP_SERVER: xmpp.meet.jitsi
+    volumes:
+      - jitsi_jvb:/config
+    networks:
+      meet.jitsi:
+    depends_on:
+      - jitsi-prosody
+
 volumes:
   pgdata:
   uploads:
   caddy_data:
   caddy_config:
+  jitsi_web:
+  jitsi_prosody_config:
+  jitsi_prosody_plugins:
+  jitsi_jicofo:
+  jitsi_jvb:
+
+networks:
+  # Réseau des conteneurs Jitsi (profil « jitsi ») ; les autres services restent sur le réseau par défaut.
+  meet.jitsi:

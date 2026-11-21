@@ -28,6 +28,8 @@ class Copropriete(Base):
     smtp_password = Column(TexteChiffre, default="")
     email_expediteur = Column(String, default="")
     frontend_url = Column(String, default="")
+    # Réunion en ligne : serveur Jitsi de la copropriété (vide : celui de l'instance, COPRO_JITSI_URL).
+    jitsi_url = Column(String, nullable=False, default="", server_default="")
     # Drive de la copropriété (core/drive.py) : ses fichiers sur un serveur WebDAV. "" = pas de drive.
     drive_type = Column(String, default="")          # "" | webdav | google (drive_password = jeton OAuth)
     drive_url = Column(String, default="")
