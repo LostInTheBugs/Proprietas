@@ -147,3 +147,30 @@ def test_pull_reussi_supprime_les_images_orphelines_sans_toucher_au_cache(tmp_pa
     res, status, _ = _run(app, {"version": "2026.10.004", "by": "x"})
     journal = (app / "data" / "updates" / "update.log").read_text(encoding="utf-8")
     assert "docker image prune -f" in journal and "builder prune" not in journal
+
+
+def _module():
+    spec = importlib.util.spec_from_file_location("apply_update", SCRIPT)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def test_ressources_lecture_de_docker_stats():
+    """Ressources (demande de Fred, 21/11/2026) : tailles de `docker stats` et rattachement aux services."""
+    m = _module()
+    assert m.taille_octets("1.5GiB") == int(1.5 * 1024 ** 3) and m.taille_octets("512kB") == 512_000
+    assert m.taille_octets("0B") == 0 and m.taille_octets("n/a") is None
+    lignes = [json.dumps({"Name": "proprietas-backend-1", "CPUPerc": "1.25%", "MemUsage": "150MiB / 7.6GiB"}),
+              json.dumps({"Name": "autre-projet-1", "CPUPerc": "9%", "MemUsage": "1GiB / 7.6GiB"})]
+    services = m.lire_stats(lignes, {"proprietas-backend-1": "backend"})
+    assert services == [{"service": "backend", "conteneur": "proprietas-backend-1", "cpu_pct": 1.25,
+                         "mem_octets": 150 * 1024 ** 2, "mem_limite": int(7.6 * 1024 ** 3)}]
+
+
+def test_battement_ecrit_les_ressources(tmp_path):
+    app = _app(tmp_path)
+    _run(app)
+    r = json.loads((app / "data" / "updates" / "ressources.json").read_text(encoding="utf-8"))
+    assert r["at"] > 0 and r["hote"]["cpus"] >= 1 and r["hote"]["disque"]["total"] > 0
+    assert isinstance(r["services"], list)            # sans Docker : liste vide, pas d'échec
