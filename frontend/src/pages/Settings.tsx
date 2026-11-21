@@ -10,6 +10,7 @@ import { InstanceAdminsCard, UpdatesCard } from "../components/Updates";
 import { ComptesBloquesCard } from "../components/Connexions";
 import { ComptesACompleterCard, SauvegardeCard } from "../components/Sauvegarde";
 import { EspaceStockageCard } from "../components/EspaceStockage";
+import { RessourcesCard } from "../components/Ressources";
 import { DriveCard } from "../components/Drive";
 
 export default function Settings() {
@@ -658,6 +659,7 @@ export default function Settings() {
       )}
 
       {onglet === "serveur" && (<>
+      <RessourcesCard />
       <UpdatesCard />
       <InstanceAdminsCard myId={me?.id} />
       <ComptesBloquesCard />
