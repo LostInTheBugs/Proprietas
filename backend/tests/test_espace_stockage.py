@@ -32,9 +32,9 @@ def _envoyer(client, token, contenu, libelle="Facture"):
 
 def test_syndic_voit_les_documents_de_sa_copropriete(client, db, copro_a, copro_b, syndic_a, syndic_b,
                                                     token_a, token_b):
-    _envoyer(client, token_a, b"x" * 10)
-    _envoyer(client, token_a, b"y" * 20)
-    _envoyer(client, token_b, b"z" * 1000)               # autre copropriété : pas compté
+    _envoyer(client, token_a, b"%PDF-" + b"x" * 5)
+    _envoyer(client, token_a, b"%PDF-" + b"y" * 15)
+    _envoyer(client, token_b, b"%PDF-" + b"z" * 995)               # autre copropriété : pas compté
     r = client.get(URL, headers=auth(token_a))
     assert r.status_code == 200, r.text
     e = r.json()
@@ -44,7 +44,7 @@ def test_syndic_voit_les_documents_de_sa_copropriete(client, db, copro_a, copro_
 
 
 def test_fichier_introuvable_compte_a_part(client, db, copro_a, syndic_a, token_a):
-    _envoyer(client, token_a, b"x" * 10)
+    _envoyer(client, token_a, b"%PDF-" + b"x" * 5)
     db.add(Document(copropriete_id=copro_a.id, libelle="Perdu", fichier="absent.pdf", date_ajout=date.today()))
     db.add(Document(copropriete_id=copro_a.id, libelle="Sans fichier", fichier="", date_ajout=date.today()))
     db.commit()
@@ -56,8 +56,8 @@ def test_administrateur_de_l_instance_voit_le_serveur(client, db, copro_a, copro
                                                      token_a, token_b):
     syndic_a.is_instance_admin = True
     db.commit()
-    _envoyer(client, token_a, b"x" * 10)
-    _envoyer(client, token_b, b"z" * 1000)
+    _envoyer(client, token_a, b"%PDF-" + b"x" * 5)
+    _envoyer(client, token_b, b"%PDF-" + b"z" * 995)
     e = client.get(URL, headers=auth(token_a)).json()
     inst = e["instance"]
     d = inst["disque"]
@@ -76,7 +76,7 @@ def test_stockage_s3_espace_utilise_seulement(client, db, copro_a, syndic_a, tok
     monkeypatch.setattr(docs, "_stockage", lambda: s3)
     syndic_a.is_instance_admin = True
     db.commit()
-    _envoyer(client, token_a, b"x" * 42)
+    _envoyer(client, token_a, b"%PDF-" + b"x" * 37)
     e = client.get(URL, headers=auth(token_a)).json()
     assert e["stockage"] == "s3"
     assert e["documents"] == {"nombre": 1, "octets": 42, "introuvables": 0, "sur_le_drive": 0}
@@ -85,7 +85,7 @@ def test_stockage_s3_espace_utilise_seulement(client, db, copro_a, syndic_a, tok
 
 
 def test_stockage_indisponible(client, db, copro_a, syndic_a, token_a, monkeypatch):
-    _envoyer(client, token_a, b"x" * 10)
+    _envoyer(client, token_a, b"%PDF-" + b"x" * 5)
 
     class Panne(stk.StockageLocal):
         def taille(self, nom):

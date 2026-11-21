@@ -90,9 +90,9 @@ def test_reserve_au_syndic(client, db, copro_a, syndic_a, token_a, serveur):
 
 # ---------------------------------------------------------------- sauvegarder maintenant
 def test_sauvegarder_maintenant(client, db, copro_a, syndic_a, token_a, serveur, dossier_local):
-    local = _deposer(client, token_a, libelle="Resté sur le serveur", contenu=b"local").json()
+    local = _deposer(client, token_a, libelle="Resté sur le serveur", contenu=b"%PDF-local").json()
     _brancher(client, token_a)
-    sur_drive = _deposer(client, token_a, libelle="Sur le drive", contenu=b"drive").json()
+    sur_drive = _deposer(client, token_a, libelle="Sur le drive", contenu=b"%PDF-drive").json()
     assert _maintenant(client, token_a).status_code == 422                   # pas encore de mot de passe
     _regler(client, token_a, auto=False)
     r = _maintenant(client, token_a)
@@ -109,7 +109,7 @@ def test_sauvegarder_maintenant(client, db, copro_a, syndic_a, token_a, serveur,
     assert syndic_a.email in {u["email"] for u in donnees["users"]}
     # Le fichier du serveur est dans l'archive ; celui du drive n'y est pas, sa fiche garde son chemin.
     docs = {d["libelle"]: d for d in donnees["documents"]}
-    assert z.read(f"documents/{local['fichier']}") == b"local"
+    assert z.read(f"documents/{local['fichier']}") == b"%PDF-local"
     assert (docs["Sur le drive"]["emplacement"], docs["Sur le drive"]["fichier"]) == ("drive", sur_drive["fichier"])
     assert not [n for n in z.namelist() if "Sur le drive" in n]
     assert docs["Resté sur le serveur"]["emplacement"] == ""
@@ -205,9 +205,9 @@ def test_automatique_coupe(client, db, copro_a, syndic_a, token_a, serveur, monk
 # ---------------------------------------------------------------- restauration
 def test_restaurer_depuis_le_drive(client, db, copro_a, copro_b, syndic_a, syndic_b, token_a, token_b, serveur,
                                    dossier_local):
-    _deposer(client, token_a, libelle="Resté sur le serveur", contenu=b"local")
+    _deposer(client, token_a, libelle="Resté sur le serveur", contenu=b"%PDF-local")
     _brancher(client, token_a)
-    doc = _deposer(client, token_a, libelle="Sur le drive", contenu=b"drive").json()
+    doc = _deposer(client, token_a, libelle="Sur le drive", contenu=b"%PDF-drive").json()
     _regler(client, token_a, auto=False)
     _maintenant(client, token_a)
     [archive] = _archives(serveur)
@@ -228,7 +228,7 @@ def test_restaurer_depuis_le_drive(client, db, copro_a, copro_b, syndic_a, syndi
     # Tant que le drive n'est pas rebranché : explication claire, et le fichier du serveur est lisible.
     r = client.get(f"/api/documents/{copie['Sur le drive'].id}/download", headers=auth(tok))
     assert r.status_code == 503 and "plus branché" in r.json()["detail"]
-    assert client.get(f"/api/documents/{copie['Resté sur le serveur'].id}/download", headers=auth(tok)).content == b"local"
+    assert client.get(f"/api/documents/{copie['Resté sur le serveur'].id}/download", headers=auth(tok)).content == b"%PDF-local"
     # L'original est encore branché sur ce dossier : la copie ne peut pas le prendre.
     r = client.put("/api/drive", json=_reglages(), headers=auth(tok))
     assert r.status_code == 409 and "autre copropriété" in r.json()["detail"]
@@ -238,7 +238,7 @@ def test_restaurer_depuis_le_drive(client, db, copro_a, copro_b, syndic_a, syndi
     db.execute(text("UPDATE coproprietes SET drive_type = '' WHERE id = :i"), {"i": copro_a.id})
     db.commit()
     assert client.put("/api/drive", json=_reglages(), headers=auth(tok)).status_code == 200
-    assert client.get(f"/api/documents/{copie['Sur le drive'].id}/download", headers=auth(tok)).content == b"drive"
+    assert client.get(f"/api/documents/{copie['Sur le drive'].id}/download", headers=auth(tok)).content == b"%PDF-drive"
 
 
 def test_supprimer_une_fiche_sans_drive_branche(client, db, copro_a, copro_b, syndic_a, syndic_b, token_a, token_b,
