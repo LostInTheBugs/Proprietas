@@ -298,10 +298,18 @@ le module n'expose volontairement aucune fonction d'avance.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -q            # 139 tests, ~70 % de couverture (pytest --cov)
+python -m pytest -q            # environ 850 tests (couverture : pytest --cov)
 ```
 
-La suite (pytest + TestClient, SQLite en mémoire) couvre : isolation multi-copro,
+La suite (pytest + TestClient, SQLite en mémoire) commence par une **matrice des droits** générée à partir
+de toutes les routes de l'API (`tests/test_matrice_droits.py`) : liste figée des routes publiques et des
+écritures permises au copropriétaire ; 401 sans connexion ou avec un jeton de double authentification ; 403
+pour le copropriétaire sur les routes du syndic et pour le syndic sur celles de l'administrateur ; aucun succès
+et aucune donnée modifiée quand le syndic d'une autre copropriété vise les objets de la copropriété A. Une
+nouvelle route publique, ou une nouvelle écriture ouverte au copropriétaire, fait échouer ce test tant qu'elle
+n'est pas ajoutée sciemment à sa liste.
+
+Elle couvre aussi : isolation multi-copro,
 majorités légales (art. 24/25/26, unanimité, régime 2 copropriétaires, passerelle
 25-1), tantièmes et appels de fonds (total ≠ 1000, arrondis au centime), soldes
 par lot, authentification (register fermé, login, switch-copro, expiration),
