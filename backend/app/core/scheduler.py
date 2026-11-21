@@ -78,10 +78,14 @@ def _tick_drive_attente() -> None:
 
 
 def _tick_supervision() -> None:
+    from app.services.alertes_serveur import verifier
     from app.services.supervision import releve
     db = SessionLocal()
     try:
         releve(db)
+        bilan = verifier(db)
+        if any(bilan.values()):
+            log.info("Supervision : %s", bilan)
     except Exception:
         log.exception("Erreur pendant le relevé de supervision")
     finally:

@@ -16,3 +16,14 @@ class MesureServeur(Base):
     latence_moy_ms = Column(Float, nullable=True)
     latence_p95_ms = Column(Float, nullable=True)
     source = Column(String, nullable=False, default="application")   # hote | application
+
+
+class Incident(Base):
+    """Problème détecté par la supervision (services/alertes_serveur.py) : ouvert, rappelé, puis résolu."""
+    __tablename__ = "incidents_serveur"
+    id = Column(Integer, primary_key=True)
+    code = Column(String, nullable=False, index=True)    # disque | memoire | cpu | erreurs | applicateur | sauvegarde
+    debut = Column(DateTime, nullable=False)
+    fin = Column(DateTime, nullable=True)                # None : en cours
+    detail = Column(String, nullable=False, default="")
+    dernier_envoi = Column(DateTime, nullable=True)       # dernier e-mail envoyé (rappel au plus toutes les 24 h)

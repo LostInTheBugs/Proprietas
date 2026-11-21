@@ -8,7 +8,8 @@ interface Mesure {
   instant: string; cpu_pct: number | null; memoire_pct: number | null; disque_pct: number | null;
   requetes: number; erreurs_5xx: number; latence_moy_ms: number | null; latence_p95_ms: number | null; source: string;
 }
-interface Historique { heures: number; intervalle_minutes: number; mesures: Mesure[] }
+interface Incident { code: string; libelle: string; debut: string; fin: string | null; en_cours: boolean; detail: string }
+interface Historique { heures: number; intervalle_minutes: number; mesures: Mesure[]; incidents?: Incident[] }
 
 const L = 300, H = 60;
 
@@ -84,6 +85,22 @@ export function SupervisionCard() {
       {erreur && <p className="text-sm text-red-700">{erreur}</p>}
       {h && m.length === 0 && (
         <p className="text-sm text-slate-500">Pas encore de relevé : le premier arrive dans les 5 minutes suivant le démarrage.</p>
+      )}
+      {(h?.incidents?.length ?? 0) > 0 && (
+        <div className="mb-3 space-y-1">
+          <p className="text-sm font-medium text-slate-700">Incidents (7 derniers jours)</p>
+          <ul className="space-y-1 text-xs">
+            {h!.incidents!.map((i) => (
+              <li key={`${i.code}-${i.debut}`}
+                className={`rounded px-2 py-1 ${i.en_cours ? "bg-red-50 text-red-800" : "bg-slate-50 text-slate-600"}`}>
+                <b>{i.libelle}</b> · {new Date(i.debut).toLocaleString("fr-FR")}
+                {i.fin ? ` → ${new Date(i.fin).toLocaleString("fr-FR")}` : " · en cours"}
+                <span className="block">{i.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-slate-500">Les administrateurs de l'instance sont prévenus par e-mail (rappel au plus une fois par jour).</p>
+        </div>
       )}
       {m.length > 0 && (
         <div className="space-y-3">
