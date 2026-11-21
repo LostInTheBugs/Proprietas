@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.065 — 2026-11-22
+
+- Documents : le contenu doit correspondre à l'extension (un exécutable renommé en .pdf est refusé). Diagnostic : contrôle de la clé secrète et rappel de sauvegarder le `.env`.
+
 ## 2026.11.064 — 2026-11-21
 
 - Sécurité : dépendances sans faille connue (FastAPI 0.165, Starlette 1.10, PyJWT 2.15, cryptography 50, python-multipart 0.0.34, Vite 6.4.6) ; la CI vérifie ruff, pip-audit et npm audit. Tests de propriété sur les répartitions et les majorités.
