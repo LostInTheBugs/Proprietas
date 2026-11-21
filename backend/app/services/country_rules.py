@@ -333,6 +333,8 @@ NATURES_RESOLUTION = {
     "autre": "Autre décision",
     "budget": "Vote du budget prévisionnel",
     "approbation_comptes": "Approbation des comptes",
+    "syndic": "Désignation du syndic",
+    "conseil": "Élection du conseil syndical",
 }
 NATURES_EXCLUES_CONSULTATION = ("budget", "approbation_comptes")
 

@@ -65,7 +65,26 @@ TABLES = [
     "budget_lines", "etats_reprise", "etats_reprise_lignes", "soldes_bancaires", "appels_fonds", "appels_lots", "documents",
     "releve_lignes", "mutations", "mouvements", "ags", "ag_creneaux", "ag_creneau_votes", "resolutions", "votes", "invitations",
     "ag_reponses", "votes_correspondance", "notifications_pv", "carnet_entretien", "travaux", "relances", "actes_recouvrement", "messages",
+    "mandats",
 ]
+# Comptes cités dans des colonnes JSON (pas de clé étrangère) : exportés et renumérotés à l'import.
+#   mandats.membres : [{"personne_id", "nom"}] ; resolutions.mandat_personnes : [id].
+
+
+def _ids_json(nom: str, ligne: dict) -> list[int]:
+    if nom == "mandats":
+        return [m["personne_id"] for m in (ligne.get("membres") or []) if m.get("personne_id")]
+    if nom == "resolutions":
+        return list(ligne.get("mandat_personnes") or [])
+    return []
+
+
+def _renumeroter_json(nom: str, valeurs: dict, users: dict) -> None:
+    if nom == "mandats" and valeurs.get("membres"):
+        valeurs["membres"] = [{**m, "personne_id": users.get(m["personne_id"])} if m.get("personne_id") else m
+                              for m in valeurs["membres"]]
+    elif nom == "resolutions" and valeurs.get("mandat_personnes"):
+        valeurs["mandat_personnes"] = [users[i] for i in valeurs["mandat_personnes"] if i in users] or None
 # Lignes d'une table : directement par copropriété, ou par leur parent (colonne → table parente).
 PAR_PARENT = {
     "cles_lots": ("cle_id", "cles_repartition"),
@@ -132,6 +151,9 @@ def _anonymiser(donnees: dict) -> None:
                     ligne[champ] = ""
     for ligne in donnees.get("notifications_pv") or []:
         ligne["nom"] = noms.get(ligne.get("user_id"), "")
+    for ligne in donnees.get("mandats") or []:          # noms libres (personnes sans compte) : effacés
+        ligne["membres"] = [{"personne_id": m.get("personne_id"), "nom": noms.get(m.get("personne_id"), "")}
+                            for m in ligne.get("membres") or []]
 
 
 def _table(nom):
@@ -208,6 +230,8 @@ def exporter(db: Session, copro, stockage, sortie, *, mot_de_passe: str = "",
         for col, cible in _cles(_table(nom)).items():
             if cible == "users":
                 users_ids |= {r[col] for r in rows if r.get(col)}
+        for r in rows:
+            users_ids |= set(_ids_json(nom, r))
     tu = _table("users")
     lignes["users"] = [dict(r._mapping) for r in db.execute(select(tu).where(tu.c.id.in_(users_ids or {-1})))]
 
@@ -401,6 +425,7 @@ def importer(db: Session, contenu: io.BufferedIOBase, importeur, stockage, mot_d
                 elif nom == "documents" and valeurs.get("fichier"):
                     valeurs["fichier"] = _copier_fichier(z, valeurs["fichier"], stockage, fichiers_ecrits, budget)
                     stats["documents"] += 1
+                _renumeroter_json(nom, valeurs, remap["users"])
                 nouvel_id = db.execute(t.insert().values(**valeurs)).inserted_primary_key[0]
                 remap[nom][ancien_id] = nouvel_id
                 for k, v in auto:

@@ -8,6 +8,7 @@ import NotificationsPVPanel from "../components/NotificationsPV";
 import { CorrespondanceSyndic, MaReponseAg, PresencesSyndic } from "../components/Presences";
 import { ListeModele, ResolutionsTypesModal, useModele } from "../components/ResolutionsTypes";
 import { useCles } from "../components/Cles";
+import { MandatsCard, useMandats } from "../components/Mandats";
 export default function Ag() {
   const { user } = useUser();
   const isSyndic = user?.role === "syndic";
@@ -17,8 +18,10 @@ export default function Ag() {
   const [majorites, setMajorites] = useState<Record<string, Majorite>>({});
   const [modal, setModal] = useState<null | { type: "ag"; ag?: AG } | { type: "resolution"; agId: number; resolution?: Resolution }>(null);
   const [error, setError] = useState("");
+  const [revMandats, setRevMandats] = useState(0);   // recharge les mandats après un vote ou une modification
 
   const load = useCallback(async () => {
+    setRevMandats((n) => n + 1);
     const [a, l, m] = await Promise.all([
       api.get<AG[]>("/ag"),
       api.get<Lot[]>("/lots"),
@@ -54,6 +57,8 @@ export default function Ag() {
       </div>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      <MandatsCard isSyndic={isSyndic} ags={ags} rev={revMandats} />
 
       {ags.length === 0 ? (
         <Empty text="Aucune assemblée. Créez la prochaine AG : proposez des dates, envoyez les convocations, suivez les votes." />
@@ -574,7 +579,10 @@ const NATURES: Record<string, string> = {
   autre: "Autre décision",
   budget: "Vote du budget prévisionnel",
   approbation_comptes: "Approbation des comptes",
+  syndic: "Désignation du syndic",
+  conseil: "Élection du conseil syndical",
 };
+const HORS_CONSULTATION = ["budget", "approbation_comptes"];
 
 function AgModal({ initial, onClose, onSaved, onError }: {
   initial?: AG; onClose: () => void; onSaved: () => void; onError: (e: string) => void;
@@ -682,6 +690,10 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
   const [cles] = useCles();
   const [cleId, setCleId] = useState(initial?.cle_id != null ? String(initial.cle_id) : "");
   const [effacerVotes, setEffacerVotes] = useState(false);
+  const [mandats] = useMandats();
+  const [mandatMois, setMandatMois] = useState(initial?.mandat_mois != null ? String(initial.mandat_mois) : "36");
+  const [mandatIds, setMandatIds] = useState<number[]>(initial?.mandat_personnes ?? []);
+  const estMandat = nature === "syndic" || nature === "conseil";
   useEffect(() => {
     api.get<Exercice[]>("/exercices").then(setExercices).catch(() => {});
   }, []);
@@ -691,6 +703,8 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
         numero: Number(numero), libelle, texte, majorite, nature,
         exercice_id: nature === "approbation_comptes" && exerciceId ? Number(exerciceId) : null,
         cle_id: nature === "autre" && cleId ? Number(cleId) : null,
+        mandat_mois: estMandat && mandatMois ? Number(mandatMois) : null,
+        mandat_personnes: estMandat && mandatIds.length ? mandatIds : null,
       };
       if (initial) await api.put(`/resolutions/${initial.id}${effacerVotes ? "?effacer_votes=true" : ""}`, corps);
       else await api.post(`/ag/${agId}/resolutions`, corps);
@@ -711,7 +725,7 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
         </div>
         <Select label="Objet" value={nature} onChange={(e) => setNature(e.target.value)}>
           {Object.entries(NATURES).map(([k, l]) => (
-            <option key={k} value={k} disabled={consultation && k !== "autre"}>{l}</option>
+            <option key={k} value={k} disabled={consultation && HORS_CONSULTATION.includes(k)}>{l}</option>
           ))}
         </Select>
         {nature === "approbation_comptes" && (
@@ -722,6 +736,27 @@ function ResolutionModal({ agId, initial, majorites, consultation, onClose, onSa
               <option key={e.id} value={e.id}>{e.annee}{e.comptes_approuves_le ? " (déjà approuvés)" : ""}</option>
             ))}
           </Select>
+        )}
+        {estMandat && (
+          <div className="space-y-2 rounded-lg border border-slate-200 p-2">
+            <Input label="Durée du mandat (mois, 36 au plus)" type="number" min={1} max={36} value={mandatMois}
+              onChange={(e) => setMandatMois(e.target.value)} />
+            <span className="block text-sm font-medium text-slate-600">{nature === "syndic" ? "Syndic désigné" : "Membres élus"}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {(mandats?.personnes ?? []).map((p) => (
+                <label key={p.id} className="flex items-center gap-1.5 text-slate-700">
+                  <input type={nature === "syndic" ? "radio" : "checkbox"} name="resolution-mandat" checked={mandatIds.includes(p.id)}
+                    onChange={(e) => setMandatIds(nature === "syndic" ? (e.target.checked ? [p.id] : [])
+                      : e.target.checked ? [...mandatIds, p.id] : mandatIds.filter((x) => x !== p.id))} />
+                  {p.nom}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              Adoptée, la résolution enregistre le mandat à partir du jour de l'AG (carte « Syndic et conseil syndical »).
+              Sans durée ou sans personne, rien n'est enregistré.
+            </p>
+          </div>
         )}
         {nature === "autre" && cles.length > 0 && (
           <Select label="Votants" value={cleId} onChange={(e) => setCleId(e.target.value)}>

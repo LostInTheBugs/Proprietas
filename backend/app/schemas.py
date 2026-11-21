@@ -832,6 +832,10 @@ class ResolutionIn(BaseModel):
     exercice_id: Optional[int] = None
     # Clé de répartition : seuls les copropriétaires concernés votent, avec ses millièmes (art. 24, dernier alinéa).
     cle_id: Optional[int] = None
+    # Désignation du syndic / élection du conseil syndical : durée (36 mois au plus) et comptes désignés ;
+    # adoptée, la résolution enregistre le mandat (services/mandats.py).
+    mandat_mois: Optional[int] = None
+    mandat_personnes: Optional[List[int]] = None
 
     @field_validator("nature")
     @classmethod
@@ -878,6 +882,8 @@ class ResolutionOut(BaseModel):
     amendee: bool = False
     cle_id: Optional[int] = None
     cle_nom: str = ""
+    mandat_mois: Optional[int] = None
+    mandat_personnes: Optional[List[int]] = None
     votes: List[VoteOut] = []
     resultat: Optional[ResolutionResult] = None
 
