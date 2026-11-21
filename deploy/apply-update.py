@@ -43,7 +43,9 @@ Avant toute modification, vérifie l'espace disque libre : 1,5 Go en « build »
     sudo python3 deploy/apply-update.py --dry-run  # montre ce qui serait fait, ne change rien
 
 Écrit `data/updates/update-applier.json` (battement de cœur + résultat, lu par le site)
-et journalise dans `data/updates/update.log`.
+et journalise dans `data/updates/update.log`. Sans demande en attente, écrit aussi
+`data/updates/ressources.json` : processeur, mémoire, disque de la machine et de chaque conteneur
+du projet (`docker stats`), affichés à l'administrateur dans Réglages → Serveur.
 """
 from __future__ import annotations
 
@@ -358,10 +360,105 @@ def wait_version(version: str) -> None:
     raise RuntimeError(f"l'API ne répond pas en {version} après {HEALTH_TIMEOUT_S} s (dernière réponse : {last!r})")
 
 
+# ---------------------------------------------------------------- ressources (Réglages → Serveur)
+RESSOURCES = UPD / "ressources.json"
+UNITES = {"b": 1, "kb": 1000, "mb": 1000 ** 2, "gb": 1000 ** 3, "tb": 1000 ** 4,
+          "kib": 1024, "mib": 1024 ** 2, "gib": 1024 ** 3, "tib": 1024 ** 4}
+
+
+def taille_octets(texte: str) -> int | None:
+    """« 150MiB », « 1.5GiB », « 512kB » (affichage de `docker stats`) → octets ; None si illisible."""
+    m = re.match(r"^\s*([\d.]+)\s*([a-zA-Z]+)\s*$", texte or "")
+    if not m or m.group(2).lower() not in UNITES:
+        return None
+    return int(float(m.group(1)) * UNITES[m.group(2).lower()])
+
+
+def lire_stats(lignes: list[str], services: dict[str, str]) -> list[dict]:
+    """Lignes JSON de `docker stats` → conteneurs de ce projet (`services` : nom du conteneur → service)."""
+    out = []
+    for ligne in lignes:
+        try:
+            d = json.loads(ligne)
+        except ValueError:
+            continue
+        nom = d.get("Name") or ""
+        if nom not in services:
+            continue
+        utilise, _, limite = (d.get("MemUsage") or "").partition("/")
+        try:
+            cpu = float((d.get("CPUPerc") or "0").rstrip("%"))
+        except ValueError:
+            cpu = 0.0
+        out.append({"service": services[nom], "conteneur": nom, "cpu_pct": cpu,
+                    "mem_octets": taille_octets(utilise), "mem_limite": taille_octets(limite)})
+    return sorted(out, key=lambda x: x["service"])
+
+
+def _commande(cmd: list[str]) -> str:
+    """Commande de lecture, sans journal (toutes les minutes) ; "" si elle échoue."""
+    try:
+        res = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return res.stdout if res.returncode == 0 else ""
+
+
+def _conteneurs_du_projet() -> dict[str, str]:
+    sortie = _commande(["docker", "compose", "ps", "--format", "json"]).strip()
+    if not sortie:
+        return {}
+    try:
+        lignes = json.loads(sortie) if sortie.startswith("[") else [json.loads(l) for l in sortie.splitlines() if l]
+    except ValueError:
+        return {}
+    return {c.get("Name", ""): c.get("Service", "") for c in lignes if c.get("Name")}
+
+
+def _meminfo() -> dict:
+    vals = {}
+    try:
+        for ligne in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            cle, _, reste = ligne.partition(":")
+            vals[cle] = int(reste.split()[0]) * 1024
+    except (OSError, ValueError, IndexError):
+        return {}
+    return {"total": vals.get("MemTotal"), "disponible": vals.get("MemAvailable"),
+            "swap_total": vals.get("SwapTotal"), "swap_libre": vals.get("SwapFree")}
+
+
+def ressources() -> None:
+    """Écrit `ressources.json` : la machine entière et chaque conteneur du projet (lu par le site)."""
+    try:
+        try:
+            charge = list(os.getloadavg())
+        except OSError:
+            charge = []
+        try:
+            demarre = float(Path("/proc/uptime").read_text().split()[0])
+        except (OSError, ValueError, IndexError):
+            demarre = None
+        u = shutil.disk_usage(APP_DIR)
+        conteneurs = _conteneurs_du_projet()
+        stats = (_commande(["docker", "stats", "--no-stream", "--format", "{{json .}}", *conteneurs]).splitlines()
+                 if conteneurs else [])
+        data = {"at": time.time(),
+                "hote": {"cpus": os.cpu_count() or 1, "charge": charge, "memoire": _meminfo(),
+                         "disque": {"total": u.total, "utilise": u.total - u.free, "libre": u.free},
+                         "demarre_depuis_s": demarre},
+                "services": lire_stats(stats, conteneurs)}
+        tmp = RESSOURCES.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        tmp.replace(RESSOURCES)
+    except Exception as exc:  # noqa: BLE001 — jamais au détriment des mises à jour
+        log(f"ressources : {exc}")
+
+
 def main() -> int:
     UPD.mkdir(parents=True, exist_ok=True)
     if not REQ.exists():
         status()                      # simple battement de cœur : le site sait que l'applicateur tourne
+        ressources()
         if not DRY:
             initialiser_versions(read_env(ENV).get("PROPRIETAS_UPDATE_STRATEGY", "build").lower())
         return 0

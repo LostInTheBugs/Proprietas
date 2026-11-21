@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core import audit
 from app.core.database import get_db
-from app.core.deps import require_syndic
+from app.core.deps import require_instance_admin, require_syndic
 from app.core.httpinfo import requete_https
 from app.models.instance import InstanceState
 from app.models.user import User
@@ -91,3 +91,15 @@ def lancer_diagnostic(request: Request, db: Session = Depends(get_db),
                       detail=f"{ok} ok / {len(resultats)} vérifications", request=request)
     db.commit()
     return DiagnosticOut(checked_at=inst.last_check_at, results=resultats)
+
+
+@router.get("/ressources")
+def ressources(db: Session = Depends(get_db), user: User = Depends(require_instance_admin)):
+    """Processeur, mémoire, disque : de la machine et par service (si l'applicateur tourne), sinon vus de
+    l'application (services/ressources.py)."""
+    from app.core.stockage import StockageLocal
+    from app.routes.espace_stockage import _stockage, _taille_base
+    from app.services import ressources as svc
+    st = _stockage()
+    chemin = st.dossier if isinstance(st, StockageLocal) else "."
+    return svc.etat(chemin, _taille_base(db))
