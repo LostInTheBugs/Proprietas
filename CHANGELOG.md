@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.060 — 2026-11-21
+
+- Réunion en ligne : serveur Jitsi propre en option (réglage de la copropriété ; profil docker-compose « jitsi », éteint par défaut ; docs/jitsi.md).
+
 ## 2026.11.059 — 2026-11-21
 
 - AG : réunion en ligne ; lien de visioconférence (ou salle Jitsi créée en un clic) dans l'e-mail d'information ; réponse « en visioconférence », comptée présente sur la feuille de présence et le PV.

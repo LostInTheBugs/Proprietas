@@ -6,7 +6,7 @@
 
 > Anciennement **CoproApp**, renommée **Proprietas** en septembre 2026 (nouvelle identité
 > visuelle ; le dépôt GitHub devient `LostInTheBugs/Proprietas`, les anciennes URLs redirigent).
-> Version courante : **2026.11.059**.
+> Version courante : **2026.11.060**.
 
 ![Tableau de bord de la démo (copropriété fictive)](docs/screenshot.png)
 
@@ -690,7 +690,7 @@ et peut faire tomber un petit VPS. À chaque release, GitHub publie l'image tout
 
 ```bash
 echo 'PROPRIETAS_UPDATE_STRATEGY=pull' >> .env      # l'applicateur télécharge au lieu de construire
-echo 'PROPRIETAS_VERSION=2026.11.059' >> .env       # version de l'image (mise à jour par l'applicateur)
+echo 'PROPRIETAS_VERSION=2026.11.060' >> .env       # version de l'image (mise à jour par l'applicateur)
 docker compose pull backend && docker compose up -d --no-build
 ```
 
