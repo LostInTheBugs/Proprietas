@@ -18,6 +18,8 @@ os.environ["COPRO_UPLOAD_DIR"] = tempfile.mkdtemp(prefix="copro-tests-uploads-")
 # Les tests contrôlent explicitement la politique 2FA de chaque copro : pas de
 # 2FA imposée par défaut (les tests dédiés activent la politique qu'ils testent).
 os.environ["COPRO_TOTP_DEFAULT_POLICY"] = "off"
+# Clé de signature de 32 octets au moins (RFC 7518, § 3.2) : PyJWT avertit sinon à chaque jeton.
+os.environ.setdefault("COPRO_SECRET_KEY", "cle-de-test-proprietas-0123456789abcdef")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

@@ -307,7 +307,11 @@ de toutes les routes de l'API (`tests/test_matrice_droits.py`) : liste figée de
 pour le copropriétaire sur les routes du syndic et pour le syndic sur celles de l'administrateur ; aucun succès
 et aucune donnée modifiée quand le syndic d'une autre copropriété vise les objets de la copropriété A. Une
 nouvelle route publique, ou une nouvelle écriture ouverte au copropriétaire, fait échouer ce test tant qu'elle
-n'est pas ajoutée sciemment à sa liste.
+n'est pas ajoutée sciemment à sa liste. Des **tests de propriété** (`tests/test_proprietes_argent.py`,
+Hypothesis) génèrent des centaines de copropriétés : répartitions toujours exactes au centime, appels par le
+budget puis par clé, majorités cohérentes (tout pour : adoptée ; un « contre » qui passe « pour » ne fait jamais
+rejeter), réduction de l'art. 22. La CI vérifie aussi le code (`ruff`, erreurs graves) et les failles connues
+des dépendances (`pip-audit`, `npm audit` au niveau « élevé »).
 
 Elle couvre aussi : isolation multi-copro,
 majorités légales (art. 24/25/26, unanimité, régime 2 copropriétaires, passerelle
