@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.063 — 2026-11-21
+
+- Tests : matrice des droits sur toutes les routes de l'API (publiques figées, non connecté, copropriétaire, syndic non administrateur, autre copropriété) ; README à jour.
+
 ## 2026.11.062 — 2026-11-21
 
 - Réglages → Serveur : ressources du serveur (processeur, mémoire, disque) et détail par service (application, base de données, Jitsi), relevés par l'applicateur de mises à jour.
