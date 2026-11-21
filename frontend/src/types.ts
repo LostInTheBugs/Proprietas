@@ -308,6 +308,7 @@ export interface AG {
   notes: string;
   rappel_jours: number;
   convocation_envoyee: boolean;
+  lien_visio: string; // réunion en ligne : lien https de la visioconférence (vide : aucune)
   resolutions: Resolution[];
 }
 

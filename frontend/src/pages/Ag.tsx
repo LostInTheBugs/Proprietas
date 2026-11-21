@@ -142,6 +142,46 @@ export default function Ag() {
 }
 
 // ---------- Sondage de dates + invitations ----------
+/** Réunion en ligne : lien de visioconférence (Teams, Zoom, Jitsi…) ; le syndic peut créer une salle Jitsi. */
+function Visio({ ag, isSyndic, onAgChanged, onError }: {
+  ag: AG; isSyndic: boolean; onAgChanged: () => void; onError: (e: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (!ag.lien_visio && !isSyndic) return null;
+  async function creer() {
+    if (ag.lien_visio && !confirm("Remplacer le lien actuel par une nouvelle salle Jitsi ? L'ancien lien, déjà envoyé, ne servira plus.")) return;
+    setBusy(true);
+    try { await api.post(`/ag/${ag.id}/lien-jitsi`); onAgChanged(); }
+    catch (e) { onError(e instanceof Error ? e.message : "Erreur"); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+      <span className="font-semibold text-slate-700">🎥 Réunion en ligne</span>
+      {ag.lien_visio ? (
+        <>
+          <a href={ag.lien_visio} target="_blank" rel="noopener noreferrer"
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700">Rejoindre la réunion</a>
+          <span className="break-all text-xs text-slate-500">{ag.lien_visio}</span>
+        </>
+      ) : (
+        <span className="text-xs text-slate-500">Pas de visioconférence pour cette assemblée.</span>
+      )}
+      {isSyndic && (
+        <Button variant="secondary" onClick={creer} disabled={busy}>{ag.lien_visio ? "Nouvelle salle Jitsi" : "Créer une salle Jitsi"}</Button>
+      )}
+      {isSyndic && (
+        <p className="w-full text-xs text-slate-500">
+          Le lien figure dans l'e-mail d'information ; un copropriétaire en visioconférence est compté présent (loi du
+          10 juillet 1965, art. 17-1 A). L'assemblée doit avoir décidé des moyens de visioconférence (décret du 17 mars
+          1967, art. 13-1 : résolution type « Participation aux assemblées par visioconférence »). Autre outil (Teams,
+          Zoom…) : collez son lien dans « Modifier l'assemblée ».
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
   agId: number; ag: AG; lots: Lot[]; isSyndic: boolean;
   onAgChanged: () => void; onError: (e: string) => void;
@@ -207,10 +247,15 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
   }
 
   if (creneaux.length === 0 && invitations.length === 0 && !isSyndic)
-    return ag.type_ag !== "consultation_ecrite" ? <MaReponseAg agId={agId} onError={onError} /> : null;
+    return ag.type_ag !== "consultation_ecrite" ? (
+      <div className="space-y-4 border-t border-slate-100 pt-4">
+        <Visio ag={ag} isSyndic={false} onAgChanged={onAgChanged} onError={onError} />
+        <MaReponseAg agId={agId} visio={!!ag.lien_visio} onError={onError} />
+      </div>) : null;
 
   return (
     <div className="space-y-4 border-t border-slate-100 pt-4">
+      {ag.type_ag !== "consultation_ecrite" && <Visio ag={ag} isSyndic={isSyndic} onAgChanged={onAgChanged} onError={onError} />}
       {/* Sondage de dates */}
       {creneaux.length > 0 && (
         <div>
@@ -375,8 +420,9 @@ function AgExtras({ agId, ag, lots, isSyndic, onAgChanged, onError }: {
         </div>
       )}
 
-      {ag.type_ag !== "consultation_ecrite" && <MaReponseAg agId={agId} onError={onError} />}
-      {isSyndic && ag.type_ag !== "consultation_ecrite" && <PresencesSyndic key={revPresences} agId={agId} onError={onError} />}
+      {ag.type_ag !== "consultation_ecrite" && <MaReponseAg agId={agId} visio={!!ag.lien_visio} onError={onError} />}
+      {isSyndic && ag.type_ag !== "consultation_ecrite" &&
+        <PresencesSyndic key={revPresences} agId={agId} visio={!!ag.lien_visio} onError={onError} />}
       {isSyndic && ag.type_ag !== "consultation_ecrite" && (
         <CorrespondanceSyndic agId={agId} resolutions={ag.resolutions}
           onChanged={() => { setRevPresences((x) => x + 1); load(); }} onError={onError} />
@@ -593,6 +639,7 @@ function AgModal({ initial, onClose, onSaved, onError }: {
   const [statut, setStatut] = useState(initial?.statut ?? "projet");
   const [lieu, setLieu] = useState(initial?.lieu ?? "");
   const [rappelJours, setRappelJours] = useState(initial ? String(initial.rappel_jours) : "21");
+  const [lienVisio, setLienVisio] = useState(initial?.lien_visio ?? "");
   // AG annuelle : résolutions types (pré-cochées : celles de chaque année) — à la création seulement.
   const [modele, choix, setChoix] = useModele(typeAg === "annuelle" && !initial ? date : "");
   // Consultation écrite réservée aux petites copropriétés (art. 41-8 et 41-12) : null = inconnu.
@@ -602,7 +649,8 @@ function AgModal({ initial, onClose, onSaved, onError }: {
   }, []);
   async function save() {
     try {
-      const corps = { date, heure, type_ag: typeAg, statut, lieu, notes: initial?.notes ?? "", rappel_jours: Number(rappelJours) || 0 };
+      const corps = { date, heure, type_ag: typeAg, statut, lieu, notes: initial?.notes ?? "", rappel_jours: Number(rappelJours) || 0,
+        lien_visio: typeAg === "consultation_ecrite" ? "" : lienVisio.trim() };
       if (initial) { await api.put(`/ag/${initial.id}`, corps); onSaved(); return; }
       const ag = await api.post<{ id: number }>("/ag", corps);
       if (typeAg === "annuelle" && choix.size > 0) await api.post(`/ag/${ag.id}/resolutions-types`, { codes: [...choix] });
@@ -645,7 +693,15 @@ function AgModal({ initial, onClose, onSaved, onError }: {
           <option value="convoquee">Convoquée</option>
           <option value="terminee">Terminée</option>
         </Select>
+        <p className="text-xs text-slate-500">
+          Projet : en préparation (ordre du jour, créneaux). Convoquée : date fixée, réponses et pouvoirs attendus.
+          Terminée : l'assemblée a eu lieu (votes, résultats, procès-verbal).
+        </p>
         <Input label="Lieu" value={lieu} onChange={(e) => setLieu(e.target.value)} placeholder="Chez M. Durand" />
+        {typeAg !== "consultation_ecrite" && (
+          <Input label="Lien de visioconférence (facultatif : Teams, Zoom, Jitsi…)" value={lienVisio}
+            onChange={(e) => setLienVisio(e.target.value)} placeholder="https://…" />
+        )}
         <Input
           label="E-mail d'information automatique (jours avant l'AG : 0 = désactivé, sinon 21 à 90)"
           type="number"

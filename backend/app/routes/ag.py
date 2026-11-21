@@ -56,6 +56,7 @@ def _ag_out(db: Session, ag: AG) -> AGOut:
         id=ag.id, date=ag.date, heure=ag.heure, type_ag=ag.type_ag, statut=ag.statut,
         lieu=ag.lieu, notes=ag.notes,
         rappel_jours=ag.rappel_jours or 0, convocation_envoyee=bool(ag.convocation_envoyee),
+        lien_visio=ag.lien_visio or "",
         resolutions=[_resolution_out(db, r) for r in sorted(ag.resolutions, key=lambda x: x.numero)],
     )
 
@@ -420,6 +421,22 @@ def second_vote(res_id: int, db: Session = Depends(get_db), user: User = Depends
     return _resolution_out(db, sv)
 
 
+# ---------- Réunion en ligne ----------
+@router.post("/ag/{ag_id}/lien-jitsi", response_model=AGOut)
+def lien_jitsi(ag_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require_syndic)):
+    """Crée (ou remplace) le lien de visioconférence de l'AG : une salle Jitsi au nom difficile à deviner,
+    sur le serveur réglé pour l'instance (COPRO_JITSI_URL, meet.jit.si par défaut)."""
+    from app.core.config import get_settings
+    copro = get_or_create_copro(db, user)
+    ag = get_owned(db, AG, ag_id, copro, label="AG")
+    ag.lien_visio = f"{get_settings().jitsi_url.rstrip('/')}/Proprietas-{secrets.token_hex(12)}"
+    audit.enregistrer(db, "ag_lien_visio", user=user, copro_id=copro.id, request=request,
+                      detail=f"AG du {ag.date:%d/%m/%Y} : lien Jitsi créé")
+    db.commit()
+    db.refresh(ag)
+    return _ag_out(db, ag)
+
+
 # ---------- Sondage de dates (type Doodle) ----------
 @router.get("/ag/{ag_id}/creneaux", response_model=list[CreneauOut])
 def list_creneaux(ag_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -590,7 +607,7 @@ def _formulaire_reponse(db: Session, ag, personne, reponse, erreur: str = "") ->
     actuelle = reponse.reponse if reponse else ""
     choix = "".join(
         f'<label><input type="radio" name="reponse" value="{k}"{" checked" if k == actuelle else ""} required> '
-        f'{html.escape(v + (" à…" if k == "pouvoir" else ""))}</label>' for k, v in presences.REPONSES.items())
+        f'{html.escape(v + (" à…" if k == "pouvoir" else ""))}</label>' for k, v in presences.reponses_possibles(ag).items())
     options = "".join(
         f'<option value="{u.id}"{" selected" if reponse and reponse.mandataire_id == u.id else ""}>'
         f'{html.escape(presences.nom(u))}</option>' for u in presences.mandataires_possibles(db, ag.copropriete_id, personne))

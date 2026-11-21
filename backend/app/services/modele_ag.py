@@ -141,6 +141,12 @@ def modeles(db: Session, copro, jour: date) -> list[dict]:
           f"L'assemblée générale fixe à {A_COMPLETER} € TTC le montant des marchés et contrats à partir duquel une "
           "mise en concurrence est obligatoire (loi du 10 juillet 1965, art. 21).",
           majorite="art25", coche=False, remarque="Une fois, puis seulement pour le changer."),
+        m("visio", "Participation aux assemblées par visioconférence",
+          "L'assemblée générale décide que les copropriétaires peuvent participer aux assemblées générales par "
+          f"visioconférence, au moyen de {A_COMPLETER} (lien communiqué avec la convocation), qui permet de les "
+          "identifier et de transmettre leur voix de façon continue et simultanée (loi du 10 juillet 1965, "
+          "art. 17-1 A ; décret n° 67-223 du 17 mars 1967, art. 13-1 et 13-2).",
+          coche=False, remarque="Une fois, avant de proposer la visioconférence."),
         m("pppt", "Plan pluriannuel de travaux",
           f"L'assemblée générale décide des modalités d'élaboration du projet de plan pluriannuel de travaux "
           f"(loi du 10 juillet 1965, art. 14-2) : {A_COMPLETER}.",

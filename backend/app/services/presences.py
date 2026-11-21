@@ -29,11 +29,14 @@ from app.services.country_rules import poids_de_vote
 
 REPONSES = {
     "present": "Je serai présent(e)",
+    "visio": "Je participerai en visioconférence",
     "pouvoir": "Je ne serai pas présent(e) et je donne pouvoir",
     "absent": "Je ne serai pas présent(e)",
     "incertain": "Je ne sais pas encore",
 }
-LIBELLES_COURTS = {"present": "Présent", "pouvoir": "Représenté", "absent": "Absent", "incertain": "Incertain",
+# Présent sur place ou par visioconférence (loi n° 65-557, art. 17-1 A : réputé présent).
+PRESENTS = ("present", "visio")
+LIBELLES_COURTS = {"present": "Présent", "visio": "En visio", "pouvoir": "Représenté", "absent": "Absent", "incertain": "Incertain",
                    "correspondance": "Vote par correspondance"}
 MAX_DELEGATIONS = 3
 PART_MAX = Fraction(1, 10)
@@ -112,10 +115,17 @@ def controler_mandat(db: Session, ag: AG, mandant: User, mandataire_id: int | No
     return mandataire
 
 
+def reponses_possibles(ag: AG) -> dict:
+    """Choix proposés : « en visioconférence » seulement si l'AG a un lien de réunion en ligne."""
+    return {k: v for k, v in REPONSES.items() if k != "visio" or ag.lien_visio}
+
+
 def repondre(db: Session, ag: AG, personne: User, reponse: str, mandataire_id: int | None, source: str) -> AgReponse:
     """Enregistre (ou change) la réponse ; l'appelant fait le commit."""
     if reponse not in REPONSES:
         raise HTTPException(422, "Réponse inconnue.")
+    if reponse not in reponses_possibles(ag):
+        raise HTTPException(422, "Cette assemblée n'a pas de lien de visioconférence.")
     if personne not in coproprietaires(db, ag.copropriete_id):
         raise HTTPException(422, "Seuls les copropriétaires répondent à l'information sur l'AG.")
     mandataire = controler_mandat(db, ag, personne, mandataire_id) if reponse == "pouvoir" else None
@@ -163,13 +173,14 @@ def etat(db: Session, ag: AG) -> dict:
         "ouvert": reponses_ouvertes(ag),
         "lignes": lignes,
         "totaux": {
-            "presents": sum(1 for l in lignes if l["reponse"] == "present"),
+            "presents": sum(1 for l in lignes if l["reponse"] in PRESENTS),
+            "visio": sum(1 for l in lignes if l["reponse"] == "visio"),
             "representes": sum(1 for l in lignes if l["reponse"] == "pouvoir"),
             "absents": sum(1 for l in lignes if l["reponse"] == "absent"),
             "incertains": sum(1 for l in lignes if l["reponse"] == "incertain"),
             "correspondances": sum(1 for l in lignes if l["reponse"] == "correspondance"),
             "voix_correspondance": total_voix("correspondance"),
             "sans_reponse": sum(1 for l in lignes if not l["reponse"]),
-            "voix_presentes_ou_representees": total_voix("present", "pouvoir"),
+            "voix_presentes_ou_representees": total_voix(*PRESENTS, "pouvoir"),
         },
     }

@@ -95,7 +95,7 @@ def test_depuis_le_compte_et_tableau_du_syndic(client, db, copro_a, syndic_a, to
     assert lignes[paul.id]["mandats"] == 1 and lignes[syndic_a.id]["reponse"] == ""
     assert e["totaux"] == {"presents": 1, "representes": 1, "absents": 0, "incertains": 1, "sans_reponse": 1,
                            "voix_presentes_ou_representees": 600.0,
-                           "correspondances": 0, "voix_correspondance": 0.0}
+                           "correspondances": 0, "voix_correspondance": 0.0, "visio": 0}
     # Pouvoir signé reçu, puis le pouvoir du syndic et la feuille de présence en PDF.
     r = client.put(f"/api/ag/{ag_id}/presences/{marie.id}",
                    json={"reponse": "pouvoir", "mandataire_id": paul.id, "pouvoir_recu": True}, headers=auth(token_a))
