@@ -5,6 +5,7 @@
 - `releve` (planificateur, toutes les 5 minutes) enregistre processeur, mémoire et disque (services/ressources.py :
   machine entière si l'applicateur tourne, sinon vue de l'application) avec les compteurs, puis les remet à zéro.
 - Les relevés de plus de 7 jours sont supprimés.
+- Après chaque relevé, services/alertes_serveur.py vérifie les seuils et prévient les administrateurs.
 Un seul processus uvicorn (comme le planificateur) : les compteurs sont en mémoire.
 """
 from __future__ import annotations
@@ -87,7 +88,9 @@ def historique(db: Session, heures: int) -> dict:
     depuis = datetime.now() - timedelta(hours=heures)
     mesures = (db.query(MesureServeur).filter(MesureServeur.instant >= depuis)
                .order_by(MesureServeur.instant).all())
+    from app.services import alertes_serveur
     return {"heures": heures, "intervalle_minutes": INTERVALLE_MINUTES,
+            "incidents": alertes_serveur.recents(db, heures),
             "mesures": [{"instant": m.instant, "cpu_pct": m.cpu_pct, "memoire_pct": m.memoire_pct,
                          "disque_pct": m.disque_pct, "requetes": m.requetes, "erreurs_5xx": m.erreurs_5xx,
                          "latence_moy_ms": m.latence_moy_ms, "latence_p95_ms": m.latence_p95_ms,
