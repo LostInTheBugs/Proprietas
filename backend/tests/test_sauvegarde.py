@@ -207,7 +207,7 @@ def test_toutes_les_tables_de_la_copropriete_sont_couvertes():
     from app.core.database import Base
     from app.services.sauvegarde import TABLES, TABLES_IGNOREES
 
-    hors_copro = {"audit_logs", "instance_state", "mesures_serveur"}   # journal, état et supervision de l'instance
+    hors_copro = {"audit_logs", "instance_state", "mesures_serveur", "incidents_serveur"}   # journal, état et supervision de l'instance
     oubliees = [n for n in Base.metadata.tables if n not in TABLES and n not in TABLES_IGNOREES and n not in hors_copro]
     assert oubliees == []
 
