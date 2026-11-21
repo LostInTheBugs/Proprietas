@@ -64,8 +64,19 @@ def _deps(dependant, acc=None):
     return acc
 
 
-ROUTES = sorted(((m, r.path, r) for r in app.routes if isinstance(r, APIRoute) for m in r.methods),
-                key=lambda x: (x[1], x[0]))
+def _api_routes(routes):
+    """Routes de l'API, y compris celles des routeurs inclus (FastAPI récent les garde dans `original_router`)."""
+    for r in routes:
+        if isinstance(r, APIRoute):
+            yield r
+        sous = getattr(r, "original_router", None)
+        if sous is not None:
+            yield from _api_routes(sous.routes)
+
+
+ROUTES = sorted({(m, r.path): r for r in _api_routes(app.routes) for m in r.methods}.items(),
+                key=lambda x: (x[0][1], x[0][0]))
+ROUTES = [(m, p, r) for (m, p), r in ROUTES]
 
 
 def _role(route) -> str:
