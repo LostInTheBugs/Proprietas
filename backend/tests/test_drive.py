@@ -214,10 +214,10 @@ def test_nouveau_fichier_range_sur_le_drive(client, db, copro_a, syndic_a, token
 
 def test_nom_deja_pris(client, db, copro_a, syndic_a, token_a, serveur):
     _brancher(client, token_a)
-    noms = [_deposer(client, token_a, contenu=str(n).encode()).json()["fichier"] for n in range(3)]
+    noms = [_deposer(client, token_a, contenu=b"%PDF-" + str(n).encode()).json()["fichier"] for n in range(3)]
     assert noms == [f"Factures/{AUJ} Facture d'électricité.pdf", f"Factures/{AUJ} Facture d'électricité (2).pdf",
                     f"Factures/{AUJ} Facture d'électricité (3).pdf"]
-    assert serveur.fichiers[f"{DOSSIER}/{noms[1]}"] == b"1"            # aucun fichier écrasé
+    assert serveur.fichiers[f"{DOSSIER}/{noms[1]}"] == b"%PDF-1"            # aucun fichier écrasé
 
 
 def test_telecharger_et_supprimer(client, db, copro_a, syndic_a, token_a, serveur):

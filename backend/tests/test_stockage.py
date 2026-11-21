@@ -163,7 +163,7 @@ def _locaux():
 
 def test_route_upload_telechargement_suppression_s3(client, token_a, route_s3):
     avant = _locaux()
-    contenu = os.urandom(1_500_000)
+    contenu = b"%PDF-1.7\n" + os.urandom(1_500_000)
     r = _envoyer(client, token_a, contenu, libelle="Contrat été")
     assert r.status_code == 200, r.text
     doc = r.json()
@@ -181,7 +181,7 @@ def test_route_upload_telechargement_suppression_s3(client, token_a, route_s3):
 
 def test_route_trop_volumineux_rien_dans_le_bucket(client, token_a, route_s3, monkeypatch):
     monkeypatch.setattr(docs.settings, "upload_max_mb", 1.5)
-    r = _envoyer(client, token_a, b"x" * 2_000_000)
+    r = _envoyer(client, token_a, b"%PDF-" + b"x" * 2_000_000)
     assert r.status_code == 413
     assert _cles(route_s3) == []
 

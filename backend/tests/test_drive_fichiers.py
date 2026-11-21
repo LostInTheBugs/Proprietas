@@ -41,8 +41,8 @@ def _api(client, token, methode, chemin, **kw):
 
 # ---------------------------------------------------------------- déplacer, rapatrier
 def test_deplacer_les_fichiers_existants(client, db, copro_a, syndic_a, token_a, serveur, dossier_local):
-    a = _deposer(client, token_a, libelle="Contrat ascenseur", categorie="contrat", contenu=b"contrat").json()
-    b = _deposer(client, token_a, libelle="Facture EDF", contenu=b"facture-edf").json()
+    a = _deposer(client, token_a, libelle="Contrat ascenseur", categorie="contrat", contenu=b"%PDF-contrat").json()
+    b = _deposer(client, token_a, libelle="Facture EDF", contenu=b"%PDF-facture-edf").json()
     doc = db.get(Document, a["id"])
     doc.date_ajout = date(2024, 3, 5)
     db.commit()
@@ -57,9 +57,9 @@ def test_deplacer_les_fichiers_existants(client, db, copro_a, syndic_a, token_a,
     assert list(dossier_local.iterdir()) == []                       # plus rien sur le serveur
     db.expire_all()
     doc = db.get(Document, a["id"])
-    assert (doc.emplacement, doc.fichier, doc.taille) == ("drive", "Contrats/2024-03-05 Contrat ascenseur.pdf", 7)
-    assert doc.empreinte == hashlib.sha256(b"contrat").hexdigest()
-    assert client.get(f"/api/documents/{b['id']}/download", headers=auth(token_a)).content == b"facture-edf"
+    assert (doc.emplacement, doc.fichier, doc.taille) == ("drive", "Contrats/2024-03-05 Contrat ascenseur.pdf", 12)
+    assert doc.empreinte == hashlib.sha256(b"%PDF-contrat").hexdigest()
+    assert client.get(f"/api/documents/{b['id']}/download", headers=auth(token_a)).content == b"%PDF-facture-edf"
     assert db.query(AuditLog).filter(AuditLog.action == "drive_deplacement").count() == 1
     # Rien à refaire.
     assert _api(client, token_a, "post", "deplacer").json()["deplaces"] == 0
@@ -68,7 +68,7 @@ def test_deplacer_les_fichiers_existants(client, db, copro_a, syndic_a, token_a,
 def test_deplacement_par_lots(client, db, copro_a, syndic_a, token_a, serveur, dossier_local, monkeypatch):
     monkeypatch.setattr(drive_fichiers, "LOT_FICHIERS", 2)
     for n in range(5):
-        _deposer(client, token_a, libelle=f"Doc {n}", contenu=str(n).encode())
+        _deposer(client, token_a, libelle=f"Doc {n}", contenu=b"%PDF-" + str(n).encode())
     _brancher(client, token_a)
     bilans = [_api(client, token_a, "post", "deplacer").json() for _ in range(3)]
     assert [(b["deplaces"], b["restants"]) for b in bilans] == [(2, 3), (2, 1), (1, 0)]
@@ -88,7 +88,7 @@ def test_fichier_absent_du_serveur_signale(client, db, copro_a, syndic_a, token_
 
 def test_panne_pendant_le_deplacement_ne_perd_rien(client, db, copro_a, syndic_a, token_a, serveur, dossier_local):
     for n in range(3):
-        _deposer(client, token_a, libelle=f"Doc {n}", contenu=str(n).encode())
+        _deposer(client, token_a, libelle=f"Doc {n}", contenu=b"%PDF-" + str(n).encode())
     _brancher(client, token_a)
     serveur.plein = True                                             # le drive refuse l'écriture
     r = _api(client, token_a, "post", "deplacer")
@@ -101,7 +101,7 @@ def test_panne_pendant_le_deplacement_ne_perd_rien(client, db, copro_a, syndic_a
 
 
 def test_copie_incomplete_refusee(client, db, copro_a, syndic_a, token_a, serveur, dossier_local, monkeypatch):
-    _deposer(client, token_a, libelle="Doc", contenu=b"0123456789")
+    _deposer(client, token_a, libelle="Doc", contenu=b"%PDF-0123456789")
     _brancher(client, token_a)
     from app.core import drive
     monkeypatch.setattr(drive.StockageWebDAV, "taille", lambda self, nom: 4)      # le drive n'a gardé que 4 octets
@@ -112,15 +112,15 @@ def test_copie_incomplete_refusee(client, db, copro_a, syndic_a, token_a, serveu
 
 def test_rapatrier_puis_debrancher(client, db, copro_a, syndic_a, token_a, serveur, dossier_local):
     _brancher(client, token_a)
-    a = _deposer(client, token_a, contenu=b"sur le drive").json()
+    a = _deposer(client, token_a, contenu=b"%PDF-sur le drive").json()
     assert client.put("/api/drive", json={"type": ""}, headers=auth(token_a)).status_code == 409
     r = _api(client, token_a, "post", "rapatrier")
     assert r.json() == {"deplaces": 1, "introuvables": [], "restants": 0}
     assert serveur.chemins() == []
     db.expire_all()
     doc = db.get(Document, a["id"])
-    assert doc.emplacement == "" and (dossier_local / doc.fichier).read_bytes() == b"sur le drive"
-    assert client.get(f"/api/documents/{a['id']}/download", headers=auth(token_a)).content == b"sur le drive"
+    assert doc.emplacement == "" and (dossier_local / doc.fichier).read_bytes() == b"%PDF-sur le drive"
+    assert client.get(f"/api/documents/{a['id']}/download", headers=auth(token_a)).content == b"%PDF-sur le drive"
     assert client.put("/api/drive", json={"type": ""}, headers=auth(token_a)).status_code == 200
     assert db.query(AuditLog).filter(AuditLog.action == "drive_rapatriement").count() == 1
 
@@ -133,15 +133,15 @@ def test_sans_drive_branche(client, db, copro_a, syndic_a, token_a, serveur):
 
 # ---------------------------------------------------------------- vérifier, retrouver, relier
 def test_depot_releve_taille_et_empreinte(client, db, copro_a, syndic_a, token_a, serveur, dossier_local):
-    a = _deposer(client, token_a, contenu=b"abc").json()
+    a = _deposer(client, token_a, contenu=b"%PDF-abc").json()
     doc = db.get(Document, a["id"])
-    assert (doc.taille, doc.empreinte) == (3, hashlib.sha256(b"abc").hexdigest())
+    assert (doc.taille, doc.empreinte) == (8, hashlib.sha256(b"%PDF-abc").hexdigest())
 
 
 def test_verifier_le_drive(client, db, copro_a, syndic_a, token_a, serveur):
     _brancher(client, token_a)
-    a = _deposer(client, token_a, libelle="Facture A", contenu=b"aaa").json()
-    _deposer(client, token_a, libelle="Facture B", contenu=b"bbbb")
+    a = _deposer(client, token_a, libelle="Facture A", contenu=b"%PDF-aaa").json()
+    _deposer(client, token_a, libelle="Facture B", contenu=b"%PDF-bbbb")
     v = _api(client, token_a, "get", "verification").json()
     assert v == {"verifies": 2, "introuvables": [], "non_rattaches": []}
     # Sur le drive : A est renommé, un fichier étranger et un fichier caché apparaissent.
@@ -153,7 +153,7 @@ def test_verifier_le_drive(client, db, copro_a, syndic_a, token_a, serveur):
     assert v["introuvables"] == [{"id": a["id"], "libelle": "Facture A", "categorie": "facture",
                                   "fichier": a["fichier"], "retrouvable": True}]
     assert v["non_rattaches"] == [{"chemin": "Divers/photo.jpg", "taille": 9},
-                                  {"chemin": "Factures/EDF novembre.pdf", "taille": 3}]
+                                  {"chemin": "Factures/EDF novembre.pdf", "taille": 8}]
 
 
 @pytest.mark.parametrize("minuscules,complet", [(True, False), (False, False), (True, True)])
@@ -161,15 +161,15 @@ def test_liste_du_drive_selon_le_serveur(client, db, copro_a, syndic_a, token_a,
     """Adresses renvoyées en %c3%a9 ou %C3%A9, relatives ou complètes : même résultat."""
     serveur.href_minuscules, serveur.href_complet = minuscules, complet
     _brancher(client, token_a)
-    a = _deposer(client, token_a, libelle="Reçu d'été", contenu=b"aaa").json()
+    a = _deposer(client, token_a, libelle="Reçu d'été", contenu=b"%PDF-aaa").json()
     assert a["fichier"] == f"Factures/{AUJ} Reçu d'été.pdf"
     assert _api(client, token_a, "get", "verification").json() == {"verifies": 1, "introuvables": [], "non_rattaches": []}
 
 
 def test_retrouver_un_fichier_renomme_ou_deplace(client, db, copro_a, syndic_a, token_a, serveur):
     _brancher(client, token_a)
-    a = _deposer(client, token_a, libelle="Facture A", contenu=b"contenu de A").json()
-    b = _deposer(client, token_a, libelle="Facture B", contenu=b"contenu de B").json()
+    a = _deposer(client, token_a, libelle="Facture A", contenu=b"%PDF-contenu de A").json()
+    b = _deposer(client, token_a, libelle="Facture B", contenu=b"%PDF-contenu de B").json()
     serveur.renommer(f"{DOSSIER}/{a['fichier']}", f"{DOSSIER}/Archives/2026/EDF.pdf")       # déplacé ET renommé
     serveur.fichiers[f"{DOSSIER}/Factures/leurre.pdf"] = b"contenu de X"                    # même taille, autre contenu
     r = _api(client, token_a, "post", "retrouver")
@@ -177,19 +177,19 @@ def test_retrouver_un_fichier_renomme_ou_deplace(client, db, copro_a, syndic_a, 
     assert r.json()["relies"] == [{"id": a["id"], "libelle": "Facture A", "ancien": a["fichier"],
                                    "nouveau": "Archives/2026/EDF.pdf"}]
     assert r.json()["introuvables"] == []
-    assert client.get(f"/api/documents/{a['id']}/download", headers=auth(token_a)).content == b"contenu de A"
-    assert client.get(f"/api/documents/{b['id']}/download", headers=auth(token_a)).content == b"contenu de B"
+    assert client.get(f"/api/documents/{a['id']}/download", headers=auth(token_a)).content == b"%PDF-contenu de A"
+    assert client.get(f"/api/documents/{b['id']}/download", headers=auth(token_a)).content == b"%PDF-contenu de B"
     detail = db.query(AuditLog).filter(AuditLog.action == "drive_fichier_relie").one().detail
     assert "Archives/2026/EDF.pdf" in detail and "contenu" in detail
 
 
 def test_retrouver_ne_devine_pas(client, db, copro_a, syndic_a, token_a, serveur):
     _brancher(client, token_a)
-    a = _deposer(client, token_a, libelle="Facture A", contenu=b"meme contenu").json()
+    a = _deposer(client, token_a, libelle="Facture A", contenu=b"%PDF-meme contenu").json()
     # Le fichier a disparu ; deux copies identiques traînent : on ne choisit pas à la place du syndic.
     del serveur.fichiers[f"{DOSSIER}/{a['fichier']}"]
-    serveur.fichiers[f"{DOSSIER}/Factures/copie 1.pdf"] = b"meme contenu"
-    serveur.fichiers[f"{DOSSIER}/Factures/copie 2.pdf"] = b"meme contenu"
+    serveur.fichiers[f"{DOSSIER}/Factures/copie 1.pdf"] = b"%PDF-meme contenu"
+    serveur.fichiers[f"{DOSSIER}/Factures/copie 2.pdf"] = b"%PDF-meme contenu"
     r = _api(client, token_a, "post", "retrouver").json()
     assert r["relies"] == [] and [i["id"] for i in r["introuvables"]] == [a["id"]]
     # Fichier modifié (autre contenu) : pas retrouvé non plus.
@@ -200,8 +200,8 @@ def test_retrouver_ne_devine_pas(client, db, copro_a, syndic_a, token_a, serveur
 
 def test_relier_a_la_main(client, db, copro_a, syndic_a, token_a, serveur):
     _brancher(client, token_a)
-    a = _deposer(client, token_a, libelle="Facture A", contenu=b"ancien").json()
-    b = _deposer(client, token_a, libelle="Facture B", contenu=b"bbb").json()
+    a = _deposer(client, token_a, libelle="Facture A", contenu=b"%PDF-ancien").json()
+    b = _deposer(client, token_a, libelle="Facture B", contenu=b"%PDF-bbb").json()
     del serveur.fichiers[f"{DOSSIER}/{a['fichier']}"]
     serveur.fichiers[f"{DOSSIER}/Factures/rescanné.pdf"] = b"nouveau scan"
     corps = {"document_id": a["id"], "chemin": "Factures/rescanné.pdf"}

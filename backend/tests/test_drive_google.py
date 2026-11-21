@@ -149,7 +149,7 @@ def test_fichiers_ranges_sur_google_drive(client, db, copro_a, syndic_a, token_a
     monkeypatch.setattr(documents.settings, "upload_dir", str(tmp_path))
     _brancher(client, token_a, google)
     a = _deposer(client, token_a).json()
-    b = _deposer(client, token_a, contenu=b"autre").json()
+    b = _deposer(client, token_a, contenu=b"%PDF-autre").json()
     from datetime import date
     jour = date.today().isoformat()
     assert (a["emplacement"], a["fichier"]) == ("drive", f"Factures/{jour} Facture d'électricité.pdf")
@@ -193,7 +193,7 @@ def test_fichier_renomme_dans_google_drive_retrouve(client, db, copro_a, syndic_
 def test_deplacer_et_sauvegarder_sur_google_drive(client, db, copro_a, syndic_a, token_a, google, tmp_path, monkeypatch):
     from app.routes import documents
     monkeypatch.setattr(documents.settings, "upload_dir", str(tmp_path))
-    ancien = _deposer(client, token_a, libelle="Ancien", contenu=b"ancien").json()
+    ancien = _deposer(client, token_a, libelle="Ancien", contenu=b"%PDF-ancien").json()
     _brancher(client, token_a, google)
     assert client.post("/api/drive/deplacer", headers=auth(token_a)).json()["deplaces"] == 1
     assert db.get(Document, ancien["id"]).emplacement == "drive"

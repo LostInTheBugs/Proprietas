@@ -46,7 +46,7 @@ def lectures(monkeypatch):
 
 
 def test_fichier_accepte_intact_et_lu_par_blocs(client, token_a, lectures):
-    contenu = os.urandom(2_500_000)                        # 2,5 Mo : plusieurs blocs
+    contenu = b"%PDF-1.7\n" + os.urandom(2_500_000)       # 2,5 Mo : plusieurs blocs
     avant = _fichiers()
     r = _envoyer(client, token_a, contenu)
     assert r.status_code == 200, r.text
@@ -61,7 +61,7 @@ def test_depassement_pendant_la_copie_413_et_rien_sur_le_disque(client, token_a,
     monkeypatch.setattr(docs.settings, "upload_max_mb", 1.5)          # limite 1,5 Mo
     avant = _fichiers()
     # 2 Mo : Content-Length (≈ 2 Mo) reste sous limite + marge → c'est la copie qui coupe
-    r = _envoyer(client, token_a, b"x" * 2_000_000)
+    r = _envoyer(client, token_a, b"%PDF-" + b"x" * 2_000_000)
     assert r.status_code == 413
     assert "trop volumineux" in r.json()["detail"]
     assert _fichiers() == avant
@@ -69,7 +69,7 @@ def test_depassement_pendant_la_copie_413_et_rien_sur_le_disque(client, token_a,
 
 def test_content_length_trop_grand_refuse_avant_lecture(client, token_a, monkeypatch, lectures):
     monkeypatch.setattr(docs.settings, "upload_max_mb", 0.5)          # 0,5 Mo
-    r = _envoyer(client, token_a, b"x" * 3_000_000)                    # 3 Mo > 0,5 + marge 1 Mo
+    r = _envoyer(client, token_a, b"%PDF-" + b"x" * 3_000_000)                    # 3 Mo > 0,5 + marge 1 Mo
     assert r.status_code == 413
     assert r.json()["detail"].startswith("Requête trop volumineuse")
     assert lectures == []                                              # le fichier n'a pas été lu

@@ -70,11 +70,11 @@ def test_plafond_de_l_instance(client, db, copro_a, copro_b, syndic_a, syndic_b,
     _brancher(client, token_a)
     _brancher(client, token_b, dossier="Proprietas/Résidence B")
     serveur.panne = True
-    assert _deposer(client, token_a, contenu=b"x" * 30_000).json()["emplacement"] == "attente"
+    assert _deposer(client, token_a, contenu=b"%PDF-" + b"x" * 30_000).json()["emplacement"] == "attente"
     # Le plafond vaut pour toute l'instance : B ne peut plus mettre 30 Ko en attente.
-    r = _deposer(client, token_b, contenu=b"y" * 30_000)
+    r = _deposer(client, token_b, contenu=b"%PDF-" + b"y" * 30_000)
     assert r.status_code == 503 and "place réservée pleine" in r.json()["detail"]
-    assert _deposer(client, token_b, contenu=b"y" * 10_000).json()["emplacement"] == "attente"
+    assert _deposer(client, token_b, contenu=b"%PDF-" + b"y" * 10_000).json()["emplacement"] == "attente"
 
 
 def test_debrancher_garde_les_depots_sur_le_serveur(client, db, copro_a, syndic_a, token_a, serveur, attente):
