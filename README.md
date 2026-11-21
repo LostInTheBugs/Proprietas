@@ -200,6 +200,13 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   (hors base SQLite) si la clé de signature JWT n'a pas été définie —
   la valeur par défaut `change-me` est publique et permettrait de forger des
   tokens. Génération : `python -c "import secrets; print(secrets.token_hex(32))"`.
+- **Ce que protège cette clé, et pourquoi la sauvegarder** : elle signe les sessions et chiffre en base le mot
+  de passe SMTP et les secrets de double authentification. **Gardez une copie du `.env` en lieu sûr** (hors du
+  serveur) : une sauvegarde de la base sans la même clé redonne les données, mais les mots de passe SMTP et la
+  double authentification enregistrés sont illisibles. Pour déplacer une instance, recopiez le `.env` tel quel.
+  **Changer la clé** (fuite, par exemple) déconnecte tout le monde, impose de ressaisir le mot de passe SMTP
+  (Réglages) et de réactiver la double authentification de chaque compte. Le diagnostic (Réglages → Serveur)
+  signale une clé de moins de 32 caractères ; il n'affiche jamais la clé.
 - **Rate limiting sur `/api/auth/login`** : 5 tentatives échouées par email et
   par IP sur 15 minutes, puis `429` (limiteur en mémoire, adapté à une instance
   mono-serveur).
@@ -210,8 +217,11 @@ Premier lancement : créer le compte syndic via `POST /api/auth/register` (ouver
   versions précédentes sont migrés automatiquement en cookie au premier
   chargement (aucune reconnexion nécessaire).
 - **Upload de documents** : plafond configurable `COPRO_UPLOAD_MAX_MB` (défaut
-  25 Mo, `413` au-delà) et liste blanche d'extensions
-  (`.pdf .jpg .jpeg .png .doc .docx .xls .xlsx .odt .ods`, `400` sinon).
+  25 Mo, `413` au-delà), liste blanche d'extensions
+  (`.pdf .jpg .jpeg .png .doc .docx .xls .xlsx .odt .ods`, `400` sinon), et **contenu conforme à l'extension**
+  (signature des premiers octets : un exécutable ou une page HTML renommés en `.pdf` sont refusés, `400`).
+  Téléchargements toujours en pièce jointe (`Content-Disposition: attachment`) avec `X-Content-Type-Options:
+  nosniff` et une CSP stricte sur toutes les réponses.
 - **CORS** : liste d'origines configurable `COPRO_CORS_ORIGINS` (JSON).
 - **RGPD** : journal d'audit et IP de dernière connexion purgés chaque jour au-delà de
   `COPRO_RETENTION_JOURNAL_MOIS` (défaut 12, 0 = jamais) ; export « mes données » dans

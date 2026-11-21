@@ -195,7 +195,27 @@ def lancer_diagnostic(db: Session, copro: Copropriete, instance) -> list[dict]:
     # 7. Couverture 2FA des comptes de la copropriété active
     resultats.append(_check_2fa(db, copro))
 
+    # 8. Clé secrète : longueur, et rappel de la garder (jamais affichée)
+    resultats.append(_check_cle())
+
     return resultats
+
+
+CLE_MIN = 32
+
+
+def _check_cle() -> dict:
+    """COPRO_SECRET_KEY signe les connexions et chiffre le mot de passe SMTP et les secrets 2FA."""
+    from app.core.config import get_settings
+    n = len(get_settings().secret_key or "")
+    garder = ("Gardez une copie du fichier .env en lieu sûr : sans la même clé, les mots de passe SMTP et la "
+              "double authentification enregistrés sont perdus, et tout le monde doit se reconnecter.")
+    if n < CLE_MIN:
+        return item("cle", "Clé secrète (COPRO_SECRET_KEY)", "attention",
+                    f"{n} caractères : {CLE_MIN} au moins recommandés (python -c \"import secrets; "
+                    f"print(secrets.token_hex(32))\"). La changer déconnecte tout le monde et impose de ressaisir "
+                    "le mot de passe SMTP et de réactiver la double authentification. " + garder)
+    return item("cle", "Clé secrète (COPRO_SECRET_KEY)", "ok", f"{n} caractères. " + garder)
 
 
 def _check_2fa(db: Session, copro: Copropriete) -> dict:
