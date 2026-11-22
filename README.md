@@ -115,6 +115,20 @@ se créer normalement depuis la page de connexion.
 - **Vote sur une clé de répartition** (loi du 10 juillet 1965, art. 24, dernier alinéa) : pour les dépenses d'une partie
   de l'immeuble ou d'un équipement, si le règlement le prévoit, une résolution peut être réservée aux lots d'une clé ;
   seuls ces copropriétaires votent, avec leurs millièmes de la clé (majorités calculées sur le total de la clé)
+- **Réunion en visioconférence** (loi du 10 juillet 1965, art. 17-1 A) : l'AG peut se suivre à distance ; le syndic
+  colle le lien de sa réunion ou crée une salle en un clic sur **meet.jit.si** (gratuit, rien à installer) ou sur son
+  propre serveur Jitsi, prêt dans `docker-compose.yml` mais éteint par défaut ([docs/jitsi.md](docs/jitsi.md)) ; le lien
+  figure dans la convocation, chacun peut répondre « Je participerai en visioconférence » et compte comme présent
+  (feuille de présence, PV)
+- **Vote en direct** pendant l'AG : le syndic ouvre le vote d'une résolution à la fois ; les copropriétaires présents
+  ou en visio votent depuis leur compte, pour leurs lots et ceux de leurs mandants (seulement les lots de la clé pour
+  une résolution sur une clé), et peuvent changer d'avis jusqu'à la clôture ; décompte visible de tous, votes par
+  correspondance déjà comptés ; la clôture calcule le résultat, et le syndic peut toujours saisir ou corriger un
+  vote à la main
+- **Mandats** du syndic bénévole et du conseil syndical (décret du 17 mars 1967, art. 22 et 28 : trois ans au plus) :
+  enregistrés par la résolution adoptée en AG (durée votée, membres élus), ou saisis à la main pour un mandat
+  antérieur ; historique, alerte six mois avant l'échéance, et résolutions de renouvellement cochées d'office dans
+  l'AG annuelle quand le mandat finit avant la suivante
 - **Consultation écrite** (régime petite copropriété, unanimité)
 - **Documents** : contrats, devis, factures, diagnostics — sur le serveur (dossier local ou S3) ou sur le
   **drive de la copropriété** (WebDAV : Nextcloud, ownCloud, Synology… ; Google Drive), choisi dans Réglages,
@@ -156,14 +170,15 @@ se créer normalement depuis la page de connexion.
   blocage des comptes après des échecs de connexion (Réglages → Sécurité)
 - **Thème clair / sombre** : au choix par compte (Réglages → Apparence) — clair, sombre
   ou système (suit l'appareil), appliqué dès le chargement sans clignotement
+- **Supervision du serveur** (Réglages → Serveur, administrateur de l'instance) : ressources de la machine et de
+  chaque service, page « État du serveur » (historique sur 7 jours) et alertes par e-mail — voir
+  [Supervision](#supervision)
 - **Multi-pays** : module de règles par pays (France en V1, extensible)
 
 ## Feuille de route
 
 Pistes retenues pour plus tard, sans date :
 
-- **Charges spéciales en AG** : vote des seuls copropriétaires concernés par une clé de répartition
-  (art. 24, dernier alinéa).
 - **OneDrive** comme drive de la copropriété (comptes personnels et professionnels), après WebDAV et
   Google Drive.
 - **Envoi des lettres recommandées** (électroniques ou papier) depuis l'application : aujourd'hui, elle
@@ -298,9 +313,10 @@ contentieux.
   prescription 5 ans).
 
 ⚠️ L'application **génère les courriers mais ne fournit pas de conseil
-juridique** : faites valider les modèles par un conseil avant usage réel. Le syndic
-ne peut pas avancer de fonds au syndicat (art. 18 de la loi du 10 juillet 1965) —
-le module n'expose volontairement aucune fonction d'avance.
+juridique** : faites valider les modèles par un conseil avant usage réel. Le
+recouvrement ne fait aucune avance au syndicat : une dépense payée de sa poche par le syndic
+ou un copropriétaire se saisit comme **avance** (facture obligatoire), que la copropriété
+rembourse ou déduit de ses charges.
 
 ## Supervision
 
