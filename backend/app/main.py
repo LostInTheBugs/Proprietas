@@ -153,7 +153,7 @@ async def compter_requetes(request: Request, call_next):
     finally:
         duree = time.monotonic() - debut
         supervision.noter_requete(request.url.path, statut, duree)
-        if settings.log_format == "json" and request.url.path.startswith("/api/") and request.url.path != "/api/health":
+        if get_settings().log_format == "json" and request.url.path.startswith("/api/") and request.url.path != "/api/health":
             _journal_requetes.info(
                 "%s %s %s", request.method, request.url.path, statut,
                 extra={"request_id": request_id, "methode": request.method, "chemin": request.url.path,
