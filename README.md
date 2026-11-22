@@ -302,6 +302,22 @@ juridique** : faites valider les modèles par un conseil avant usage réel. Le s
 ne peut pas avancer de fonds au syndicat (art. 18 de la loi du 10 juillet 1965) —
 le module n'expose volontairement aucune fonction d'avance.
 
+## Supervision
+
+- **Réglages → Serveur** (administrateur de l'instance) : ressources de la machine et de chaque service,
+  historique sur 7 jours (relevé toutes les 5 minutes : processeur, mémoire, disque, requêtes, erreurs 5xx,
+  temps de réponse) et incidents.
+- **Alertes par e-mail** aux administrateurs de l'instance : disque ≥ 90 %, mémoire ≥ 95 % ou processeur ≥ 90 %
+  sur 15 minutes, 10 erreurs serveur en 5 minutes, applicateur des mises à jour arrêté, sauvegarde du drive en
+  échec ; rappel au plus une fois par jour, e-mail « résolu » ensuite. Il faut un serveur d'envoi (celui de
+  l'instance ou de la copropriété de l'administrateur).
+- **Prometheus** : `COPRO_METRICS_TOKEN=<jeton>` dans le `.env` active `GET /api/metrics`
+  (`Authorization: Bearer <jeton>`) : version, requêtes, erreurs, histogramme des durées, ressources, incidents.
+  Sans jeton, l'adresse n'existe pas (404).
+- **Journaux JSON** : `COPRO_LOG_FORMAT=json` donne une ligne JSON par message et par requête de l'API
+  (`request_id`, compte, copropriété, méthode, chemin, code, durée), pour Loki ou un autre collecteur. Chaque
+  réponse porte un en-tête `X-Request-ID`.
+
 ## Tests
 
 ```bash
