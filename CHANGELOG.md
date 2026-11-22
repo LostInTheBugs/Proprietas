@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.068 — 2026-11-22
+
+- Supervision externe : `/api/metrics` (Prometheus, jeton `COPRO_METRICS_TOKEN`), en-tête `X-Request-ID`, journaux JSON avec `COPRO_LOG_FORMAT=json`.
+
 ## 2026.11.067 — 2026-11-22
 
 - Supervision : alertes par e-mail aux administrateurs (disque, mémoire, processeur, erreurs serveur, applicateur arrêté, sauvegarde en échec), rappel quotidien, e-mail « résolu » ; incidents dans « État du serveur ».
