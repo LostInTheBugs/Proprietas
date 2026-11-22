@@ -38,6 +38,7 @@ PUBLIQUES = {
     ("GET", "/api/ag/confirmation/{jeton}"), ("POST", "/api/ag/confirmation/{jeton}"),
     ("GET", "/api/ag/confirmation/{jeton}/pouvoir"),                           # lien personnel de l'e-mail
     ("GET", "/api/drive/google/retour"),                                       # retour OAuth (state signé)
+    ("GET", "/api/metrics"),                                                   # jeton COPRO_METRICS_TOKEN (404 sans)
     ("GET", "/api/majorites"), ("GET", "/api/travaux/categories"), ("GET", "/api/travaux/statuts"),
     ("GET", "/api/contacts/types"), ("GET", "/api/contacts/categories"),
     ("GET", "/api/contrats/types"), ("GET", "/api/contrats/periodes"),         # listes de référence
