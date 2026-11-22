@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.11.067 — 2026-11-22
+
+- Supervision : alertes par e-mail aux administrateurs (disque, mémoire, processeur, erreurs serveur, applicateur arrêté, sauvegarde en échec), rappel quotidien, e-mail « résolu » ; incidents dans « État du serveur ».
+
 ## 2026.11.066 — 2026-11-22
 
 - Supervision : relevés toutes les 5 minutes (processeur, mémoire, disque, requêtes, erreurs, temps de réponse), gardés 7 jours ; carte « État du serveur » dans Réglages → Serveur.
