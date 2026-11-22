@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.supervision import MesureServeur
 
 INTERVALLE_MINUTES = 5
@@ -26,6 +27,9 @@ _verrou = threading.Lock()
 _requetes = 0
 _erreurs = 0
 _durees: list[float] = []
+# Totaux depuis le démarrage, pour GET /api/metrics (Prometheus : compteurs et histogramme des durées).
+SEUILS_DUREE = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
+totaux = {"requetes": 0, "erreurs": 0, "somme_durees": 0.0, "seaux": [0] * (len(SEUILS_DUREE) + 1)}
 
 
 def reinitialiser() -> tuple[int, int, list[float]]:
@@ -43,8 +47,12 @@ def noter_requete(chemin: str, statut: int, duree_s: float) -> None:
     global _requetes, _erreurs
     with _verrou:
         _requetes += 1
+        totaux["requetes"] += 1
+        totaux["somme_durees"] += duree_s
+        totaux["seaux"][next((i for i, s in enumerate(SEUILS_DUREE) if duree_s <= s), len(SEUILS_DUREE))] += 1
         if statut >= 500:
             _erreurs += 1
+            totaux["erreurs"] += 1
         if len(_durees) < MAX_DUREES:
             _durees.append(duree_s)
 
@@ -91,6 +99,7 @@ def historique(db: Session, heures: int) -> dict:
     from app.services import alertes_serveur
     return {"heures": heures, "intervalle_minutes": INTERVALLE_MINUTES,
             "incidents": alertes_serveur.recents(db, heures),
+            "externe": {"metrics": bool(get_settings().metrics_token), "journal": get_settings().log_format},
             "mesures": [{"instant": m.instant, "cpu_pct": m.cpu_pct, "memoire_pct": m.memoire_pct,
                          "disque_pct": m.disque_pct, "requetes": m.requetes, "erreurs_5xx": m.erreurs_5xx,
                          "latence_moy_ms": m.latence_moy_ms, "latence_p95_ms": m.latence_p95_ms,

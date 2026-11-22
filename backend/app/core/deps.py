@@ -62,6 +62,9 @@ def get_current_user(
     user = _charger_user(db, raw)
     if user._token_scope:
         raise HTTPException(401, "Double authentification requise")
+    if request is not None:          # journal de la requête (core/journal.py) : compte et copropriété
+        request.state.user_id = user.id
+        request.state.copro_id = (user._token_data or {}).get("copro_id")
     return user
 
 

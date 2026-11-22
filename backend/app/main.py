@@ -1,7 +1,9 @@
 import logging
 import math
 import os
+import re
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -15,7 +17,7 @@ from app.core.version import VERSION
 from app.core.database import SessionLocal
 from app.core.httpinfo import est_externe, requete_https
 from app.models.instance import InstanceState
-from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne
+from app.routes import auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne, metrics
 
 settings = get_settings()
 
@@ -40,6 +42,8 @@ async def lifespan(app: FastAPI):
     # Stockage des documents vérifié AU DÉMARRAGE (écriture, relecture, suppression d'un
     # fichier témoin) : une mauvaise configuration S3 ou un dossier en lecture seule empêche
     # de démarrer, avec un message clair, au lieu d'échouer au premier document déposé.
+    from app.core import journal as journaux
+    journaux.configurer(settings.log_format)          # COPRO_LOG_FORMAT=json : journaux structurés
     journal = logging.getLogger("uvicorn.error")
     debut = time.monotonic()
     from app.core.stockage import stockage_depuis
@@ -112,7 +116,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne):
+for r in (auth, copro, lots, comptes, ag, documents, carnet, export, email, relances, travaux, consolide, contacts, contrats, securite, instance, recouvrement, updates, notifications, reprise, paiements, sauvegarde, espace_stockage, drive, connexions, cles, releves, mutations, messages, mandats, vote_en_ligne, metrics):
     app.include_router(r.router)
 app.include_router(securite.router_audit)
 
@@ -128,18 +132,34 @@ _CSP = (
 )
 
 
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_journal_requetes = logging.getLogger("proprietas.requete")
+
+
 @app.middleware("http")
 async def compter_requetes(request: Request, call_next):
-    """Supervision : nombre, erreurs 5xx et durée des requêtes de l'API (services/supervision.py)."""
+    """Supervision : nombre, erreurs 5xx et durée des requêtes de l'API (services/supervision.py) ; identifiant
+    de requête (en-tête X-Request-ID) ; en journal JSON, une ligne par requête de l'API (core/journal.py)."""
     from app.services import supervision
     debut = time.monotonic()
+    recu = request.headers.get("x-request-id", "")
+    request_id = recu if _REQUEST_ID.match(recu) else uuid.uuid4().hex[:16]
     statut = 500
     try:
         response = await call_next(request)
         statut = response.status_code
+        response.headers["X-Request-ID"] = request_id
         return response
     finally:
-        supervision.noter_requete(request.url.path, statut, time.monotonic() - debut)
+        duree = time.monotonic() - debut
+        supervision.noter_requete(request.url.path, statut, duree)
+        if settings.log_format == "json" and request.url.path.startswith("/api/") and request.url.path != "/api/health":
+            _journal_requetes.info(
+                "%s %s %s", request.method, request.url.path, statut,
+                extra={"request_id": request_id, "methode": request.method, "chemin": request.url.path,
+                       "statut": statut, "duree_ms": round(duree * 1000, 1),
+                       "user_id": getattr(request.state, "user_id", None),
+                       "copro_id": getattr(request.state, "copro_id", None)})
 
 
 @app.middleware("http")

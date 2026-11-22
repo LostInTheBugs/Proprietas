@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     frontend_url: str = ""
     # Réunion en ligne : serveur Jitsi des liens créés par l'application (COPRO_JITSI_URL).
     jitsi_url: str = "https://meet.jit.si"
+    # Supervision externe : jeton de GET /api/metrics (format Prometheus) ; vide = désactivé.
+    metrics_token: str = ""
+    # Journaux : « texte » (défaut) ou « json » (une ligne JSON par message et par requête, pour Loki…).
+    log_format: str = "texte"
     # Stockage des documents : « local » (dossier upload_dir) ou « s3 » (bucket compatible S3 :
     # AWS, Clever Cloud Cellar, OVH, Scaleway, MinIO…). Voir app/core/stockage.py.
     stockage: str = "local"

@@ -9,7 +9,10 @@ interface Mesure {
   requetes: number; erreurs_5xx: number; latence_moy_ms: number | null; latence_p95_ms: number | null; source: string;
 }
 interface Incident { code: string; libelle: string; debut: string; fin: string | null; en_cours: boolean; detail: string }
-interface Historique { heures: number; intervalle_minutes: number; mesures: Mesure[]; incidents?: Incident[] }
+interface Historique {
+  heures: number; intervalle_minutes: number; mesures: Mesure[]; incidents?: Incident[];
+  externe?: { metrics: boolean; journal: string };
+}
 
 const L = 300, H = 60;
 
@@ -120,6 +123,13 @@ export function SupervisionCard() {
             {m[m.length - 1].source === "hote" ? "Ressources de toute la machine." : "Ressources vues par l'application (applicateur absent)."}
             {" "}Ligne orange : seuil d'alerte (90 %). Historique gardé 7 jours.
           </p>
+          {h!.externe && (
+            <p className="text-xs text-slate-500">
+              Supervision externe : <code>/api/metrics</code> (format Prometheus){" "}
+              {h!.externe.metrics ? "activé (jeton COPRO_METRICS_TOKEN)" : "désactivé — définir COPRO_METRICS_TOKEN dans le .env"} ;
+              journaux : {h!.externe.journal === "json" ? "JSON (une ligne par requête)" : "texte (COPRO_LOG_FORMAT=json pour du JSON)"}.
+            </p>
+          )}
         </div>
       )}
     </Card>
